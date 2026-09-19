@@ -905,7 +905,15 @@ async def ws_velha(websocket: WebSocket, sala: str):
 
 
 # ---------------------------------------------------------------------------
-# Static files (por último)
+# Static files (por último, mas só HTTP GET — NÃO captura WebSocket)
 # ---------------------------------------------------------------------------
 
-app.mount("/", StaticFiles(directory=PASTA_STATIC, html=True), name="static")
+from starlette.responses import FileResponse
+
+@app.get("/{caminho:path}")
+@app.get("/")
+async def servir_estatico(caminho: str = ""):
+    arquivo = PASTA_STATIC / caminho
+    if caminho and arquivo.is_file():
+        return FileResponse(arquivo)
+    return FileResponse(PASTA_STATIC / "index.html")
