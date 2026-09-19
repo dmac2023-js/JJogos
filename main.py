@@ -314,7 +314,7 @@ def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str)
         "modo": modo,
         "tabuleiro": ["", "", "", "", "", "", "", "", ""],
         "jogador_atual": "X",
-        "jogador_x": {"nome": nome_x, "nick": nick_x},
+        "jogador_x": None,
         "jogador_o": None,
         "jogo_ativo": True,
         "resultado": None,
