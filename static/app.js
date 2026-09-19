@@ -544,17 +544,23 @@ function conectarWsVelha(sala, nome, nick, espectador) {
   velhaEspectador = espectador;
 
   velhaWs.onmessage = function (evento) {
-    var dados = JSON.parse(evento.data);
-    processarMensagemVelha(dados);
-  };
-
-  velhaWs.onclose = function () {
-    if (!velhaEspectador) {
-      atualizarVelhaMensagem("Conexão perdida.", "erro");
+    try {
+      var dados = JSON.parse(evento.data);
+      processarMensagemVelha(dados);
+    } catch (e) {
+      console.error("Erro ao processar mensagem WS:", e);
     }
   };
 
-  velhaWs.onerror = function () {
+  velhaWs.onclose = function (evento) {
+    console.warn("WebSocket fechado. code=" + evento.code + " reason=" + evento.reason + " wasClean=" + evento.wasClean);
+    if (!velhaEspectador) {
+      atualizarVelhaMensagem("Conexão perdida. (code=" + evento.code + ")", "erro");
+    }
+  };
+
+  velhaWs.onerror = function (evento) {
+    console.error("WebSocket erro:", evento);
     atualizarVelhaMensagem("Erro de conexão.", "erro");
   };
 }
