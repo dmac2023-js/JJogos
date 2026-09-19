@@ -648,10 +648,13 @@ async function criarSalaVelha() {
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
 
+    velhaModo = "multiplayer";
     velhaSala = dados.sala;
     mostrarTela(telaVelha);
     mostrarCodigoSala(dados.sala);
     atualizarVelhaMensagem("Aguardando oponente...");
+    vezLabel.textContent = "Aguardando...";
+    vezLabel.className = "indicador-vez";
     document.querySelector("#reiniciar-velha").style.display = "none";
     document.querySelector("#sair-sala-velha").style.display = "";
     document.querySelector("#espectadores-bar").style.display = "none";
@@ -676,9 +679,12 @@ function entrarSalaVelha(codigo) {
   var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
 
+  velhaModo = "multiplayer";
   mostrarTela(telaVelha);
   esconderCodigoSala();
   atualizarVelhaMensagem("Entrando na sala...");
+  vezLabel.textContent = "Entrando...";
+  vezLabel.className = "indicador-vez";
   document.querySelector("#reiniciar-velha").style.display = "none";
   document.querySelector("#sair-sala-velha").style.display = "";
   document.querySelector("#espectadores-bar").style.display = "none";

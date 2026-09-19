@@ -779,11 +779,15 @@ async def ws_velha(websocket: WebSocket, sala: str):
         return
 
     my_piece = None
-    if not jogo["jogador_x"] or jogo["jogador_x"]["nick"] == nick:
+    if not jogo["jogador_x"]:
         jogo["jogador_x"] = {"nome": nome, "nick": nick}
         my_piece = "X"
-    elif not jogo["jogador_o"] or jogo["jogador_o"]["nick"] == nick:
+    elif not jogo["jogador_o"]:
         jogo["jogador_o"] = {"nome": nome, "nick": nick}
+        my_piece = "O"
+    elif jogo["jogador_x"]["nick"] == nick:
+        my_piece = "X"
+    elif jogo["jogador_o"]["nick"] == nick:
         my_piece = "O"
     else:
         await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
