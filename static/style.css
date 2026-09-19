@@ -1,0 +1,150 @@
+:root {
+  color: #f4f6ff;
+  background: #11131d;
+  font-family: Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #29204a, #11131d 55%); }
+button { font: inherit; }
+.aplicacao { width: min(760px, 94%); margin: 0 auto; padding: 42px 0 28px; }
+.cabecalho, .cabecalho-jogo, .informacoes-jogo, .acoes { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.marca { margin: 0 0 10px; color: #a98bff; font-size: 12px; font-weight: bold; letter-spacing: 2px; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 8px; font-size: clamp(30px, 6vw, 48px); }
+h2 { margin-bottom: 8px; font-size: 22px; }
+.subtitulo, .titulo-tela p { margin-bottom: 0; color: #aeb2c7; }
+.status, .etiqueta { border: 1px solid #4b3b78; border-radius: 999px; padding: 8px 12px; color: #c8baff; font-size: 12px; white-space: nowrap; }
+.status.conectado { border-color: #3d9d6b; color: #85e0ae; }
+.tela { display: none; margin-top: 34px; padding: 26px; border: 1px solid #34384f; border-radius: 20px; background: rgba(25, 28, 43, .94); box-shadow: 0 20px 60px rgba(0, 0, 0, .28); }
+.tela.ativa { display: block; }
+.titulo-tela { margin-bottom: 24px; }
+.cartao-jogo, .botao-dificuldade { width: 100%; display: flex; align-items: center; gap: 16px; border: 1px solid #454b69; border-radius: 14px; padding: 18px; color: #f4f6ff; background: #1b1e30; text-align: left; cursor: pointer; }
+.cartao-jogo:hover, .botao-dificuldade:hover { border-color: #9c7cff; background: #24213d; }
+.icone-jogo { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 12px; color: #c8baff; background: #34275d; font-weight: bold; }
+.cartao-jogo strong, .botao-dificuldade strong { display: block; margin-bottom: 6px; font-size: 18px; }
+.cartao-jogo small, .botao-dificuldade small { display: block; color: #aeb2c7; }
+.seta { margin-left: auto; color: #a98bff; font-size: 24px; }
+.voltar { margin-bottom: 22px; border: 0; padding: 0; color: #aaa0ff; background: transparent; cursor: pointer; }
+.dificuldades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.botao-dificuldade { display: block; min-height: 112px; }
+.cabecalho-jogo { margin-bottom: 14px; }
+.informacoes-jogo { justify-content: flex-end; }
+.cronometro { min-width: 64px; color: #ffffff; font-variant-numeric: tabular-nums; font-weight: bold; text-align: right; }
+.mensagem { min-height: 24px; margin: 18px 0 14px; color: #c8baff; font-weight: bold; text-align: center; }
+.mensagem.erro { color: #ff9a9a; }
+.mensagem.sucesso { color: #85e0ae; }
+.grade { display: grid; grid-template-columns: repeat(9, minmax(28px, 1fr)); max-width: 594px; margin: 0 auto; border: 2px solid #8d76e8; background: #4b5170; gap: 1px; }
+.celula { width: 100%; aspect-ratio: 1; border: 0; border-radius: 0; padding: 0; color: #ffffff; background: #171a29; font-size: clamp(16px, 3vw, 25px); font-weight: bold; line-height: 1; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.celula::-webkit-outer-spin-button, .celula::-webkit-inner-spin-button { margin: 0; appearance: none; -webkit-appearance: none; }
+.celula:nth-child(3n) { border-right: 2px solid #8d76e8; }
+.celula:nth-child(9n) { border-right: 0; }
+.celula:nth-child(n+19):nth-child(-n+27), .celula:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #8d76e8; }
+.celula:focus { outline: 2px solid #c8baff; outline-offset: -2px; }
+.celula.preenchida { color: #aaa0ff; background: #292145; cursor: not-allowed; }
+.celula.erro { color: #ff7070; background: #4d2028; }
+.acoes { justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+.botao { border: 1px solid #4b5170; border-radius: 10px; padding: 11px 14px; color: #f4f6ff; background: #22263a; cursor: pointer; }
+.botao:hover { border-color: #9c7cff; }
+.botao.principal { border-color: #8664ff; background: #7655e8; }
+.historico { margin-top: 30px; border-top: 1px solid #34384f; padding-top: 22px; }
+.historico h2 { font-size: 18px; }
+.registro, .vazio { margin: 8px 0; padding: 10px 12px; border-radius: 8px; color: #c9ccda; background: #1b1e30; font-size: 14px; }
+.registro { display: flex; justify-content: space-between; gap: 12px; }
+.jogo-conteudo { display: flex; gap: 24px; align-items: flex-start; }
+.jogo-grade-area { flex: 1; min-width: 0; }
+.painel-recordes { width: 220px; flex-shrink: 0; border: 1px solid #34384f; border-radius: 14px; padding: 16px; background: #1b1e30; }
+.painel-recordes h2 { font-size: 16px; margin-bottom: 12px; color: #c8baff; }
+.registro-recorde { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; background: #22263a; font-size: 13px; }
+.recorde-posicao { font-size: 18px; flex-shrink: 0; }
+.recorde-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.recorde-info strong { color: #f4f6ff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recorde-info small { color: #aeb2c7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recorde-tempo { color: #85e0ae; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Jogo da Velha */
+.modo-selecao { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.botao-modo { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 120px; border: 1px solid #454b69; border-radius: 14px; padding: 18px; color: #f4f6ff; background: #1b1e30; cursor: pointer; text-align: center; }
+.botao-modo:hover { border-color: #9c7cff; background: #24213d; }
+.botao-modo .icone { font-size: 32px; }
+.botao-modo strong { font-size: 16px; }
+.botao-modo small { color: #aeb2c7; font-size: 12px; }
+
+.tabuleiro-velha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 320px; margin: 0 auto; }
+.casa-velha { width: 100%; aspect-ratio: 1; border: 2px solid #454b69; border-radius: 10px; background: #1b1e30; color: #fff; font-size: clamp(32px, 8vw, 56px); font-weight: bold; cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
+.casa-velha:hover:not(.preenchida):not(.desabilitada) { border-color: #9c7cff; background: #24213d; }
+.casa-velha.preenchida { cursor: not-allowed; }
+.casa-velha.x { color: #c8baff; background: #292145; }
+.casa-velha.o { color: #85e0ae; background: #1a3328; }
+.casa-velha.venceu { border-color: #ffd700; background: #3d3520; box-shadow: 0 0 12px rgba(255, 215, 0, .3); }
+.casa-velha.desabilitada { cursor: not-allowed; opacity: .7; }
+
+.indicador-vez { display: inline-block; padding: 4px 14px; border-radius: 999px; font-weight: bold; font-size: 14px; }
+.indicador-vez.x { color: #c8baff; border: 1px solid #6b5b95; }
+.indicador-vez.o { color: #85e0ae; border: 1px solid #3d9d6b; }
+
+.sala-container { display: flex; flex-direction: column; gap: 14px; }
+.sala-input { display: flex; gap: 10px; }
+.sala-input input { flex: 1; padding: 10px 14px; border: 1px solid #454b69; border-radius: 10px; background: #171a29; color: #f4f6ff; font-size: 14px; }
+.sala-input input::placeholder { color: #555; }
+.sala-input input:focus { outline: 2px solid #c8baff; outline-offset: -2px; }
+
+.lobby-participantes { margin-top: 12px; }
+.participante { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px; border-radius: 8px; background: #22263a; font-size: 14px; }
+.participante-avatar { width: 32px; height: 32px; border-radius: 50%; background: #34275d; display: grid; place-items: center; font-weight: bold; font-size: 14px; color: #c8baff; flex-shrink: 0; }
+.participante-info { flex: 1; }
+.participante-info strong { display: block; font-size: 14px; }
+.participante-info small { color: #aeb2c7; font-size: 12px; }
+.participante-status { font-size: 12px; color: #aeb2c7; }
+.participante-status.disponivel { color: #85e0ae; }
+.botao-convidar { padding: 6px 12px; border: 1px solid #3d9d6b; border-radius: 8px; background: transparent; color: #85e0ae; font-size: 12px; cursor: pointer; }
+.botao-convidar:hover { background: #1a3328; }
+
+.espectadores-bar { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: #1b1e30; font-size: 13px; color: #aeb2c7; text-align: center; }
+
+.sala-lista { margin-top: 16px; }
+.sala-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; margin-bottom: 8px; border: 1px solid #454b69; border-radius: 10px; background: #1b1e30; cursor: pointer; }
+.sala-item:hover { border-color: #9c7cff; background: #24213d; }
+.sala-item-info { flex: 1; }
+.sala-item-info strong { display: block; font-size: 14px; }
+.sala-item-info small { color: #aeb2c7; font-size: 12px; }
+.sala-item-jogadores { font-size: 12px; color: #c8baff; white-space: nowrap; }
+
+.popup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.6); display: none; place-items: center; z-index: 100; }
+.popup-overlay.ativo { display: grid; }
+.popup { padding: 24px; border: 1px solid #454b69; border-radius: 16px; background: #1b1e30; text-align: center; max-width: 340px; width: 90%; }
+.popup h3 { margin: 0 0 12px; font-size: 18px; color: #c8baff; }
+.popup p { margin: 0 0 18px; color: #c9ccda; font-size: 14px; }
+.popup-botoes { display: flex; gap: 10px; justify-content: center; }
+
+.sala-codigo-display { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px; padding: 10px 14px; border: 1px solid #454b69; border-radius: 10px; background: #1b1e30; }
+.sala-codigo-label { color: #aeb2c7; font-size: 13px; }
+.sala-codigo-valor { color: #c8baff; font-size: 18px; font-weight: bold; letter-spacing: 2px; font-family: monospace; }
+.botao-copiar { padding: 5px 12px; border: 1px solid #4b3b78; border-radius: 8px; background: transparent; color: #aaa0ff; font-size: 12px; cursor: pointer; }
+.botao-copiar:hover { background: #24213d; border-color: #9c7cff; }
+.botao-copiar.copiado { border-color: #3d9d6b; color: #85e0ae; }
+
+.ranking-panel { margin-top: 16px; border: 1px solid #34384f; border-radius: 14px; padding: 16px; background: #1b1e30; }
+.ranking-panel h2 { font-size: 16px; margin-bottom: 10px; color: #c8baff; }
+
+footer { margin-top: 24px; color: #777d98; font-size: 13px; text-align: center; }
+footer a { color: #aaa0ff; text-decoration: none; }
+footer a:hover { color: #c8baff; }
+
+@media (max-width: 560px) { .cabecalho, .cabecalho-jogo { align-items: flex-start; flex-direction: column; } .informacoes-jogo { width: 100%; justify-content: space-between; } .dificuldades, .modo-selecao { grid-template-columns: 1fr; } .tela { padding: 18px; } .jogo-conteudo { flex-direction: column; } .painel-recordes { width: 100%; } }
+
+/* Ajustes para a janela menor do Discord. */
+@media (max-height: 800px) {
+  .aplicacao { padding-top: 20px; }
+  h1 { font-size: clamp(28px, 5vw, 38px); }
+  .subtitulo { font-size: 14px; }
+  .tela { margin-top: 18px; padding: 16px; }
+  #tela-jogo .cabecalho-jogo { margin-bottom: 4px; }
+  #tela-jogo .voltar { margin-bottom: 8px; }
+  #tela-jogo .mensagem { margin: 8px 0; }
+  #tela-jogo .grade { max-width: min(594px, 54vh, 82vw); }
+  #tela-jogo .acoes { margin-top: 12px; }
+  #tela-jogo .historico { margin-top: 18px; padding-top: 14px; }
+  .jogo-conteudo { gap: 16px; }
+  .painel-recordes { padding: 12px; width: 180px; }
+}

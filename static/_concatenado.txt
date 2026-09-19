@@ -1,0 +1,357 @@
+=========================
+ARQUIVO: app.js
+=========================
+ERRO: [Errno 2] No such file or directory: 'C:\\Users\\leona\\OneDrive\\Área de Trabalho\\JJogos\\app.js'
+=========================
+ARQUIVO: main.py
+=========================
+import os
+import secrets
+from pathlib import Path
+from typing import Dict, List
+
+import requests
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+
+load_dotenv()
+
+PASTA_BASE = Path(__file__).parent
+PASTA_STATIC = PASTA_BASE / "static"
+DISCORD_APPLICATION_ID = os.getenv("DISCORD_APPLICATION_ID", "")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
+
+app = FastAPI(title="Jogos no Discord")
+
+
+@app.middleware("http")
+async def permitir_activity_no_discord(request, call_next):
+    """Permite que o Discord abra a aplicação dentro do iframe da Activity."""
+    resposta = await call_next(request)
+    # A Discloud adiciona SAMEORIGIN quando o cabeçalho não existe.
+    # Um valor não restritivo impede esse padrão de bloquear a Activity.
+    resposta.headers["X-Frame-Options"] = "ALLOWALL"
+    resposta.headers["Content-Security-Policy"] = (
+        "frame-ancestors 'self' https://discord.com https://*.discord.com "
+        "https://*.discordsays.com;"
+    )
+    return resposta
+
+
+class NovoSudoku(BaseModel):
+    dificuldade: str = "facil"
+
+
+class RespostaSudoku(BaseModel):
+    jogo_id: str
+    grade: List[List[int]]
+
+
+class CodigoAutorizacao(BaseModel):
+    code: str
+
+
+jogos: Dict[str, dict] = {}
+
+
+def embaralhar_grupos(grupos: List[List[int]]) -> List[int]:
+    resultado = []
+    grupos = [grupo[:] for grupo in grupos]
+    secrets.SystemRandom().shuffle(grupos)
+    for grupo in grupos:
+        secrets.SystemRandom().shuffle(grupo)
+        resultado.extend(grupo)
+    return resultado
+
+
+def criar_solucao() -> List[List[int]]:
+    """Cria uma solução nova e válida a cada partida."""
+    linhas = embaralhar_grupos([[0, 1, 2], [3, 4, 5], [6, 7, 8]])
+    colunas = embaralhar_grupos([[0, 1, 2], [3, 4, 5], [6, 7, 8]])
+    numeros = list(range(1, 10))
+    secrets.SystemRandom().shuffle(numeros)
+
+    def valor(linha: int, coluna: int) -> int:
+        indice = (linha * 3 + linha // 3 + coluna) % 9
+        return numeros[indice]
+
+    return [[valor(linha, coluna) for coluna in colunas] for linha in linhas]
+
+
+def candidatos(grade: List[List[int]], linha: int, coluna: int) -> set:
+    usados = set(grade[linha])
+    usados.update(grade[indice][coluna] for indice in range(9))
+    bloco_linha = linha // 3 * 3
+    bloco_coluna = coluna // 3 * 3
+    usados.update(
+        grade[indice_linha][indice_coluna]
+        for indice_linha in range(bloco_linha, bloco_linha + 3)
+        for indice_coluna in range(bloco_coluna, bloco_coluna + 3)
+    )
+    return set(range(1, 10)) - usados
+
+
+def contar_solucoes(grade: List[List[int]], limite: int = 2) -> int:
+    """Conta soluções até o limite informado, evitando puzzles ambíguos."""
+    melhor = None
+    opcoes = None
+
+    for linha in range(9):
+        for coluna in range(9):
+            if grade[linha][coluna] == 0:
+                atuais = candidatos(grade, linha, coluna)
+                if not atuais:
+                    return 0
+                if opcoes is None or len(atuais) < len(opcoes):
+                    melhor = (linha, coluna)
+                    opcoes = atuais
+
+    if melhor is None:
+        return 1
+
+    linha, coluna = melhor
+    total = 0
+    for numero in opcoes:
+        grade[linha][coluna] = numero
+        total += contar_solucoes(grade, limite)
+        grade[linha][coluna] = 0
+        if total >= limite:
+            return total
+    return total
+
+
+def criar_puzzle(solucao: List[List[int]], dificuldade: str) -> List[List[int]]:
+    """Remove casas sem perder a solução única do Sudoku."""
+    quantidade_minima = {"facil": 40, "medio": 32, "dificil": 27}.get(dificuldade, 40)
+    puzzle = [linha[:] for linha in solucao]
+    posicoes = [(linha, coluna) for linha in range(9) for coluna in range(9)]
+    secrets.SystemRandom().shuffle(posicoes)
+    preenchidas = 81
+
+    for linha, coluna in posicoes:
+        if preenchidas <= quantidade_minima:
+            break
+        valor_original = puzzle[linha][coluna]
+        puzzle[linha][coluna] = 0
+        teste = [linha_teste[:] for linha_teste in puzzle]
+        if contar_solucoes(teste) == 1:
+            preenchidas -= 1
+        else:
+            puzzle[linha][coluna] = valor_original
+
+    return puzzle
+
+
+def grade_tem_duplicatas(grade: List[List[int]]) -> bool:
+    for linha in grade:
+        numeros = [numero for numero in linha if numero != 0]
+        if len(numeros) != len(set(numeros)):
+            return True
+
+    for coluna in range(9):
+        numeros = [grade[linha][coluna] for linha in range(9) if grade[linha][coluna] != 0]
+        if len(numeros) != len(set(numeros)):
+            return True
+
+    for inicio_linha in range(0, 9, 3):
+        for inicio_coluna in range(0, 9, 3):
+            numeros = [
+                grade[linha][coluna]
+                for linha in range(inicio_linha, inicio_linha + 3)
+                for coluna in range(inicio_coluna, inicio_coluna + 3)
+                if grade[linha][coluna] != 0
+            ]
+            if len(numeros) != len(set(numeros)):
+                return True
+
+    return False
+
+
+@app.get("/api/saude")
+def saude():
+    return {"online": True}
+
+
+@app.get("/api/config")
+def configuracao_publica():
+    return {"application_id": DISCORD_APPLICATION_ID}
+
+
+@app.post("/api/token")
+def trocar_codigo_por_token(dados: CodigoAutorizacao):
+    if not DISCORD_APPLICATION_ID or not DISCORD_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
+
+    resposta = requests.post(
+        "https://discord.com/api/oauth2/token",
+        data={
+            "client_id": DISCORD_APPLICATION_ID,
+            "client_secret": DISCORD_CLIENT_SECRET,
+            "grant_type": "authorization_code",
+            "code": dados.code,
+        },
+        timeout=15,
+    )
+
+    if resposta.status_code != 200:
+        raise HTTPException(status_code=400, detail="Não foi possível autenticar com o Discord.")
+
+    return resposta.json()
+
+
+@app.get("/api/jogos")
+def listar_jogos():
+    return [{
+        "id": "sudoku",
+        "nome": "Sudoku",
+        "descricao": "Complete a grade 9×9 com números de 1 a 9.",
+    }]
+
+
+@app.post("/api/sudoku/novo")
+def novo_sudoku(dados: NovoSudoku):
+    dificuldade = dados.dificuldade.lower()
+    if dificuldade not in {"facil", "medio", "dificil"}:
+        raise HTTPException(status_code=400, detail="Dificuldade inválida.")
+
+    solucao = [linha[:] for linha in SOLUCAO_CLASSICA]
+    puzzle = criar_puzzle(solucao, dificuldade)
+    jogo_id = secrets.token_urlsafe(12)
+    jogos[jogo_id] = {"solucao": solucao, "puzzle": puzzle, "dificuldade": dificuldade}
+
+    return {"jogo_id": jogo_id, "dificuldade": dificuldade, "grade": puzzle}
+
+
+@app.post("/api/sudoku/verificar")
+def verificar_sudoku(resposta: RespostaSudoku):
+    jogo = jogos.get(resposta.jogo_id)
+    if not jogo:
+        raise HTTPException(status_code=404, detail="Partida não encontrada.")
+
+    grade = resposta.grade
+    if len(grade) != 9 or any(len(linha) != 9 for linha in grade):
+        raise HTTPException(status_code=400, detail="A grade deve ser 9×9.")
+
+    for linha in grade:
+        if any(numero not in range(10) for numero in linha):
+            raise HTTPException(status_code=400, detail="Use somente números de 1 a 9.")
+
+    if grade_tem_duplicatas(grade):
+        return {
+            "correto": False,
+            "completo": False,
+            "erros": [
+                [linha, coluna]
+                for linha in range(9)
+                for coluna in range(9)
+                if grade[linha][coluna] != 0
+                and grade[linha][coluna] != jogo["solucao"][linha][coluna]
+            ],
+            "mensagem": "Há números repetidos em uma linha, coluna ou bloco 3×3.",
+        }
+
+    puzzle = jogo["puzzle"]
+    for linha in range(9):
+        for coluna in range(9):
+            if puzzle[linha][coluna] != 0 and grade[linha][coluna] != puzzle[linha][coluna]:
+                return {
+                    "correto": False,
+                    "completo": False,
+                    "erros": [[linha, coluna]],
+                    "mensagem": "Não altere os números que já estavam preenchidos.",
+                }
+
+    if any(numero == 0 for linha in grade for numero in linha):
+        return {
+            "correto": False,
+            "completo": False,
+            "erros": [
+                [linha, coluna]
+                for linha in range(9)
+                for coluna in range(9)
+                if grade[linha][coluna] != 0
+                and grade[linha][coluna] != jogo["solucao"][linha][coluna]
+            ],
+            "mensagem": "Preencha todas as casas antes de verificar.",
+        }
+
+    correto = grade == jogo["solucao"]
+    erros = [
+        [linha, coluna]
+        for linha in range(9)
+        for coluna in range(9)
+        if grade[linha][coluna] != jogo["solucao"][linha][coluna]
+    ]
+    return {
+        "correto": correto,
+        "completo": correto,
+        "erros": erros,
+        "mensagem": "Parabéns! Você resolveu o Sudoku." if correto else "Ainda há números incorretos.",
+    }
+
+
+app.mount("/", StaticFiles(directory=PASTA_STATIC, html=True), name="static")
+
+=========================
+ARQUIVO: style.css
+=========================
+ERRO: [Errno 2] No such file or directory: 'C:\\Users\\leona\\OneDrive\\Área de Trabalho\\JJogos\\style.css'
+=========================
+ARQUIVO: index.html
+=========================
+ERRO: [Errno 2] No such file or directory: 'C:\\Users\\leona\\OneDrive\\Área de Trabalho\\JJogos\\index.html'
+=========================
+ARQUIVO: README.md
+=========================
+# Jogos no Discord
+
+Activity com backend em Python e primeiro jogo em formato Sudoku 9×9.
+
+## Rodar localmente
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8080
+```
+
+Abra `http://localhost:8080` no navegador.
+
+## Configuração
+
+1. Copie `.env.example` para `.env`.
+2. Preencha o Application ID e o Client Secret da aplicação Discord.
+3. No `discloud.config`, troque `escolha-seu-subdominio` pelo subdomínio cadastrado na Discloud.
+4. Em **Activities → URL Mappings**, adicione `/sdk` apontando para `cdn.jsdelivr.net`.
+
+## Fluxo da Activity
+
+1. A tela inicial mostra a lista de jogos.
+2. O jogador escolhe Sudoku.
+3. O jogador escolhe a dificuldade.
+4. A partida começa com cronômetro.
+5. É possível verificar a resposta ou reiniciar a partida.
+6. Partidas concluídas ficam salvas no histórico local do navegador.
+
+## Discloud
+
+O projeto já contém `discloud.config`, `requirements.txt` e a porta `8080` exigida para sites.
+Envie os arquivos do projeto para a Discloud e configure as variáveis do `.env` no painel da hospedagem.
+
+=========================
+ARQUIVO: .env
+=========================
+DISCORD_APPLICATION_ID=1542697423879671910
+DISCORD_CLIENT_SECRET=GugJ1L5dJuECrJAmQuYe5FDsqL1WUjs3
+
+=========================
+ARQUIVO: requirements.txt
+=========================
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+requests==2.32.3

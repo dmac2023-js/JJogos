@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: jogos7
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_PUBLIC_KEY
+        sync: false

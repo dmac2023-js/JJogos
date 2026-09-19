@@ -1,0 +1,16 @@
+ROOT: C:\Users\leona\OneDrive\Área de Trabalho\JJogos\static
+==============================
+ARVORE DE: C:\Users\leona\OneDrive\Área de Trabalho\JJogos
+==============================
+JJogos/
+  .env  (98 bytes)
+  JJogos.zip  (11143 bytes)
+  README.md  (1115 bytes)
+  discloud.config  (118 bytes)
+  main.py  (9245 bytes)
+  requirements.txt  (81 bytes)
+  static/
+    _tmp_lista.txt  (393 bytes)
+    app.js  (6934 bytes)
+    index.html  (8457 bytes)
+    style.css  (5094 bytes)

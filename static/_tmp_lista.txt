@@ -1,0 +1,16 @@
+NAO-EXISTE C:\Users\leona\OneDrive\rascunhos
+EXISTE  C:\Users\leona\OneDrive
+   - .849C9593-D756-4E56-8D6E-42412F2A707B
+   - Documentos
+   - Imagens
+   - Área de Trabalho
+   - �rea de Trabalho
+EXISTE  C:\Users\leona\OneDrive\Área de Trabalho\JJogos
+   - .env
+   - discloud.config
+   - JJogos.zip
+   - main.py
+   - README.md
+   - requirements.txt
+   - static
+   - __pycache__
