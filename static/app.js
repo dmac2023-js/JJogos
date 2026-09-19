@@ -112,7 +112,7 @@ async function iniciarSudoku(dificuldade) {
   carregarRecordes(dificuldade);
 
   try {
-    const resposta = await fetch("./api/sudoku/novo", {
+    const resposta = await fetch("./sudoku/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dificuldade: dificuldade }),
@@ -162,7 +162,7 @@ function salvarHistorico() {
 // ---------------------------------------------------------------------------
 async function carregarRecordes(dificuldade) {
   try {
-    const resposta = await fetch("./api/sudoku/recordes/" + dificuldade);
+    const resposta = await fetch("./sudoku/recordes/" + dificuldade);
     const dados = await resposta.json();
     const lista = dados.recordes || [];
     elementoRecordes.innerHTML = "";
@@ -193,7 +193,7 @@ async function salvarRecorde() {
   const nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
 
   try {
-    await fetch("./api/sudoku/recordes", {
+    await fetch("./sudoku/recordes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -214,7 +214,7 @@ async function verificarResposta() {
   mostrarMensagem("Verificando...");
 
   try {
-    const resposta = await fetch("./api/sudoku/verificar", {
+    const resposta = await fetch("./sudoku/verificar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jogo_id: jogoId, grade: gradeAtual }),
@@ -453,7 +453,7 @@ async function iniciarVelhaMaquina(dificuldade) {
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
 
   try {
-    var res = await fetch("./api/velha/novo", {
+    var res = await fetch("./velha/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modo: "maquina", dificuldade: dificuldade, nome: nome, nick: nick }),
@@ -479,7 +479,7 @@ async function jogarVelhaMaquina(posicao) {
   if (velhaTabuleiro[posicao]) return;
 
   try {
-    var res = await fetch("./api/velha/mover", {
+    var res = await fetch("./velha/mover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jogo_id: velhaJogoId, posicao: posicao }),
@@ -516,7 +516,7 @@ async function salvarRecordVelha() {
   var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
   try {
-    await fetch("./api/velha/recordes", {
+    await fetch("./velha/recordes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dificuldade: velhaDificuldade, nome: nome, nick: nick }),
@@ -640,7 +640,7 @@ async function criarSalaVelha() {
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
 
   try {
-    var res = await fetch("./api/velha/novo", {
+    var res = await fetch("./velha/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modo: "multiplayer", nome: nome, nick: nick }),
@@ -865,7 +865,7 @@ async function carregarParticipantesDiscord() {
 
 async function conectarAoDiscord() {
   try {
-    var respostaConfiguracao = await fetch("./api/config");
+    var respostaConfiguracao = await fetch("./config");
     if (!respostaConfiguracao.ok) return;
     var configuracao = await respostaConfiguracao.json();
     if (!configuracao.application_id) return;

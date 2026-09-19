@@ -32,6 +32,8 @@ app = FastAPI(title="Jogos no Discord")
 
 @app.middleware("http")
 async def liberar_embed_discord(request: Request, call_next):
+    if request.scope["type"] != "http":
+        return await call_next(request)
     if request.method == "OPTIONS":
         from starlette.responses import Response
         response = Response(status_code=204)
@@ -41,6 +43,7 @@ async def liberar_embed_discord(request: Request, call_next):
     response.headers["Access-Control-Allow-Methods"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "*"
     return response
+
 
 
 # ---------------------------------------------------------------------------
@@ -393,17 +396,16 @@ def limpar_sala(sala: str):
 # Endpoints — saúde / config / auth
 # ---------------------------------------------------------------------------
 
-@app.get("/api/saude")
+@app.get("/saude")
 def saude():
     return {"online": True}
 
 
-@app.get("/api/config")
+@app.get("/config")
 def configuracao_publica():
     return {"application_id": DISCORD_APPLICATION_ID}
 
 
-@app.post("/api/discord/interactions")
 async def discord_interactions(request: Request):
     body = await request.body()
     signature = request.headers.get("X-Signature-Ed25519", "")
@@ -424,8 +426,11 @@ async def discord_interactions(request: Request):
 
     return {"type": 4, "data": {"content": "Este jogo só funciona dentro do Discord Activity!", "flags": 64}}
 
+app.add_api_route("/api/discord/interactions", discord_interactions, methods=["POST"])
+app.add_api_route("/discord/interactions", discord_interactions, methods=["POST"])
 
-@app.post("/api/token")
+
+@app.post("/token")
 def trocar_codigo_por_token(dados: CodigoAutorizacao):
     if not DISCORD_APPLICATION_ID or not DISCORD_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
@@ -451,7 +456,7 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
 # Endpoints — jogos disponíveis
 # ---------------------------------------------------------------------------
 
-@app.get("/api/jogos")
+@app.get("/jogos")
 def listar_jogos():
     return [
         {
@@ -471,7 +476,7 @@ def listar_jogos():
 # Endpoints — Sudoku
 # ---------------------------------------------------------------------------
 
-@app.post("/api/sudoku/novo")
+@app.post("/sudoku/novo")
 def novo_sudoku(dados: NovoSudoku):
     dificuldade = dados.dificuldade.lower()
     if dificuldade not in {"facil", "medio", "dificil"}:
@@ -485,7 +490,7 @@ def novo_sudoku(dados: NovoSudoku):
     return {"jogo_id": jogo_id, "dificuldade": dificuldade, "grade": puzzle}
 
 
-@app.post("/api/sudoku/verificar")
+@app.post("/sudoku/verificar")
 def verificar_sudoku(resposta: RespostaSudoku):
     jogo = jogos.get(resposta.jogo_id)
     if not jogo:
@@ -553,7 +558,7 @@ def verificar_sudoku(resposta: RespostaSudoku):
     }
 
 
-@app.get("/api/sudoku/recordes/{dificuldade}")
+@app.get("/sudoku/recordes/{dificuldade}")
 def obter_recordes(dificuldade: str):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
@@ -562,7 +567,7 @@ def obter_recordes(dificuldade: str):
     return {"dificuldade": dificuldade, "recordes": top3}
 
 
-@app.post("/api/sudoku/recordes")
+@app.post("/sudoku/recordes")
 def salvar_novo_record(dados: NovoRecord):
     if dados.dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
@@ -584,7 +589,7 @@ def salvar_novo_record(dados: NovoRecord):
 # Endpoints — Jogo da Velha
 # ---------------------------------------------------------------------------
 
-@app.post("/api/velha/novo")
+@app.post("/velha/novo")
 def novo_jogo_velha(dados: NovoJogoVelha):
     modo = dados.modo.lower()
     if modo not in {"maquina", "multiplayer"}:
@@ -602,7 +607,7 @@ def novo_jogo_velha(dados: NovoJogoVelha):
     }
 
 
-@app.post("/api/velha/mover")
+@app.post("/velha/mover")
 def mover_velha(dados: MoverJogoVelha):
     jogo = jogos.get(dados.jogo_id)
     if not jogo:
@@ -648,7 +653,7 @@ def mover_velha(dados: MoverJogoVelha):
     return estado_para_cliente(jogo, "X")
 
 
-@app.get("/api/velha/salas")
+@app.get("/velha/salas")
 def listar_salas():
     salas_ativas = []
     for sala, jogo_id in list(salas_velha.items()):
@@ -668,7 +673,7 @@ def listar_salas():
     return {"salas": salas_ativas}
 
 
-@app.get("/api/velha/recordes/{dificuldade}")
+@app.get("/velha/recordes/{dificuldade}")
 def obter_recordes_velha(dificuldade: str):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
@@ -677,14 +682,14 @@ def obter_recordes_velha(dificuldade: str):
     return {"dificuldade": dificuldade, "recordes": top3}
 
 
-@app.get("/api/velha/ranking")
+@app.get("/velha/ranking")
 def ranking_vitorias():
     recordes = carregar_recordes()
     ranking = sorted(recordes.get("velha_vitorias", []), key=lambda r: r["vitorias"], reverse=True)[:10]
     return {"ranking": ranking}
 
 
-@app.post("/api/velha/recordes")
+@app.post("/velha/recordes")
 def salvar_record_velha(dados: NovoRecordVelha):
     if dados.dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
