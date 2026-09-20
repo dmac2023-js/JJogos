@@ -255,7 +255,9 @@ let velhaSala = null;
 let velhaEspectador = false;
 let velhaReconnectAttempts = 0;
 const VELHA_MAX_RECONNECT = 5;
+let velhaPingTimer = null;
 let lobbyWs = null;
+let lobbyPingTimer = null;
 
 const telaModoVelha = document.querySelector("#tela-modo-velha");
 const telaDificuldadeVelha = document.querySelector("#tela-dificuldade-velha");
@@ -361,6 +363,13 @@ function conectarLobbyWs() {
 
   lobbyWs = new WebSocket(url);
 
+  clearInterval(lobbyPingTimer);
+  lobbyPingTimer = setInterval(function () {
+    if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
+      lobbyWs.send("ping");
+    }
+  }, 20000);
+
   lobbyWs.onmessage = function (evento) {
     var dados = JSON.parse(evento.data);
     if (dados.tipo === "salas_atualizadas") {
@@ -370,6 +379,7 @@ function conectarLobbyWs() {
   };
 
   lobbyWs.onclose = function () {
+    clearInterval(lobbyPingTimer);
     setTimeout(conectarLobbyWs, 3000);
   };
 
@@ -545,6 +555,13 @@ function conectarWsVelha(sala, nome, nick, espectador) {
   velhaSala = sala;
   velhaEspectador = espectador;
 
+  clearInterval(velhaPingTimer);
+  velhaPingTimer = setInterval(function () {
+    if (velhaWs && velhaWs.readyState === WebSocket.OPEN) {
+      velhaWs.send(JSON.stringify({ tipo: "ping" }));
+    }
+  }, 20000);
+
   if (!espectador) {
     localStorage.setItem("velha-reconnect", JSON.stringify({
       sala: sala, nome: nome, nick: nick
@@ -561,6 +578,7 @@ function conectarWsVelha(sala, nome, nick, espectador) {
   };
 
   velhaWs.onclose = function (evento) {
+    clearInterval(velhaPingTimer);
     console.warn("WebSocket fechado. code=" + evento.code + " reason=" + evento.reason + " wasClean=" + evento.wasClean);
 
     if (evento.code === 1006 && !velhaEspectador && velhaReconnectAttempts < VELHA_MAX_RECONNECT) {

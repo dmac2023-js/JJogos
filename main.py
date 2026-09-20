@@ -873,6 +873,9 @@ async def ws_velha(websocket: WebSocket, sala: str):
             dados = await websocket.receive_json()
             tipo = dados.get("tipo")
 
+            if tipo == "ping":
+                continue
+
             if tipo == "jogar" and jogo["jogo_ativo"]:
                 if jogo["jogador_atual"] != my_piece:
                     await websocket.send_json({"tipo": "erro", "mensagem": "Não é sua vez."})
