@@ -253,6 +253,8 @@ let velhaDificuldade = "facil";
 let velhaWs = null;
 let velhaSala = null;
 let velhaEspectador = false;
+let velhaReconnectAttempts = 0;
+const VELHA_MAX_RECONNECT = 5;
 let lobbyWs = null;
 
 const telaModoVelha = document.querySelector("#tela-modo-velha");
@@ -543,6 +545,13 @@ function conectarWsVelha(sala, nome, nick, espectador) {
   velhaSala = sala;
   velhaEspectador = espectador;
 
+  if (!espectador) {
+    velhaReconnectAttempts = 0;
+    localStorage.setItem("velha-reconnect", JSON.stringify({
+      sala: sala, nome: nome, nick: nick
+    }));
+  }
+
   velhaWs.onmessage = function (evento) {
     try {
       var dados = JSON.parse(evento.data);
@@ -554,7 +563,25 @@ function conectarWsVelha(sala, nome, nick, espectador) {
 
   velhaWs.onclose = function (evento) {
     console.warn("WebSocket fechado. code=" + evento.code + " reason=" + evento.reason + " wasClean=" + evento.wasClean);
+
+    if (evento.code === 1006 && !velhaEspectador && velhaReconnectAttempts < VELHA_MAX_RECONNECT) {
+      var saved = localStorage.getItem("velha-reconnect");
+      if (saved) {
+        velhaReconnectAttempts++;
+        var info = JSON.parse(saved);
+        var delay = Math.min(1000 * Math.pow(2, velhaReconnectAttempts - 1), 8000);
+        atualizarVelhaMensagem("Reconectando... (" + velhaReconnectAttempts + "/" + VELHA_MAX_RECONNECT + ")");
+        vezLabel.textContent = "Reconectando...";
+        vezLabel.className = "indicador-vez";
+        setTimeout(function () {
+          conectarWsVelha(info.sala, info.nome, info.nick, false);
+        }, delay);
+        return;
+      }
+    }
+
     if (!velhaEspectador) {
+      localStorage.removeItem("velha-reconnect");
       atualizarVelhaMensagem("Conexão perdida. (code=" + evento.code + ")", "erro");
     }
   };
@@ -566,6 +593,7 @@ function conectarWsVelha(sala, nome, nick, espectador) {
 }
 
 function processarMensagemVelha(dados) {
+  velhaReconnectAttempts = 0;
   switch (dados.tipo) {
     case "estado":
       velhaJogoId = dados.jogo_id;
@@ -636,6 +664,8 @@ function processarMensagemVelha(dados) {
       break;
 
     case "erro":
+      localStorage.removeItem("velha-reconnect");
+      velhaReconnectAttempts = VELHA_MAX_RECONNECT;
       atualizarVelhaMensagem(dados.mensagem, "erro");
       break;
   }
@@ -738,6 +768,7 @@ document.querySelector("#reiniciar-velha").addEventListener("click", function ()
 });
 
 document.querySelector("#sair-sala-velha").addEventListener("click", function () {
+  localStorage.removeItem("velha-reconnect");
   esconderCodigoSala();
   if (velhaWs && velhaWs.readyState === WebSocket.OPEN) {
     velhaWs.send(JSON.stringify({ tipo: "sair" }));

@@ -1,6 +1,8 @@
+import asyncio
 import json
 import os
 import secrets
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -96,6 +98,8 @@ jogos: Dict[str, dict] = {}
 salas_velha: Dict[str, str] = {}
 conexoes_ws: Dict[str, List[WebSocket]] = {}
 conexoes_lobby: List[WebSocket] = []
+_reconnect_timers: Dict[str, asyncio.Task] = {}
+RECONNECT_GRACE_SECONDS = 15
 
 
 # ---------------------------------------------------------------------------
@@ -740,6 +744,37 @@ async def ws_lobby(websocket: WebSocket):
 # WebSocket — Jogo da Velha (multiplayer + espectadores)
 # ---------------------------------------------------------------------------
 
+async def _delayed_disconnect(sala: str, piece: str, jogo: dict, nick: str):
+    await asyncio.sleep(RECONNECT_GRACE_SECONDS)
+    key = f"{sala}:{piece}"
+    _reconnect_timers.pop(key, None)
+    slot_key = f"jogador_{piece.lower()}"
+    slot = jogo.get(slot_key)
+    if not slot or slot["nick"] != nick:
+        return
+    jogo[slot_key] = None
+    if not jogo["jogador_x"] and not jogo["jogador_o"]:
+        try:
+            await transmitir_sala(sala, {"tipo": "oponente_desconectou", "nick": nick})
+        except Exception:
+            pass
+        limpar_sala(sala)
+    else:
+        reiniciar_jogo(jogo)
+        try:
+            await transmitir_sala(sala, {
+                "tipo": "oponente_saiu reiniciando",
+                "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
+                "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
+            })
+        except Exception:
+            pass
+    try:
+        await transmitir_salas_lobby()
+    except Exception:
+        pass
+
+
 @app.websocket("/ws/velha/{sala}")
 async def ws_velha(websocket: WebSocket, sala: str):
     await websocket.accept()
@@ -779,6 +814,7 @@ async def ws_velha(websocket: WebSocket, sala: str):
         return
 
     my_piece = None
+    is_reconnect = False
     if not jogo["jogador_x"]:
         jogo["jogador_x"] = {"nome": nome, "nick": nick}
         my_piece = "X"
@@ -787,8 +823,16 @@ async def ws_velha(websocket: WebSocket, sala: str):
         my_piece = "O"
     elif jogo["jogador_x"]["nick"] == nick:
         my_piece = "X"
+        is_reconnect = True
+        t = _reconnect_timers.pop(f"{sala}:X", None)
+        if t:
+            t.cancel()
     elif jogo["jogador_o"]["nick"] == nick:
         my_piece = "O"
+        is_reconnect = True
+        t = _reconnect_timers.pop(f"{sala}:O", None)
+        if t:
+            t.cancel()
     else:
         await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
         await websocket.close()
@@ -798,15 +842,24 @@ async def ws_velha(websocket: WebSocket, sala: str):
     await transmitir_salas_lobby()
 
     if jogo["jogador_x"] and jogo["jogador_o"]:
-        primeiro = reiniciar_jogo(jogo)
-        await transmitir_sala(sala, {
-            "tipo": "inicio",
-            "jogador_x": jogo["jogador_x"]["nick"],
-            "jogador_o": jogo["jogador_o"]["nick"],
-            "quem_comeca": primeiro,
-        })
-        await transmitir_sala(sala, estado_para_cliente(jogo, "X"), {id(websocket)})
-        await websocket.send_json(estado_para_cliente(jogo, my_piece))
+        if is_reconnect:
+            await websocket.send_json({
+                "tipo": "inicio",
+                "jogador_x": jogo["jogador_x"]["nick"],
+                "jogador_o": jogo["jogador_o"]["nick"],
+                "quem_comeca": jogo["jogador_atual"],
+            })
+            await websocket.send_json(estado_para_cliente(jogo, my_piece))
+        else:
+            primeiro = reiniciar_jogo(jogo)
+            await transmitir_sala(sala, {
+                "tipo": "inicio",
+                "jogador_x": jogo["jogador_x"]["nick"],
+                "jogador_o": jogo["jogador_o"]["nick"],
+                "quem_comeca": primeiro,
+            })
+            await transmitir_sala(sala, estado_para_cliente(jogo, "X"), {id(websocket)})
+            await websocket.send_json(estado_para_cliente(jogo, my_piece))
     else:
         await websocket.send_json({
             "tipo": "esperando",
@@ -878,34 +931,14 @@ async def ws_velha(websocket: WebSocket, sala: str):
             conexoes_ws[sala].remove(websocket)
 
             if not eh_espectador and not _saiu_explicitamente:
-                if my_piece == "X":
-                    jogo["jogador_x"] = None
-                else:
-                    jogo["jogador_o"] = None
-
-                if not jogo["jogador_x"] and not jogo["jogador_o"]:
-                    try:
-                        await transmitir_sala(sala, {
-                            "tipo": "oponente_desconectou",
-                            "nick": nick,
-                        })
-                    except Exception:
-                        pass
-                    limpar_sala(sala)
-                else:
-                    reiniciar_jogo(jogo)
-                    try:
-                        await transmitir_sala(sala, {
-                            "tipo": "oponente_saiu reiniciando",
-                            "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
-                            "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
-                        })
-                    except Exception:
-                        pass
-                try:
-                    await transmitir_salas_lobby()
-                except Exception:
-                    pass
+                key = f"{sala}:{my_piece}"
+                old = _reconnect_timers.pop(key, None)
+                if old:
+                    old.cancel()
+                task = asyncio.create_task(
+                    _delayed_disconnect(sala, my_piece, jogo, nick)
+                )
+                _reconnect_timers[key] = task
 
 
 # ---------------------------------------------------------------------------
