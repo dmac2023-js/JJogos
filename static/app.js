@@ -546,7 +546,6 @@ function conectarWsVelha(sala, nome, nick, espectador) {
   velhaEspectador = espectador;
 
   if (!espectador) {
-    velhaReconnectAttempts = 0;
     localStorage.setItem("velha-reconnect", JSON.stringify({
       sala: sala, nome: nome, nick: nick
     }));
@@ -685,6 +684,7 @@ async function criarSalaVelha() {
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
 
     velhaModo = "multiplayer";
+    velhaReconnectAttempts = 0;
     velhaSala = dados.sala;
     mostrarTela(telaVelha);
     mostrarCodigoSala(dados.sala);
@@ -716,6 +716,7 @@ function entrarSalaVelha(codigo) {
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
 
   velhaModo = "multiplayer";
+  velhaReconnectAttempts = 0;
   mostrarTela(telaVelha);
   esconderCodigoSala();
   atualizarVelhaMensagem("Entrando na sala...");
@@ -926,15 +927,11 @@ async function conectarAoDiscord() {
     await discordSdkGlobal.ready();
 
     try {
-      var opcoes = await discordSdkGlobal.commands.getUser({ id: discordSdkGlobal.applicationId });
-      usuarioDiscord = opcoes;
+      var opcoes = await discordSdkGlobal.commands.authenticate();
+      usuarioDiscord = opcoes.user || opcoes;
+      console.log("Discord user identified:", usuarioDiscord.username);
     } catch (e) {
-      try {
-        var opcoes2 = await discordSdkGlobal.commands.authenticate();
-        usuarioDiscord = opcoes2;
-      } catch (e2) {
-        console.warn("Não foi possível obter dados do usuário:", e2);
-      }
+      console.warn("Não foi possível autenticar:", e);
     }
 
     elementoStatus.textContent = "Conectado ao Discord";
@@ -957,3 +954,32 @@ window.addEventListener("unhandledrejection", function (e) {
 
 carregarHistorico();
 conectarAoDiscord();
+
+// Auto-reconnect after Discord iframe reload
+(function () {
+  var saved = localStorage.getItem("velha-reconnect");
+  if (saved) {
+    try {
+      var info = JSON.parse(saved);
+      if (info.sala && info.nome && info.nick) {
+        console.log("Auto-reconectando à sala:", info.sala);
+        velhaModo = "multiplayer";
+        mostrarTela(telaVelha);
+        mostrarCodigoSala(info.sala);
+        atualizarVelhaMensagem("Reconectando...");
+        vezLabel.textContent = "Reconectando...";
+        vezLabel.className = "indicador-vez";
+        document.querySelector("#reiniciar-velha").style.display = "none";
+        document.querySelector("#sair-sala-velha").style.display = "";
+        document.querySelector("#espectadores-bar").style.display = "none";
+        limparTabuleiro();
+        velhaReconnectAttempts = 1;
+        setTimeout(function () {
+          conectarWsVelha(info.sala, info.nome, info.nick, false);
+        }, 1500);
+      }
+    } catch (e) {
+      localStorage.removeItem("velha-reconnect");
+    }
+  }
+})();
