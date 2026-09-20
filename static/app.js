@@ -253,6 +253,7 @@ let velhaDificuldade = "facil";
 let velhaWs = null;
 let velhaSala = null;
 let velhaEspectador = false;
+let velhaDonoSaiu = false;
 let velhaReconnectAttempts = 0;
 const VELHA_MAX_RECONNECT = 5;
 let velhaPingTimer = null;
@@ -581,6 +582,10 @@ function conectarWsVelha(sala, nome, nick, espectador) {
     clearInterval(velhaPingTimer);
     console.warn("WebSocket fechado. code=" + evento.code + " reason=" + evento.reason + " wasClean=" + evento.wasClean);
 
+    if (velhaDonoSaiu) {
+      return;
+    }
+
     if (evento.code === 1006 && !velhaEspectador && velhaReconnectAttempts < VELHA_MAX_RECONNECT) {
       var saved = localStorage.getItem("velha-reconnect");
       if (saved) {
@@ -655,15 +660,26 @@ function processarMensagemVelha(dados) {
       break;
 
     case "oponente_desconectou":
+      localStorage.removeItem("velha-reconnect");
+      velhaReconnectAttempts = VELHA_MAX_RECONNECT;
+      velhaDonoSaiu = !!dados.dono_saiu;
       limparTabuleiro();
-      atualizarVelhaMensagem("Sala encerrada.", "erro");
+      atualizarVelhaMensagem(dados.mensagem || "Sala encerrada.", "erro");
       vezLabel.textContent = "";
       vezLabel.className = "indicador-vez";
       document.querySelector("#reiniciar-velha").style.display = "none";
-
-      document.querySelector("#sair-sala-velha").style.display = "";
       document.querySelector("#espectadores-bar").style.display = "none";
       esconderCodigoSala();
+
+      if (velhaDonoSaiu) {
+        document.querySelector("#sair-sala-velha").style.display = "none";
+        setTimeout(function () {
+          velhaDonoSaiu = false;
+          mostrarTela(telaLobbyVelha);
+        }, 1500);
+      } else {
+        document.querySelector("#sair-sala-velha").style.display = "";
+      }
       break;
 
     case "espectador_entrou":

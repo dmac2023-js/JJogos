@@ -313,17 +313,23 @@ def jogada_ia(tabuleiro: List[str], dificuldade: str) -> int:
 def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str) -> dict:
     jogo_id = secrets.token_urlsafe(12)
     sala = secrets.token_urlsafe(6) if modo == "multiplayer" else None
+    # O criador da sala ocupa a vaga "X" e é o dono (responsável pela sala).
+    # Antes, nome_x/nick_x eram ignorados e o criador só era atribuído quando
+    # o WebSocket conectava — o nome sumia do lobby e outro jogador podia
+    # roubar a vaga X antes da conexão.
+    jogador_x = {"nome": nome_x, "nick": nick_x} if modo == "multiplayer" else None
     jogo = {
         "jogo_id": jogo_id,
         "modo": modo,
         "tabuleiro": ["", "", "", "", "", "", "", "", ""],
         "jogador_atual": "X",
-        "jogador_x": None,
+        "jogador_x": jogador_x,
         "jogador_o": None,
         "jogo_ativo": True,
         "resultado": None,
         "sala": sala,
         "dificuldade": dificuldade if modo == "maquina" else None,
+        "dono": "X" if modo == "multiplayer" else None,
     }
     jogos[jogo_id] = jogo
     if sala:
@@ -390,10 +396,29 @@ async def transmitir_salas_lobby():
 
 
 def limpar_sala(sala: str):
-    if sala in salas_velha:
-        del salas_velha[sala]
-    if sala in conexoes_ws:
-        del conexoes_ws[sala]
+    jogo_id = salas_velha.pop(sala, None)
+    if jogo_id and jogo_id in jogos:
+        del jogos[jogo_id]
+    conexoes_ws.pop(sala, None)
+
+
+async def _fechar_sala_por_dono(sala: str, jogo: dict, excluido: Optional[WebSocket] = None):
+    """O dono da sala saiu: avisa os demais, fecha a sala e limpa o estado."""
+    mensagem = {
+        "tipo": "oponente_desconectou",
+        "mensagem": "O dono da sala saiu. A sala foi encerrada.",
+        "dono_saiu": True,
+    }
+    for ws in list(conexoes_ws.get(sala, [])):
+        if id(ws) == id(excluido):
+            continue
+        try:
+            await ws.send_json(mensagem)
+            await ws.close()
+        except Exception:
+            pass
+    limpar_sala(sala)
+    await transmitir_salas_lobby()
 
 
 # ---------------------------------------------------------------------------
@@ -594,7 +619,7 @@ def salvar_novo_record(dados: NovoRecord):
 # ---------------------------------------------------------------------------
 
 @app.post("/velha/novo")
-def novo_jogo_velha(dados: NovoJogoVelha):
+async def novo_jogo_velha(dados: NovoJogoVelha):
     modo = dados.modo.lower()
     if modo not in {"maquina", "multiplayer"}:
         raise HTTPException(status_code=400, detail="Modo inválido.")
@@ -603,11 +628,15 @@ def novo_jogo_velha(dados: NovoJogoVelha):
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
 
     jogo = criar_novo_jogo_velha(modo, dificuldade, dados.nome, dados.nick)
+    # Avisa imediatamente o lobby para os oponentes verem a sala em tempo real.
+    if modo == "multiplayer":
+        await transmitir_salas_lobby()
     return {
         "jogo_id": jogo["jogo_id"],
         "sala": jogo["sala"],
         "tabuleiro": jogo["tabuleiro"],
         "jogador_atual": jogo["jogador_atual"],
+        "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
     }
 
 
@@ -752,6 +781,10 @@ async def _delayed_disconnect(sala: str, piece: str, jogo: dict, nick: str):
     slot = jogo.get(slot_key)
     if not slot or slot["nick"] != nick:
         return
+    # O dono da sala caiu e não voltou: encerra a sala e remove o oponente.
+    if jogo.get("dono") == piece:
+        await _fechar_sala_por_dono(sala, jogo)
+        return
     jogo[slot_key] = None
     if not jogo["jogador_x"] and not jogo["jogador_o"]:
         try:
@@ -815,24 +848,27 @@ async def ws_velha(websocket: WebSocket, sala: str):
 
     my_piece = None
     is_reconnect = False
-    if not jogo["jogador_x"]:
-        jogo["jogador_x"] = {"nome": nome, "nick": nick}
-        my_piece = "X"
-    elif not jogo["jogador_o"]:
-        jogo["jogador_o"] = {"nome": nome, "nick": nick}
-        my_piece = "O"
-    elif jogo["jogador_x"]["nick"] == nick:
+    # Verifica primeiro se o nick já ocupa um lugar (reconexão), ANTES de
+    # preencher vagas livres. Com o criador pré-atribuído como "X" na criação,
+    # o criador deve voltar a ser "X" e não virar "O" acidentalmente.
+    if jogo["jogador_x"] and jogo["jogador_x"]["nick"] == nick:
         my_piece = "X"
         is_reconnect = True
         t = _reconnect_timers.pop(f"{sala}:X", None)
         if t:
             t.cancel()
-    elif jogo["jogador_o"]["nick"] == nick:
+    elif jogo["jogador_o"] and jogo["jogador_o"]["nick"] == nick:
         my_piece = "O"
         is_reconnect = True
         t = _reconnect_timers.pop(f"{sala}:O", None)
         if t:
             t.cancel()
+    elif not jogo["jogador_x"]:
+        jogo["jogador_x"] = {"nome": nome, "nick": nick}
+        my_piece = "X"
+    elif not jogo["jogador_o"]:
+        jogo["jogador_o"] = {"nome": nome, "nick": nick}
+        my_piece = "O"
     else:
         await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
         await websocket.close()
@@ -907,6 +943,10 @@ async def ws_velha(websocket: WebSocket, sala: str):
 
             elif tipo == "sair":
                 _saiu_explicitamente = True
+                # O dono saiu: encerra a sala e remove o oponente/espectadores.
+                if jogo.get("dono") == my_piece:
+                    await _fechar_sala_por_dono(sala, jogo, excluido=websocket)
+                    break
                 if my_piece == "X":
                     jogo["jogador_x"] = None
                 else:
