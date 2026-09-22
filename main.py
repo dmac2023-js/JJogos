@@ -97,6 +97,10 @@ class NovaTransmissao(BaseModel):
     fps: int = 30
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 # ---------------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------------
@@ -490,6 +494,28 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
     return resposta.json()
 
 
+@app.post("/token/refresh")
+def renovar_token(dados: RefreshTokenRequest):
+    if not DISCORD_APPLICATION_ID or not DISCORD_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
+
+    resposta = requests.post(
+        "https://discord.com/api/oauth2/token",
+        data={
+            "client_id": DISCORD_APPLICATION_ID,
+            "client_secret": DISCORD_CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": dados.refresh_token,
+        },
+        timeout=15,
+    )
+
+    if resposta.status_code != 200:
+        raise HTTPException(status_code=400, detail="Não foi possível renovar a sessão.")
+
+    return resposta.json()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints — jogos disponíveis
 # ---------------------------------------------------------------------------
@@ -764,6 +790,7 @@ def salvar_record_velha(dados: NovoRecordVelha):
 # ---------------------------------------------------------------------------
 
 @app.websocket("/ws/lobby")
+@app.websocket("/lobby")
 async def ws_lobby(websocket: WebSocket):
     await websocket.accept()
     conexoes_lobby.append(websocket)
@@ -818,6 +845,7 @@ async def _delayed_disconnect(sala: str, piece: str, jogo: dict, nick: str):
 
 
 @app.websocket("/ws/velha/{sala}")
+@app.websocket("/velha/{sala}")
 async def ws_velha(websocket: WebSocket, sala: str):
     await websocket.accept()
     query = websocket.query_params
@@ -1000,6 +1028,11 @@ async def ws_velha(websocket: WebSocket, sala: str):
 RESOLUCOES_VALIDAS = {"480p", "720p", "1080p"}
 FPS_VALIDOS = {30, 60}
 MAX_ESPECTADORES_TELA = 9
+SALA_TELA_SEM_HOST_SEGUNDOS = 90
+
+
+def log_tela(mensagem: str) -> None:
+    print("[tela] " + mensagem, flush=True)
 
 
 def info_transmissao(sala: str, transmissao: dict) -> dict:
@@ -1010,6 +1043,15 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
         "fps": transmissao["fps"],
         "espectadores": len(transmissao["viewers"]),
     }
+
+
+def purgar_transmissoes_obsoletas() -> None:
+    """Remove salas criadas mas sem host conectado (ex.: POST ok e WS falhou)."""
+    agora = time.time()
+    for sala, t in list(salas_tela.items()):
+        if t["host_ws"] is None and agora - t.get("criado_em", agora) > SALA_TELA_SEM_HOST_SEGUNDOS:
+            salas_tela.pop(sala, None)
+            log_tela("sala obsoleta removida sala=" + sala)
 
 
 @app.post("/tela/novo")
@@ -1028,69 +1070,71 @@ def criar_transmissao(dados: NovaTransmissao):
         "resolucao": resolucao,
         "fps": dados.fps,
         "viewers": {},
+        "criado_em": time.time(),
     }
+    log_tela("sala criada sala=%s res=%s fps=%s instancia=%s" % (
+        sala, resolucao, dados.fps, salas_tela[sala]["instancia"] or "-"))
     return {"sala": sala, "resolucao": resolucao, "fps": dados.fps}
 
 
 @app.get("/tela/transmissoes")
 def listar_transmissoes(instancia: str = ""):
-    """Lista transmissões de uma instância da Activity (ou as públicas, se vazio)."""
+    """Lista as transmissões de UMA instância da call.
+
+    Salas são privadas: sem instância (call) não há lista — quem está fora
+    só entra pelo código da sala.
+    """
+    purgar_transmissoes_obsoletas()
     instancia = instancia.strip()[:64] or None
+    if not instancia:
+        return {"transmissoes": []}
     return {
         "transmissoes": [
             info_transmissao(sala, t)
             for sala, t in salas_tela.items()
-            if t["instancia"] == instancia
+            if t["instancia"] == instancia and t["host_ws"] is not None
         ]
     }
 
 
 @app.get("/tela/sala/{sala}")
 def obter_transmissao(sala: str):
+    purgar_transmissoes_obsoletas()
     transmissao = salas_tela.get(sala)
     if not transmissao:
         raise HTTPException(status_code=404, detail="Transmissão não encontrada.")
     return info_transmissao(sala, transmissao)
 
 
-async def _encerrar_transmissao(sala: str, transmissao: dict):
-    """Host saiu: avisa todos os espectadores e remove a sala."""
+async def _encerrar_transmissao(sala: str, transmissao: dict, motivo: str):
+    """Host saiu/perdeu conexão: encerra a sala e derruba todos os espectadores."""
+    log_tela("encerrando sala=%s motivo=%s espectadores=%d" % (
+        sala, motivo, len(transmissao["viewers"])))
     for ws in list(transmissao["viewers"].values()):
         try:
-            await ws.send_json({"tipo": "transmissao_encerrada"})
+            await ws.send_json({"tipo": "transmissao_encerrada", "motivo": motivo})
             await ws.close()
         except Exception:
             pass
     salas_tela.pop(sala, None)
 
 
-@app.websocket("/ws/tela/{sala}")
-async def ws_tela(websocket: WebSocket, sala: str):
-    await websocket.accept()
-    papel = websocket.query_params.get("papel", "viewer")
-    nick = websocket.query_params.get("nick", "Anônimo")
-
-    transmissao = salas_tela.get(sala)
-    if not transmissao:
-        await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão não encontrada."})
-        await websocket.close()
-        return
-
-    if papel == "host":
-        await _ws_tela_host(websocket, sala, transmissao, nick)
-    else:
-        await _ws_tela_viewer(websocket, sala, transmissao, nick)
-
-
 async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
-    if transmissao["host_ws"] is not None:
-        await websocket.send_json({"tipo": "erro", "mensagem": "Já existe uma transmissão ativa nesta sala."})
-        await websocket.close()
-        return
-
+    antigo = transmissao.get("host_ws")
+    # Substitui ANTES de fechar o antigo: o finally do antigo só encerra a
+    # sala se ele ainda for o host_ws registrado (senão mataria a sala nova).
     transmissao["host_ws"] = websocket
     transmissao["host_nick"] = nick
-    # Espectadores já na sala precisam abrir conexão WebRTC com o novo host.
+    if antigo is not None and antigo is not websocket:
+        # Reconexão do host (ex.: aba recarregada): sem encerrar a sala.
+        log_tela("host reconectado, substituindo conexao antiga sala=" + sala)
+        try:
+            await antigo.close()
+        except Exception:
+            pass
+
+    log_tela("host conectado sala=%s nick=%s" % (sala, nick))
+    # Espectadores já na sala precisam abrir conexão WebRTC com o (novo) host.
     for viewer_id in list(transmissao["viewers"].keys()):
         try:
             await websocket.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id})
@@ -1119,17 +1163,23 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
         pass
     finally:
         if transmissao.get("host_ws") is websocket:
-            await _encerrar_transmissao(sala, transmissao)
+            log_tela("host desconectado sala=" + sala)
+            await _encerrar_transmissao(sala, transmissao, "host_saiu")
+        else:
+            log_tela("conexao antiga de host ignorada sala=" + sala)
 
 
 async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
     if len(transmissao["viewers"]) >= MAX_ESPECTADORES_TELA:
+        log_tela("viewer recusado (sala cheia) sala=" + sala)
         await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão cheia (máximo de 9 espectadores)."})
         await websocket.close()
         return
 
     viewer_id = secrets.token_urlsafe(8)
     transmissao["viewers"][viewer_id] = websocket
+    log_tela("viewer conectado sala=%s nick=%s total=%d" % (
+        sala, nick, len(transmissao["viewers"])))
     await websocket.send_json(info_transmissao(sala, transmissao) | {"tipo": "entrada_ok"})
 
     host_ws = transmissao.get("host_ws")
@@ -1167,12 +1217,34 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
     finally:
         if transmissao["viewers"].get(viewer_id) is websocket:
             del transmissao["viewers"][viewer_id]
+            log_tela("viewer desconectado sala=%s nick=%s total=%d" % (
+                sala, nick, len(transmissao["viewers"])))
             host_ws = transmissao.get("host_ws")
             if host_ws:
                 try:
                     await host_ws.send_json({"tipo": "viewer_saiu", "viewer_id": viewer_id, "nick": nick})
                 except Exception:
                     pass
+
+
+@app.websocket("/ws/tela/{sala}")
+@app.websocket("/tela/{sala}")
+async def ws_tela(websocket: WebSocket, sala: str):
+    await websocket.accept()
+    papel = websocket.query_params.get("papel", "viewer")
+    nick = websocket.query_params.get("nick", "Anônimo")
+
+    transmissao = salas_tela.get(sala)
+    if not transmissao:
+        log_tela("ws recusado, sala inexistente sala=" + sala)
+        await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão não encontrada."})
+        await websocket.close()
+        return
+
+    if papel == "host":
+        await _ws_tela_host(websocket, sala, transmissao, nick)
+    else:
+        await _ws_tela_viewer(websocket, sala, transmissao, nick)
 
 
 # ---------------------------------------------------------------------------

@@ -970,8 +970,9 @@ async function conectarAoDiscord() {
 
     elementoStatus.textContent = "Conectado ao Discord";
     elementoStatus.classList.add("conectado");
+    renderAuth();
   } catch (erro) {
-    console.warn("A conexão com o Discord não foi concluída:", erro);
+    console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
   }
 }
 
@@ -1003,7 +1004,15 @@ var videoTransmissaoEl = document.querySelector("#video-transmissao");
 
 function obterInstanciaParam() {
   var params = new URLSearchParams(location.search);
-  return params.get("instancia") || "";
+  // O Discord injeta o param instance_id no iframe da Activity.
+  return params.get("instancia") || params.get("instance_id") || "";
+}
+
+// True dentro da Activity (mesmo se o SDK falhar ao carregar).
+function dentroDaActivity() {
+  if (discordSdkGlobal) return true;
+  var params = new URLSearchParams(location.search);
+  return params.has("frame_id") || params.has("instance_id");
 }
 
 function compartilharInstanciaAtual() {
@@ -1041,12 +1050,21 @@ function atualizarAvisoUpload() {
 function abrirTelaCompartilhar() {
   mostrarTela(telaCompartilhar);
   mensagemTela("");
-  var noNavegador = !discordSdkGlobal;
-  document.querySelector("#tela-aviso-navegador").style.display = noNavegador ? "none" : "";
-  document.querySelector("#tela-config-host").style.display = noNavegador ? "" : "none";
+  var naActivity = dentroDaActivity();
+  document.querySelector("#tela-aviso-navegador").style.display = naActivity ? "" : "none";
+  document.querySelector("#tela-config-host").style.display = naActivity ? "none" : "";
   document.querySelector("#abrir-navegador-tela").style.display = "";
+
+  // Lista é privada: só existe para quem tem a instância da call. Sem ela,
+  // quem está fora entra apenas com o código.
+  var temInstancia = !!compartilharInstanciaAtual();
+  document.querySelector("#lista-transmissoes").style.display = temInstancia ? "" : "none";
+  document.querySelector("#atualizar-transmissoes").style.display = temInstancia ? "" : "none";
+  document.querySelector("#assistir-titulo-lista").style.display = temInstancia ? "" : "none";
+
   atualizarAvisoUpload();
-  carregarTransmissoes();
+  if (temInstancia) carregarTransmissoes();
+  else document.querySelector("#lista-transmissoes").innerHTML = '<p class="vazio">Nenhuma transmissão ativa.</p>';
 }
 
 async function abrirNoNavegadorParaTransmitir() {
@@ -1221,6 +1239,7 @@ function atualizarContadorViewers(delta) {
 
 function encerrarTransmissao(silencioso) {
   limparConexaoTela();
+  telaSala = null;
   if (telaEhHost && telaStream) {
     telaStream.getTracks().forEach(function (t) { t.stop(); });
   }
@@ -1301,6 +1320,7 @@ function processarOfertaHost(sdp) {
 
 function pararDeAssistir() {
   limparConexaoTela();
+  telaSala = null;
   telaEhHost = false;
   videoTransmissaoEl.srcObject = null;
   mostrarTela(telaCompartilhar);
@@ -1310,28 +1330,42 @@ function pararDeAssistir() {
 // ---------------------------------------------------------------------------
 // Compartilhar Tela - WebSocket de sinalização
 // ---------------------------------------------------------------------------
+var telaAbriu = false;
+var telaTentativa = 1;
+var TELA_MAX_TENTATIVAS = 3;
+
 function enviarTela(obj) {
   if (telaWs && telaWs.readyState === WebSocket.OPEN) {
     telaWs.send(JSON.stringify(obj));
   }
 }
 
-function conectarWsTela(host) {
-  limparConexaoTela();
+function conectarWsTela(host, tentativa) {
+  limparConexaoTela(); // não mexe em telaSala — quem chama já definiu a sala
+  telaAbriu = false;
+  telaTentativa = tentativa || 1;
 
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
   var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocolo + "//" + location.host + "/ws/tela/" + encodeURIComponent(telaSala) +
     "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick);
 
-  telaWs = new WebSocket(url);
+  var ws = new WebSocket(url);
+  telaWs = ws;
 
   clearInterval(telaPingTimer);
   telaPingTimer = setInterval(function () {
     enviarTela({ tipo: "ping" });
   }, 20000);
 
-  telaWs.onmessage = function (evento) {
+  ws.onopen = function () {
+    telaAbriu = true;
+    if (telaTentativa > 1) {
+      mensagemTransmissao(host ? "Reconectado ao servidor." : "Reconectado. Recebendo transmissão...", "sucesso");
+    }
+  };
+
+  ws.onmessage = function (evento) {
     try {
       processarMensagemTela(JSON.parse(evento.data));
     } catch (e) {
@@ -1339,20 +1373,47 @@ function conectarWsTela(host) {
     }
   };
 
-  telaWs.onclose = function (evento) {
+  ws.onclose = function (evento) {
+    if (ws !== telaWs) return; // conexão já substituída/desligada de propósito
     clearInterval(telaPingTimer);
-    if (!telaSala) return; // fechamento proposital já tratado
-    console.warn("WS tela fechado:", evento.code);
-    if (telaEhHost) {
-      encerrarTransmissao(false);
-      mensagemTela("Conexão com o servidor foi encerrada.", "erro");
+    if (!telaSala) return;
+    console.warn("WS tela fechado: code=" + evento.code + " abriu=" + telaAbriu);
+
+    // Nunca chegou a abrir: pode ser instância acordando/proxy — tenta de novo.
+    if (!telaAbriu && telaTentativa < TELA_MAX_TENTATIVAS) {
+      mensagemTransmissao("Reconectando ao servidor... (" + telaTentativa + "/" + TELA_MAX_TENTATIVAS + ")");
+      setTimeout(function () {
+        if (telaSala) conectarWsTela(host, telaTentativa + 1);
+      }, 1500 * telaTentativa);
+      return;
+    }
+
+    if (host) {
+      encerrarTransmissao(true);
+      mensagemTela(telaAbriu
+        ? "Conexão com o servidor foi encerrada."
+        : "Não foi possível conectar ao servidor. Tente novamente.", "erro");
+      mostrarTela(telaCompartilhar);
+      carregarTransmissoes();
     } else {
-      pararDeAssistir();
-      mensagemTela("Conexão com o servidor foi encerrada.", "erro");
+      encerrarViewerTela(telaAbriu
+        ? "Conexão com o servidor foi encerrada."
+        : "Não foi possível conectar ao servidor. Tente novamente.");
     }
   };
 
-  telaWs.onerror = function () {};
+  ws.onerror = function () {};
+}
+
+// Fecha a conexão do espectador mostrando o erro sem voltar de tela antes da
+// hora (o onclose é ignorado porque limparConexaoTela desliga os handlers).
+function encerrarViewerTela(mensagem) {
+  limparConexaoTela();
+  telaSala = null;
+  telaEhHost = false;
+  document.querySelector("#parar-assistir").style.display = "none";
+  document.querySelector("#encerrar-transmissao").style.display = "none";
+  if (mensagem) mensagemTransmissao(mensagem, "erro");
 }
 
 function processarMensagemTela(dados) {
@@ -1392,21 +1453,30 @@ function processarMensagemTela(dados) {
       }
       break;
     case "transmissao_encerrada":
-      mensagemTransmissao("A transmissão foi encerrada.", "erro");
+      // O host saiu: a sala foi fechada — derruba o espectador.
       if (telaPeerViewer) {
-        telaPeerViewer.close();
+        limparConexaoTela();
         telaPeerViewer = null;
       }
       videoTransmissaoEl.srcObject = null;
-      setTimeout(pararDeAssistir, 2000);
+      mensagemTransmissao("A transmissão foi encerrada" +
+        (dados.motivo === "host_saiu" ? ": quem transmitiu saiu." : "."), "erro");
+      setTimeout(function () {
+        telaSala = null;
+        mostrarTela(telaCompartilhar);
+        carregarTransmissoes();
+      }, 2500);
       break;
     case "erro":
+      // O servidor vai fechar a conexão: desliga os handlers ANTES para o
+      // onclose não sobrescrever esta mensagem.
       if (telaEhHost) {
-        mensagemTransmissao(dados.mensagem, "erro");
-        encerrarTransmissao(false);
+        encerrarTransmissao(true);
+        mensagemTela(dados.mensagem, "erro");
+        mostrarTela(telaCompartilhar);
+        carregarTransmissoes();
       } else {
-        mensagemTransmissao(dados.mensagem, "erro");
-        setTimeout(pararDeAssistir, 2000);
+        encerrarViewerTela(dados.mensagem);
       }
       break;
   }
@@ -1414,11 +1484,16 @@ function processarMensagemTela(dados) {
 
 function limparConexaoTela() {
   if (telaWs) {
-    try { enviarTela({ tipo: "sair" }); } catch (e) { /* ignore */ }
     var ws = telaWs;
     telaWs = null;
-    telaSala = null;
     clearInterval(telaPingTimer);
+    // Desliga os handlers ANTES de fechar: fechações propositais não devem
+    // disparar a lógica de onclose (senão derrubam a nova conexão).
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    try { ws.send(JSON.stringify({ tipo: "sair" })); } catch (e) { /* ignore */ }
     try { ws.close(); } catch (e) { /* ignore */ }
   }
   Object.keys(telaPeers).forEach(function (id) {
@@ -1501,6 +1576,157 @@ document.querySelector("#copiar-codigo-tela").addEventListener("click", function
 });
 
 // ---------------------------------------------------------------------------
+// Discord OAuth2 - login no site (modo navegador)
+// ---------------------------------------------------------------------------
+function estadoDiscord() {
+  try {
+    return JSON.parse(localStorage.getItem("usuario-discord") || "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+function salvarSessaoDiscord(sessao) {
+  localStorage.setItem("usuario-discord", JSON.stringify(sessao));
+  usuarioDiscord = sessao.user;
+  renderAuth();
+}
+
+function limparSessaoDiscord() {
+  localStorage.removeItem("usuario-discord");
+  usuarioDiscord = null;
+  renderAuth();
+}
+
+function avatarUrlDiscord(user) {
+  if (user && user.avatar) {
+    return "https://cdn.discordapp.com/avatars/" + user.id + "/" + user.avatar + ".png?size=64";
+  }
+  return "https://cdn.discordapp.com/embed/avatars/" + ((user ? parseInt(user.discriminator || "0", 10) : 0) % 6) + ".png";
+}
+
+function renderAuth() {
+  var botaoLogin = document.querySelector("#btn-login-discord");
+  var caixa = document.querySelector("#auth-usuario");
+  if (!botaoLogin || !caixa) return;
+
+  if (usuarioDiscord) {
+    botaoLogin.style.display = "none";
+    caixa.style.display = "";
+    document.querySelector("#auth-avatar").src = avatarUrlDiscord(usuarioDiscord);
+    document.querySelector("#auth-nome").textContent =
+      usuarioDiscord.global_name || usuarioDiscord.username;
+    // Na Activity a identidade vem do SDK — logout local não faria sentido.
+    document.querySelector("#btn-logout-discord").style.display = dentroDaActivity() ? "none" : "";
+  } else {
+    caixa.style.display = "none";
+    botaoLogin.style.display = dentroDaActivity() ? "none" : "";
+  }
+}
+
+async function iniciarLoginDiscord() {
+  try {
+    var res = await fetch("./config");
+    var config = await res.json();
+    if (!config.application_id) throw new Error("application_id ausente.");
+
+    var state = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : String(Math.random()).slice(2) + String(Math.random()).slice(2);
+    sessionStorage.setItem("oauth-state", state);
+
+    var url = "https://discord.com/api/oauth2/authorize?" + new URLSearchParams({
+      client_id: config.application_id,
+      response_type: "code",
+      redirect_uri: location.origin + "/auth/callback",
+      scope: "identify",
+      state: state,
+    });
+    location.href = url;
+  } catch (e) {
+    console.warn("Falha ao iniciar login:", e);
+    abrirTelaCompartilhar();
+    mensagemTela("Não foi possível iniciar o login com o Discord.", "erro");
+  }
+}
+
+async function processarCallbackOAuth() {
+  var params = new URLSearchParams(location.search);
+  var code = params.get("code");
+  if (!code) return;
+
+  var state = params.get("state");
+  var guardado = sessionStorage.getItem("oauth-state");
+  sessionStorage.removeItem("oauth-state");
+  history.replaceState({}, "", "/");
+
+  if (!state || !guardado || state !== guardado) {
+    console.warn("OAuth: state inválido.");
+    abrirTelaCompartilhar();
+    mensagemTela("Login cancelado (verificação de segurança falhou).", "erro");
+    return;
+  }
+
+  try {
+    var res = await fetch("./token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code }),
+    });
+    var token = await res.json();
+    if (!res.ok) throw new Error(token.detail || "Falha ao trocar o código.");
+
+    var me = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: "Bearer " + token.access_token },
+    });
+    if (!me.ok) throw new Error("Falha ao obter o perfil.");
+    var user = await me.json();
+
+    salvarSessaoDiscord({
+      user: user,
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      obtido_em: Date.now(),
+    });
+    console.log("Login Discord ok:", user.username);
+  } catch (e) {
+    console.warn("OAuth callback falhou:", e);
+    abrirTelaCompartilhar();
+    mensagemTela("Não foi possível concluir o login com o Discord.", "erro");
+  }
+}
+
+async function restaurarSessaoDiscord() {
+  var sessao = estadoDiscord();
+  if (!sessao) return;
+
+  // Tokens do Discord expiram em ~7 dias; renova a partir do 6º.
+  var idade = Date.now() - (sessao.obtido_em || 0);
+  if (sessao.refresh_token && idade > 6 * 24 * 60 * 60 * 1000) {
+    try {
+      var res = await fetch("./token/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: sessao.refresh_token }),
+      });
+      if (res.ok) {
+        var novo = await res.json();
+        sessao.access_token = novo.access_token || sessao.access_token;
+        sessao.refresh_token = novo.refresh_token || sessao.refresh_token;
+        sessao.obtido_em = Date.now();
+        salvarSessaoDiscord(sessao);
+      }
+    } catch (e) { /* mantém a sessão atual */ }
+  }
+
+  usuarioDiscord = sessao.user;
+  renderAuth();
+}
+
+document.querySelector("#btn-login-discord").addEventListener("click", iniciarLoginDiscord);
+document.querySelector("#btn-logout-discord").addEventListener("click", limparSessaoDiscord);
+
+// ---------------------------------------------------------------------------
 // Inicialização
 // ---------------------------------------------------------------------------
 window.addEventListener("error", function (e) {
@@ -1514,19 +1740,24 @@ window.addEventListener("unhandledrejection", function (e) {
 carregarHistorico();
 conectarAoDiscord();
 
-// Links diretos: ?transmitir=1&instancia=... (gerado pelo botão da Activity)
-// e ?sala=<codigo> (link de espectador compartilhado manualmente).
+// Sessão OAuth + links diretos: ?transmitir=1&instancia=... (gerado pelo
+// botão da Activity), ?sala=<codigo> (espectador) e /auth/callback?code=...
 (function () {
-  var params = new URLSearchParams(location.search);
-  var salaCompartilhada = params.get("sala");
-  var querTransmitir = params.get("transmitir") === "1";
+  restaurarSessaoDiscord().then(function () {
+    renderAuth();
+    return processarCallbackOAuth();
+  }).then(function () {
+    var params = new URLSearchParams(location.search);
+    var salaCompartilhada = params.get("sala");
+    var querTransmitir = params.get("transmitir") === "1";
 
-  if (salaCompartilhada) {
-    abrirTelaCompartilhar();
-    assistirTransmissao(salaCompartilhada);
-  } else if (querTransmitir) {
-    abrirTelaCompartilhar();
-  }
+    if (salaCompartilhada) {
+      abrirTelaCompartilhar();
+      assistirTransmissao(salaCompartilhada);
+    } else if (querTransmitir) {
+      abrirTelaCompartilhar();
+    }
+  });
 })();
 
 // Auto-reconnect after Discord iframe reload

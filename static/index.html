@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
-    <link rel="stylesheet" href="./style.css?v=20260922-1" />
+    <link rel="stylesheet" href="./style.css?v=20260922-2" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -142,6 +142,13 @@
       .aviso-upload { margin: 6px 0 14px; color: #aeb2c7; font-size: 12px; line-height: 1.5; }
       .video-transmissao { display: block; width: 100%; max-height: 60vh; border-radius: 12px; background: #000; margin-top: 6px; }
 
+      /* Login Discord */
+      .cabecalho-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+      .botao-login { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+      #auth-usuario { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid #4b3b78; border-radius: 999px; background: #1b1e30; }
+      #auth-avatar { width: 28px; height: 28px; border-radius: 50%; background: #34275d; }
+      #auth-nome { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8baff; font-size: 13px; }
+
       footer { margin-top: 24px; color: #777d98; font-size: 13px; text-align: center; }
       footer a { color: #aaa0ff; text-decoration: none; }
       footer a:hover { color: #c8baff; }
@@ -171,7 +178,15 @@
           <h1>Escolha seu jogo</h1>
           <p class="subtitulo">Uma coleção simples de jogos para jogar com seus amigos.</p>
         </div>
-        <span id="status-discord" class="status">Modo navegador</span>
+        <div class="cabecalho-acoes">
+          <span id="status-discord" class="status">Modo navegador</span>
+          <button id="btn-login-discord" class="botao botao-login">Entrar com Discord</button>
+          <div id="auth-usuario" style="display:none;">
+            <img id="auth-avatar" alt="" />
+            <span id="auth-nome"></span>
+            <button id="btn-logout-discord" class="botao-copiar">Sair</button>
+          </div>
+        </div>
       </header>
 
       <!-- Tela: Jogos -->
@@ -401,7 +416,7 @@
         </div>
 
         <div id="tela-assistir-bloco" style="margin-top: 22px;">
-          <h3 class="subtitulo-secao">Assistir</h3>
+          <h3 class="subtitulo-secao" id="assistir-titulo-lista">Transmissões na sua call</h3>
           <div id="lista-transmissoes"><p class="vazio">Nenhuma transmissão ativa.</p></div>
           <div class="sala-input" style="margin-top: 10px;">
             <input type="text" id="codigo-tela-input" placeholder="Ou digite o código da transmissão" maxlength="12" />
@@ -459,6 +474,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-1"></script>
+    <script src="./app.js?v=20260922-2"></script>
   </body>
 </html>

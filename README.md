@@ -12,10 +12,25 @@ Activity com backend em Python e jogos em navegador: Sudoku 9×9, Jogo da Velha
 - **Quem assiste**: de dentro da própria Activity (ou do navegador com o código
   da sala), recebe o vídeo via WebRTC P2P. O servidor só faz sinalização
   (SDP/ICE) em `/ws/tela/{sala}`; o vídeo nunca passa pelo backend.
+- **Salas privadas**: a lista só aparece para quem está na mesma call
+  (instância da Activity). Quem está fora entra apenas com o código da sala.
+- Quando quem transmite sai (ou perde a conexão), a sala é encerrada e todos
+  os espectadores são desconectados automaticamente.
 - Limite de 9 espectadores por transmissão. O upload do host é ~1 stream por
   espectador (1080p60 para 9 pessoas exige ~30 Mbps de upload — prefira 720p30).
-- Salas criadas a partir da Activity ficam vinculadas à instância da call
-  (só aparecem na lista de quem está na mesma call).
+
+## Login com Discord (site no navegador)
+
+O site tem login via OAuth2 (escopo `identify`) com botão "Entrar com Discord".
+Para funcionar, cadastre estes Redirect URIs no Developer Portal em
+**OAuth2 → Redirects**:
+
+- `https://jogos7.onrender.com/auth/callback` (produção)
+- `http://localhost:8080/auth/callback` (desenvolvimento local)
+
+A sessão fica no `localStorage` e o token é renovado automaticamente
+(`/token/refresh`) quando expira. Dentro da Activity o login não é necessário —
+a identidade vem do SDK.
 
 ## Rodar localmente
 
