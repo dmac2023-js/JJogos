@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
-    <link rel="stylesheet" href="./style.css?v=20260922-4" />
+    <base href="/" />
+    <link rel="stylesheet" href="./style.css?v=20260922-5" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -458,6 +459,7 @@
         </div>
 
         <video id="video-transmissao" class="video-transmissao" autoplay playsinline controls></video>
+        <canvas id="canvas-relay" class="video-transmissao" style="display:none;"></canvas>
 
         <div id="transmissao-qualidade" style="display:none;">
           <div class="grupo-preset">
@@ -505,6 +507,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-4"></script>
+    <script src="./app.js?v=20260922-5"></script>
   </body>
 </html>

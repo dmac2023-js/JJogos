@@ -1100,6 +1100,7 @@ def criar_transmissao(dados: NovaTransmissao):
         "resolucao": resolucao,
         "fps": dados.fps,
         "viewers": {},
+        "relay_ws": {},  # espectadores da Activity (vídeo via WS binário)
         "criado_em": time.time(),
     }
     log_tela("sala criada sala=%s res=%s fps=%s instancia=%s" % (
@@ -1149,6 +1150,25 @@ async def _encerrar_transmissao(sala: str, transmissao: dict, motivo: str):
     salas_tela.pop(sala, None)
 
 
+async def _notificar_total(transmissao: dict):
+    host = transmissao.get("host_ws")
+    if host:
+        try:
+            await host.send_json({"tipo": "viewers_total", "total": len(transmissao["viewers"])})
+        except Exception:
+            pass
+
+
+async def _notificar_relay_total(transmissao: dict):
+    host = transmissao.get("host_ws")
+    if host:
+        try:
+            await host.send_json({"tipo": "relay_total",
+                                  "total": len(transmissao.get("relay_ws", {}))})
+        except Exception:
+            pass
+
+
 async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
     antigo = transmissao.get("host_ws")
     # Substitui ANTES de fechar o antigo: o finally do antigo só encerra a
@@ -1164,17 +1184,45 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
             pass
 
     log_tela("host conectado sala=%s nick=%s" % (sala, nick))
-    # Espectadores já na sala precisam abrir conexão WebRTC com o (novo) host.
-    for viewer_id in list(transmissao["viewers"].keys()):
+    # Espectadores WebRTC já na sala precisam de oferta do (novo) host.
+    relay_ws_map = transmissao.setdefault("relay_ws", {})
+    for viewer_id, ws in list(transmissao["viewers"].items()):
+        if relay_ws_map.get(viewer_id) is ws:
+            continue  # quem assiste na Activity usa relay (sem WebRTC)
         try:
             await websocket.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id})
         except Exception:
             pass
     await websocket.send_json({"tipo": "host_pronto", "sala": sala})
+    # Relay (Activity): avisa os espectadores e o host (inicia o encoder).
+    for ws in list(relay_ws_map.values()):
+        try:
+            await ws.send_json({"tipo": "host_conectado"})
+        except Exception:
+            pass
+    await _notificar_total(transmissao)
+    await _notificar_relay_total(transmissao)
 
     try:
         while True:
-            dados = await websocket.receive_json()
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
+                # Quadro de vídeo VP8 do relay → fã-out para quem assiste na Activity.
+                for ws in list(transmissao.get("relay_ws", {}).values()):
+                    try:
+                        await ws.send_bytes(msg["bytes"])
+                    except Exception:
+                        pass
+                continue
+            text = msg.get("text")
+            if not text:
+                continue
+            try:
+                dados = json.loads(text)
+            except Exception:
+                continue
             tipo = dados.get("tipo")
             viewer_id = str(dados.get("viewer_id", ""))
             viewer_ws = transmissao["viewers"].get(viewer_id)
@@ -1192,8 +1240,8 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                     transmissao["fps"] = novo_fps
                     log_tela("config atualizada sala=%s res=%s fps=%s" % (sala, nova_res, novo_fps))
                 continue
-            # Relay de oferta/ICE do host para o espectador alvo.
-            if tipo in {"oferta", "ice"} and viewer_ws:
+            # Relay de oferta/ICE do host para o espectador alvo (só WebRTC).
+            if tipo in {"oferta", "ice"} and viewer_ws and viewer_id not in relay_ws_map:
                 try:
                     await viewer_ws.send_json({"tipo": tipo, "dados": dados.get("dados")})
                 except Exception:
@@ -1208,7 +1256,7 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
             log_tela("conexao antiga de host ignorada sala=" + sala)
 
 
-async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
+async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str, transporte: str):
     if len(transmissao["viewers"]) >= MAX_ESPECTADORES_TELA:
         log_tela("viewer recusado (sala cheia) sala=" + sala)
         await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão cheia (máximo de 9 espectadores)."})
@@ -1216,31 +1264,52 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
         return
 
     viewer_id = secrets.token_urlsafe(8)
+    eh_relay = transporte == "relay"
     transmissao["viewers"][viewer_id] = websocket
-    log_tela("viewer conectado sala=%s nick=%s total=%d" % (
-        sala, nick, len(transmissao["viewers"])))
+    if eh_relay:
+        transmissao.setdefault("relay_ws", {})[viewer_id] = websocket
+    log_tela("viewer conectado sala=%s nick=%s transporte=%s total=%d" % (
+        sala, nick, transporte, len(transmissao["viewers"])))
     await websocket.send_json(info_transmissao(sala, transmissao) | {"tipo": "entrada_ok"})
+    await _notificar_total(transmissao)
+    if eh_relay:
+        await _notificar_relay_total(transmissao)
 
     host_ws = transmissao.get("host_ws")
     if host_ws:
-        try:
-            await host_ws.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id, "nick": nick})
-        except Exception:
-            pass
+        if eh_relay:
+            await websocket.send_json({"tipo": "host_conectado"})
+        else:
+            try:
+                await host_ws.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id, "nick": nick})
+            except Exception:
+                pass
     else:
         await websocket.send_json({"tipo": "aguardando_host"})
 
+    relay_ws_map = transmissao.setdefault("relay_ws", {})
     try:
         while True:
-            dados = await websocket.receive_json()
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
+                continue  # espectador não envia binário
+            text = msg.get("text")
+            if not text:
+                continue
+            try:
+                dados = json.loads(text)
+            except Exception:
+                continue
             tipo = dados.get("tipo")
 
             if tipo == "ping":
                 continue
             if tipo == "sair":
                 break
-            # Relay de resposta/ICE do espectador para o host.
-            if tipo in {"resposta", "ice"}:
+            # Relay de resposta/ICE do espectador WebRTC para o host.
+            if tipo in {"resposta", "ice"} and not eh_relay:
                 host_ws = transmissao.get("host_ws")
                 if host_ws:
                     try:
@@ -1256,10 +1325,15 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
     finally:
         if transmissao["viewers"].get(viewer_id) is websocket:
             del transmissao["viewers"][viewer_id]
+            if relay_ws_map.get(viewer_id) is websocket:
+                del relay_ws_map[viewer_id]
             log_tela("viewer desconectado sala=%s nick=%s total=%d" % (
                 sala, nick, len(transmissao["viewers"])))
+            await _notificar_total(transmissao)
+            if eh_relay:
+                await _notificar_relay_total(transmissao)
             host_ws = transmissao.get("host_ws")
-            if host_ws:
+            if host_ws and not eh_relay:
                 try:
                     await host_ws.send_json({"tipo": "viewer_saiu", "viewer_id": viewer_id, "nick": nick})
                 except Exception:
@@ -1272,6 +1346,7 @@ async def ws_tela(websocket: WebSocket, sala: str):
     await websocket.accept()
     papel = websocket.query_params.get("papel", "viewer")
     nick = websocket.query_params.get("nick", "Anônimo")
+    transporte = websocket.query_params.get("transporte", "webrtc")
 
     transmissao = salas_tela.get(sala)
     if not transmissao:
@@ -1283,7 +1358,7 @@ async def ws_tela(websocket: WebSocket, sala: str):
     if papel == "host":
         await _ws_tela_host(websocket, sala, transmissao, nick)
     else:
-        await _ws_tela_viewer(websocket, sala, transmissao, nick)
+        await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte)
 
 
 # ---------------------------------------------------------------------------

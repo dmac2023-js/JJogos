@@ -9,9 +9,13 @@ Activity com backend em Python e jogos em navegador: Sudoku 9×9, Jogo da Velha
   botão "Abrir no navegador para transmitir" dentro da Activity, já com o
   `instanceId` da call), escolhe resolução (480p/720p/1080p) e FPS (30/60) e
   captura a tela com `getDisplayMedia`.
-- **Quem assiste**: de dentro da própria Activity (ou do navegador com o código
-  da sala), recebe o vídeo via WebRTC P2P. O servidor só faz sinalização
-  (SDP/ICE) em `/ws/tela/{sala}`; o vídeo nunca passa pelo backend.
+- **Quem assiste no site**: recebe o vídeo via WebRTC P2P; o servidor só faz
+  sinalização (SDP/ICE) em `/ws/tela/{sala}`.
+- **Quem assiste na Activity**: o Discord **não suporta WebRTC dentro da
+  Activity** (docs oficiais: "WebRTC is not supported" — todo o tráfego passa
+  pelo proxy). Por isso o espectador da Activity usa **relay por WebSocket**:
+  o host codifica VP8 no navegador (WebCodecs) e o servidor repassa os
+  quadros binários até um `<canvas>` — funciona dentro do Discord sem ICE.
 - **Salas privadas**: a lista só aparece para quem está na mesma call
   (instância da Activity). Quem está fora entra apenas com o código da sala.
 - **Código personalizado**: ao iniciar, o host pode escolher um código curto e

@@ -989,6 +989,17 @@ var telaPeerViewer = null; // viewer: 1 conexão com o host
 var telaResolucao = "720p";
 var telaFps = 30;
 var telaOfertaTimer = null;
+// Relay de vídeo (Activity não suporta WebRTC — docs do Discord).
+var telaModoRelay = false;
+var telaRelayTimer = null;
+var telaRelayTotal = 0;
+var relayFrameOk = false;
+var relayEncoder = null;
+var relayAtivo = false;
+var relayDrawTimer = null;
+var relayReader = null;
+var relayForcarKey = false;
+var relayDecoder = null;
 
 var TELA_PRESETS = {
   "480p": { largura: 854, altura: 480, bitrate: 800000 },
@@ -1095,6 +1106,7 @@ function definirResolucao(valor) {
   if (telaEhHost && telaStream) {
     aplicarQualidadeNosViewers();
     mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+    reiniciarEncoderRelaySeAtivo();
   }
 }
 
@@ -1109,6 +1121,7 @@ function definirFps(valor) {
   if (telaEhHost && telaStream) {
     aplicarQualidadeNosViewers();
     mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+    reiniciarEncoderRelaySeAtivo();
   }
 }
 
@@ -1164,9 +1177,139 @@ async function trocarJanelaTela() {
       console.warn("replaceTrack falhou, recriando conexões:", erro);
       concluir();
       Object.keys(telaPeers).forEach(function (id) {
-        criarPeerParaViewer(id, false);
+        criarPeerParaViewer(id);
       });
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - relay de vídeo por WebSocket (para a Activity)
+// O Discord não suporta WebRTC dentro da Activity; o host codifica VP8 com
+// WebCodecs e o servidor repassa os quadros binários até o canvas do viewer.
+// ---------------------------------------------------------------------------
+function iniciarDecoderRelay(resolucao) {
+  pararDecoderRelay();
+  var dims = { "480p": [854, 480], "720p": [1280, 720], "1080p": [1920, 1080] }[resolucao] || [1280, 720];
+  var canvas = document.querySelector("#canvas-relay");
+  canvas.width = dims[0];
+  canvas.height = dims[1];
+  if (typeof VideoDecoder === "undefined") {
+    mensagemTransmissao("Seu cliente não suporta o modo de vídeo compatível.", "erro");
+    return;
+  }
+  var ctx = canvas.getContext("2d");
+  relayDecoder = new VideoDecoder({
+    output: function (frame) {
+      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+      frame.close();
+    },
+    error: function (e) { console.warn("Decoder relay:", e); },
+  });
+  relayDecoder.configure({ codec: "vp8" });
+}
+
+function pararDecoderRelay() {
+  if (relayDecoder) {
+    try { if (relayDecoder.state !== "closed") relayDecoder.close(); } catch (e) { /* ignore */ }
+    relayDecoder = null;
+  }
+}
+
+function receberRelay(buffer) {
+  relayFrameOk = true;
+  clearTimeout(telaRelayTimer);
+  if (!relayDecoder || relayDecoder.state === "closed") return;
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 5) return;
+  var dv = new DataView(buffer);
+  var tipo = dv.getUint8(0) === 1 ? "key" : "delta";
+  var timestamp = dv.getUint32(1);
+  if (relayDecoder.decodeQueueSize > 30 && tipo === "delta") return;
+  try {
+    relayDecoder.decode({ type: tipo, timestamp: timestamp, data: new Uint8Array(buffer, 5) });
+  } catch (e) { console.warn("decode relay:", e); }
+}
+
+async function iniciarEncoderRelay() {
+  if (relayAtivo || !telaEhHost || !telaStream) return;
+  if (typeof VideoEncoder === "undefined" || typeof MediaStreamTrackProcessor === "undefined") {
+    console.warn("WebCodecs ausente: quem assiste na Activity não receberá vídeo.");
+    return;
+  }
+  relayAtivo = true;
+  var preset = TELA_PRESETS[telaResolucao];
+
+  var canvas = document.createElement("canvas");
+  canvas.width = preset.largura;
+  canvas.height = preset.altura;
+  var ctx = canvas.getContext("2d");
+
+  relayDrawTimer = setInterval(function () {
+    var v = videoTransmissaoEl;
+    if (v && v.readyState >= 2 && v.videoWidth > 0) {
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    }
+  }, Math.max(16, Math.floor(1000 / telaFps)));
+
+  var stream = canvas.captureStream(telaFps);
+  var track = stream.getVideoTracks()[0];
+
+  relayEncoder = new VideoEncoder({
+    output: function (chunk) {
+      if (!telaWs || telaWs.readyState !== WebSocket.OPEN) return;
+      var dados = chunk.data();
+      var pacote = new Uint8Array(5 + dados.byteLength);
+      pacote[0] = chunk.type === "key" ? 1 : 2;
+      new DataView(pacote.buffer).setUint32(1, chunk.timestamp);
+      pacote.set(new Uint8Array(dados), 5);
+      try { telaWs.send(pacote); } catch (e) { /* ignore */ }
+    },
+    error: function (e) { console.warn("Encoder relay:", e); },
+  });
+  relayEncoder.configure({
+    codec: "vp8",
+    width: canvas.width,
+    height: canvas.height,
+    framerate: telaFps,
+    bitrate: bitrateEfetivo(),
+    latencyMode: "realtime",
+  });
+
+  var reader = new MediaStreamTrackProcessor({ track: track }).readable.getReader();
+  relayReader = reader;
+  var ultimoKey = 0;
+
+  (async function laco() {
+    while (relayAtivo && relayReader === reader) {
+      var resultado = await reader.read();
+      if (resultado.done) break;
+      var frame = resultado.value;
+      if (!relayEncoder || relayEncoder.state === "closed") { frame.close(); break; }
+      if (relayEncoder.encodeQueueSize > 8) { frame.close(); continue; }
+      var agora = performance.now();
+      var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
+      if (forcar) { ultimoKey = agora; relayForcarKey = false; }
+      try { relayEncoder.encode(frame, { keyFrame: forcar }); } catch (e) { /* ignore */ }
+      frame.close();
+    }
+  })();
+}
+
+function pararEncoderRelay() {
+  relayAtivo = false;
+  relayReader = null;
+  clearInterval(relayDrawTimer);
+  relayDrawTimer = null;
+  if (relayEncoder) {
+    try { if (relayEncoder.state !== "closed") relayEncoder.close(); } catch (e) { /* ignore */ }
+    relayEncoder = null;
+  }
+}
+
+function reiniciarEncoderRelaySeAtivo() {
+  if (relayAtivo) {
+    pararEncoderRelay();
+    if (telaRelayTotal > 0) iniciarEncoderRelay();
   }
 }
 
@@ -1322,11 +1465,13 @@ function configurarTelaTransmissaoHost() {
   document.querySelectorAll("#live-fps .botao-preset").forEach(function (b) {
     b.classList.toggle("selecionado", parseInt(b.dataset.fps, 10) === telaFps);
   });
+  videoTransmissaoEl.style.display = "";
+  document.querySelector("#canvas-relay").style.display = "none";
   videoTransmissaoEl.muted = true;
   videoTransmissaoEl.srcObject = telaStream;
 }
 
-function criarPeerParaViewer(viewerId, contaViewers) {
+function criarPeerParaViewer(viewerId) {
   if (telaPeers[viewerId]) {
     telaPeers[viewerId].close();
     delete telaPeers[viewerId];
@@ -1352,7 +1497,6 @@ function criarPeerParaViewer(viewerId, contaViewers) {
     if (pc.connectionState === "failed" || pc.connectionState === "closed") {
       if (telaPeers[viewerId]) {
         delete telaPeers[viewerId];
-        atualizarContadorViewers(-1);
       }
     }
   };
@@ -1363,14 +1507,6 @@ function criarPeerParaViewer(viewerId, contaViewers) {
       enviarTela({ tipo: "oferta", viewer_id: viewerId, dados: pc.localDescription.sdp });
     })
     .catch(function (e) { console.warn("Falha ao criar oferta:", e); });
-
-  if (contaViewers !== false) atualizarContadorViewers(1);
-}
-
-function atualizarContadorViewers(delta) {
-  var el = document.querySelector("#transmissao-viewers-contador");
-  var atual = parseInt(el.textContent, 10) || 0;
-  el.textContent = Math.max(0, atual + delta);
 }
 
 function encerrarTransmissao(silencioso) {
@@ -1408,6 +1544,8 @@ async function assistirTransmissao(codigo) {
 
   telaEhHost = false;
   telaSala = codigo;
+  telaModoRelay = dentroDaActivity();
+  relayFrameOk = false;
   mostrarTela(telaTransmissaoEl);
   mensagemTransmissao("Conectando à transmissão...");
   document.querySelector("#transmissao-papel").textContent = "Assistindo";
@@ -1416,6 +1554,8 @@ async function assistirTransmissao(codigo) {
   document.querySelector("#encerrar-transmissao").style.display = "none";
   document.querySelector("#parar-assistir").style.display = "";
   document.querySelector("#transmissao-qualidade").style.display = "none";
+  videoTransmissaoEl.style.display = telaModoRelay ? "none" : "";
+  document.querySelector("#canvas-relay").style.display = telaModoRelay ? "" : "none";
   videoTransmissaoEl.srcObject = null;
   conectarWsTela(false);
 }
@@ -1495,9 +1635,11 @@ function conectarWsTela(host, tentativa) {
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
   var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocolo + "//" + location.host + "/ws/tela/" + encodeURIComponent(telaSala) +
-    "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick);
+    "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick) +
+    (!host && telaModoRelay ? "&transporte=relay" : "");
 
   var ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
   telaWs = ws;
 
   clearInterval(telaPingTimer);
@@ -1513,6 +1655,10 @@ function conectarWsTela(host, tentativa) {
   };
 
   ws.onmessage = function (evento) {
+    if (typeof evento.data !== "string") {
+      if (!host) receberRelay(evento.data);
+      return;
+    }
     try {
       processarMensagemTela(JSON.parse(evento.data));
     } catch (e) {
@@ -1568,9 +1714,18 @@ function processarMensagemTela(dados) {
     case "entrada_ok":
       mensagemTransmissao("Conectado a " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps). Aguardando vídeo...", "sucesso");
       clearTimeout(telaOfertaTimer);
-      if (!telaEhHost) {
+      clearTimeout(telaRelayTimer);
+      relayFrameOk = false;
+      if (telaModoRelay) {
+        iniciarDecoderRelay(dados.resolucao);
+        telaRelayTimer = setTimeout(function () {
+          if (telaModoRelay && !relayFrameOk && telaSala) {
+            mensagemTransmissao("Conectado, mas quem transmite ainda não está enviando vídeo (sala " + telaSala + "). Verifique se a transmissão está aberta.", "erro");
+          }
+        }, 15000);
+      } else if (!telaEhHost) {
         telaOfertaTimer = setTimeout(async function () {
-          if (telaEhHost || !telaSala || telaPeerViewer) return;
+          if (telaEhHost || !telaSala || telaPeerViewer || telaModoRelay) return;
           var codigo = telaSala;
           try {
             var res = await fetch("./tela/sala/" + encodeURIComponent(codigo));
@@ -1590,6 +1745,27 @@ function processarMensagemTela(dados) {
         }, 12000);
       }
       break;
+    case "host_conectado":
+      if (!telaEhHost && telaModoRelay) {
+        mensagemTransmissao("Quem transmite conectou — recebendo vídeo...", "sucesso");
+      }
+      break;
+    case "relay_total":
+      telaRelayTotal = dados.total || 0;
+      if (telaEhHost) {
+        if (telaRelayTotal > 0) {
+          relayForcarKey = true;
+          if (!relayAtivo) iniciarEncoderRelay();
+        } else if (relayAtivo) {
+          pararEncoderRelay();
+        }
+      }
+      break;
+    case "viewers_total":
+      if (telaEhHost) {
+        document.querySelector("#transmissao-viewers-contador").textContent = String(dados.total || 0);
+      }
+      break;
     case "aguardando_host":
       mensagemTransmissao("Aguardando quem transmite conectar...");
       break;
@@ -1602,7 +1778,6 @@ function processarMensagemTela(dados) {
       if (telaEhHost && telaPeers[dados.viewer_id]) {
         telaPeers[dados.viewer_id].close();
         delete telaPeers[dados.viewer_id];
-        atualizarContadorViewers(-1);
       }
       break;
     case "oferta":
@@ -1653,6 +1828,10 @@ function processarMensagemTela(dados) {
 
 function limparConexaoTela() {
   clearTimeout(telaOfertaTimer);
+  clearTimeout(telaRelayTimer);
+  relayFrameOk = false;
+  pararDecoderRelay();
+  pararEncoderRelay();
   if (telaWs) {
     var ws = telaWs;
     telaWs = null;
@@ -1948,6 +2127,9 @@ conectarAoDiscord();
     } else if (querTransmitir) {
       abrirTelaCompartilhar();
     }
+  }).catch(function (e) {
+    console.error("Init OAuth/deep-link falhou:", e);
+    if (location.pathname !== "/") history.replaceState({}, "", "/");
   });
 })();
 
