@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
-    <link rel="stylesheet" href="./style.css?v=20260922-2" />
+    <link rel="stylesheet" href="./style.css?v=20260922-3" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -143,9 +143,16 @@
       .video-transmissao { display: block; width: 100%; max-height: 60vh; border-radius: 12px; background: #000; margin-top: 6px; }
 
       /* Login Discord */
-      .cabecalho-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+      .cabecalho-acoes { position: fixed; top: 10px; right: 14px; z-index: 70; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; max-width: calc(100vw - 20px); padding: 6px 10px; background: rgba(14, 16, 30, 0.93); border: 1px solid #33365a; border-radius: 999px; backdrop-filter: blur(6px); }
       .botao-login { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
-      #auth-usuario { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid #4b3b78; border-radius: 999px; background: #1b1e30; }
+      #auth-usuario { display: flex; align-items: center; gap: 8px; padding: 0; border: none; background: transparent; }
+      #auth-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #2a2350; border: 2px solid #4b3b78; }
+      #auth-nome { font-size: 13px; font-weight: 600; color: #e8e9f5; white-space: nowrap; }
+      .codigo-custom { flex: 1; padding: 10px 14px; border: 1px solid #454b69; border-radius: 10px; background: #171a29; color: #f4f6ff; font-size: 14px; min-width: 140px; }
+      .codigo-custom::placeholder { color: #555; }
+      .codigo-custom:focus { outline: 2px solid #c8baff; outline-offset: -2px; }
+      #transmissao-qualidade { margin-top: 14px; padding: 14px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
+      @media (max-width: 640px) { #status-discord { display: none; } }
       #auth-avatar { width: 28px; height: 28px; border-radius: 50%; background: #34275d; }
       #auth-nome { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8baff; font-size: 13px; }
 
@@ -411,6 +418,10 @@
               <button class="botao-preset" data-fps="60">60 fps</button>
             </div>
           </div>
+          <div class="grupo-preset">
+            <span class="preset-label">Código da sala</span>
+            <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Opcional — ex.: tela-joao" maxlength="16" />
+          </div>
           <p class="aviso-upload" id="aviso-upload"></p>
           <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
         </div>
@@ -419,7 +430,7 @@
           <h3 class="subtitulo-secao" id="assistir-titulo-lista">Transmissões na sua call</h3>
           <div id="lista-transmissoes"><p class="vazio">Nenhuma transmissão ativa.</p></div>
           <div class="sala-input" style="margin-top: 10px;">
-            <input type="text" id="codigo-tela-input" placeholder="Ou digite o código da transmissão" maxlength="12" />
+            <input type="text" id="codigo-tela-input" placeholder="Ou digite o código da transmissão" maxlength="16" />
             <button id="assistir-codigo" class="botao">Assistir</button>
           </div>
           <button id="atualizar-transmissoes" class="botao" style="margin-top: 10px; width:100%;">Atualizar lista</button>
@@ -443,9 +454,29 @@
           <span class="sala-codigo-label">Código:</span>
           <span id="transmissao-codigo-valor" class="sala-codigo-valor"></span>
           <button id="copiar-codigo-tela" class="botao-copiar" title="Copiar código">Copiar</button>
+          <button id="copiar-link-tela" class="botao-copiar" title="Copiar link da transmissão">Copiar link</button>
         </div>
 
         <video id="video-transmissao" class="video-transmissao" autoplay playsinline controls></video>
+
+        <div id="transmissao-qualidade" style="display:none;">
+          <div class="grupo-preset">
+            <span class="preset-label">Resolução</span>
+            <div class="preset-opcoes" id="live-resolucao">
+              <button class="botao-preset" data-resolucao="480p">480p</button>
+              <button class="botao-preset selecionado" data-resolucao="720p">720p</button>
+              <button class="botao-preset" data-resolucao="1080p">1080p</button>
+            </div>
+          </div>
+          <div class="grupo-preset">
+            <span class="preset-label">FPS</span>
+            <div class="preset-opcoes" id="live-fps">
+              <button class="botao-preset selecionado" data-fps="30">30 fps</button>
+              <button class="botao-preset" data-fps="60">60 fps</button>
+            </div>
+          </div>
+          <button id="trocar-janela" class="botao" style="width:100%; text-align:center;">Trocar programa/janela da transmissão</button>
+        </div>
 
         <div id="transmissao-viewers-bar" class="espectadores-bar" style="display:none;">
           &#128065; <span id="transmissao-viewers-contador">0</span> assistindo
@@ -474,6 +505,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-2"></script>
+    <script src="./app.js?v=20260922-3"></script>
   </body>
 </html>

@@ -988,6 +988,7 @@ var telaPeers = {}; // host: viewer_id -> RTCPeerConnection
 var telaPeerViewer = null; // viewer: 1 conexão com o host
 var telaResolucao = "720p";
 var telaFps = 30;
+var telaOfertaTimer = null;
 
 var TELA_PRESETS = {
   "480p": { largura: 854, altura: 480, bitrate: 800000 },
@@ -1042,6 +1043,124 @@ function atualizarAvisoUpload() {
   document.querySelector("#aviso-upload").textContent =
     "Vídeo direto entre você e cada espectador (P2P). Com 9 espectadores, seu upload chega a ~" +
     total + " Mbps (" + mbpsPorEspectador.toFixed(1) + " Mbps por pessoa). Para muita gente, prefira 720p 30fps.";
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - qualidade ao vivo (escala/bitrate/fps por sender)
+// ---------------------------------------------------------------------------
+function escalaDePreset() {
+  var preset = TELA_PRESETS[telaResolucao];
+  var tr = telaStream ? telaStream.getVideoTracks()[0] : null;
+  var s = tr && tr.getSettings ? tr.getSettings() : {};
+  var altura = s.height || preset.altura;
+  return Math.max(1, Math.round(altura / preset.altura));
+}
+
+function aplicarParamsSender(sender) {
+  if (!sender || !sender.getParameters) return;
+  var params = sender.getParameters();
+  params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
+  params.encodings[0].maxBitrate = bitrateEfetivo();
+  params.encodings[0].maxFramerate = telaFps;
+  params.encodings[0].scaleResolutionDownBy = escalaDePreset();
+  var r = sender.setParameters(params);
+  if (r && r.catch) r.catch(function () {});
+}
+
+function aplicarQualidadeNosViewers() {
+  if (!telaEhHost || !telaStream) return;
+  Object.keys(telaPeers).forEach(function (id) {
+    telaPeers[id].getSenders().forEach(function (sender) {
+      if (sender.track && sender.track.kind === "video") aplicarParamsSender(sender);
+    });
+  });
+  enviarTela({ tipo: "config", resolucao: telaResolucao, fps: telaFps });
+}
+
+function definirResolucao(valor) {
+  telaResolucao = valor;
+  ["#preset-resolucao", "#live-resolucao"].forEach(function (sel) {
+    document.querySelectorAll(sel + " .botao-preset").forEach(function (b) {
+      b.classList.toggle("selecionado", b.dataset.resolucao === valor);
+    });
+  });
+  atualizarAvisoUpload();
+  if (telaEhHost && telaStream) {
+    aplicarQualidadeNosViewers();
+    mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+  }
+}
+
+function definirFps(valor) {
+  telaFps = valor;
+  ["#preset-fps", "#live-fps"].forEach(function (sel) {
+    document.querySelectorAll(sel + " .botao-preset").forEach(function (b) {
+      b.classList.toggle("selecionado", parseInt(b.dataset.fps, 10) === valor);
+    });
+  });
+  atualizarAvisoUpload();
+  if (telaEhHost && telaStream) {
+    aplicarQualidadeNosViewers();
+    mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+  }
+}
+
+// Pede nova captura (o seletor do navegador permite trocar o programa/janela)
+// e troca a track ao vivo sem derrubar as conexões WebRTC.
+async function trocarJanelaTela() {
+  if (!telaEhHost || !telaStream) return;
+  var preset = TELA_PRESETS[telaResolucao];
+  var novo;
+  try {
+    novo = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        width: { ideal: preset.largura },
+        height: { ideal: preset.altura },
+        frameRate: { ideal: telaFps, max: telaFps },
+      },
+      audio: false,
+    });
+  } catch (e) {
+    mensagemTransmissao("Troca de programa/janela cancelada.");
+    return;
+  }
+
+  var novaTrack = novo.getVideoTracks()[0];
+  var antiga = telaStream;
+  var trocas = [];
+
+  Object.keys(telaPeers).forEach(function (id) {
+    telaPeers[id].getSenders().forEach(function (sender) {
+      if (sender.track && sender.track.kind === "video") {
+        var p = sender.replaceTrack(novaTrack);
+        if (p && p.then) trocas.push(p);
+      }
+    });
+  });
+
+  function concluir() {
+    antiga.getTracks().forEach(function (t) { t.stop(); });
+    telaStream = novo;
+    videoTransmissaoEl.srcObject = novo;
+    novaTrack.addEventListener("ended", function () {
+      encerrarTransmissao(false);
+      mensagemTela("Transmissão encerrada: você parou a captura de tela.", "erro");
+    });
+    aplicarQualidadeNosViewers();
+    mensagemTransmissao("Programa/janela trocado. Qualidade " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+  }
+
+  if (trocas.length === 0) {
+    concluir();
+  } else {
+    Promise.all(trocas).then(concluir).catch(function (erro) {
+      console.warn("replaceTrack falhou, recriando conexões:", erro);
+      concluir();
+      Object.keys(telaPeers).forEach(function (id) {
+        criarPeerParaViewer(id, false);
+      });
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1126,6 +1245,12 @@ async function iniciarTransmissaoTela() {
     return;
   }
 
+  var codigoCustom = (document.querySelector("#codigo-custom-input").value || "").trim().toLowerCase();
+  if (codigoCustom && !/^[a-z0-9_-]{3,16}$/.test(codigoCustom)) {
+    mensagemTela("Código da sala: use de 3 a 16 caracteres (letras, números, - ou _).", "erro");
+    return;
+  }
+
   var preset = TELA_PRESETS[telaResolucao];
   try {
     telaStream = await navigator.mediaDevices.getDisplayMedia({
@@ -1148,7 +1273,7 @@ async function iniciarTransmissaoTela() {
     var res = await fetch("./tela/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instancia: instancia, nick: nick, resolucao: telaResolucao, fps: telaFps }),
+      body: JSON.stringify({ instancia: instancia, nick: nick, resolucao: telaResolucao, fps: telaFps, codigo: codigoCustom || null }),
     });
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar transmissão.");
@@ -1166,7 +1291,8 @@ async function iniciarTransmissaoTela() {
 
   // Se o usuário parar a captura pelo botão do próprio navegador, encerra tudo.
   telaStream.getVideoTracks()[0].addEventListener("ended", function () {
-    encerrarTransmissao(true);
+    encerrarTransmissao(false);
+    mensagemTela("Transmissão encerrada: você parou a captura de tela.", "erro");
   });
 }
 
@@ -1180,11 +1306,18 @@ function configurarTelaTransmissaoHost() {
   document.querySelector("#transmissao-viewers-bar").style.display = "";
   document.querySelector("#encerrar-transmissao").style.display = "";
   document.querySelector("#parar-assistir").style.display = "none";
+  document.querySelector("#transmissao-qualidade").style.display = "";
+  document.querySelectorAll("#live-resolucao .botao-preset").forEach(function (b) {
+    b.classList.toggle("selecionado", b.dataset.resolucao === telaResolucao);
+  });
+  document.querySelectorAll("#live-fps .botao-preset").forEach(function (b) {
+    b.classList.toggle("selecionado", parseInt(b.dataset.fps, 10) === telaFps);
+  });
   videoTransmissaoEl.muted = true;
   videoTransmissaoEl.srcObject = telaStream;
 }
 
-function criarPeerParaViewer(viewerId) {
+function criarPeerParaViewer(viewerId, contaViewers) {
   if (telaPeers[viewerId]) {
     telaPeers[viewerId].close();
     delete telaPeers[viewerId];
@@ -1198,13 +1331,7 @@ function criarPeerParaViewer(viewerId) {
   });
 
   var sender = pc.getSenders().filter(function (s) { return s.track && s.track.kind === "video"; })[0];
-  if (sender && sender.getParameters) {
-    var params = sender.getParameters();
-    params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
-    params.encodings[0].maxBitrate = bitrateEfetivo();
-    params.encodings[0].maxFramerate = telaFps;
-    sender.setParameters(params).catch(function () {});
-  }
+  aplicarParamsSender(sender);
 
   pc.onicecandidate = function (evento) {
     if (evento.candidate) {
@@ -1228,7 +1355,7 @@ function criarPeerParaViewer(viewerId) {
     })
     .catch(function (e) { console.warn("Falha ao criar oferta:", e); });
 
-  atualizarContadorViewers(1);
+  if (contaViewers !== false) atualizarContadorViewers(1);
 }
 
 function atualizarContadorViewers(delta) {
@@ -1248,6 +1375,7 @@ function encerrarTransmissao(silencioso) {
   videoTransmissaoEl.srcObject = null;
   document.querySelector("#transmissao-codigo-display").style.display = "none";
   document.querySelector("#transmissao-viewers-bar").style.display = "none";
+  document.querySelector("#transmissao-qualidade").style.display = "none";
   if (!silencioso) {
     mostrarTela(telaCompartilhar);
     carregarTransmissoes();
@@ -1278,11 +1406,13 @@ async function assistirTransmissao(codigo) {
   document.querySelector("#transmissao-viewers-bar").style.display = "none";
   document.querySelector("#encerrar-transmissao").style.display = "none";
   document.querySelector("#parar-assistir").style.display = "";
+  document.querySelector("#transmissao-qualidade").style.display = "none";
   videoTransmissaoEl.srcObject = null;
   conectarWsTela(false);
 }
 
 function processarOfertaHost(sdp) {
+  clearTimeout(telaOfertaTimer);
   if (telaPeerViewer) {
     telaPeerViewer.close();
   }
@@ -1292,6 +1422,14 @@ function processarOfertaHost(sdp) {
 
   pc.ontrack = function (evento) {
     videoTransmissaoEl.srcObject = evento.streams[0];
+    var promessa = videoTransmissaoEl.play();
+    if (promessa && promessa.then) {
+      promessa.then(function () {
+        mensagemTransmissao("Recebendo vídeo de quem transmite.", "sucesso");
+      }).catch(function () {
+        mensagemTransmissao("Vídeo recebido — clique no player para começar a assistir.");
+      });
+    }
   };
 
   pc.onicecandidate = function (evento) {
@@ -1419,7 +1557,15 @@ function encerrarViewerTela(mensagem) {
 function processarMensagemTela(dados) {
   switch (dados.tipo) {
     case "entrada_ok":
-      mensagemTransmissao("Assistindo " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps).");
+      mensagemTransmissao("Conectado a " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps). Aguardando vídeo...", "sucesso");
+      clearTimeout(telaOfertaTimer);
+      if (!telaEhHost) {
+        telaOfertaTimer = setTimeout(function () {
+          if (!telaEhHost && telaSala && !telaPeerViewer) {
+            mensagemTransmissao("Conectado ao servidor, mas o vídeo ainda não chegou. Confirme que quem transmite está transmitindo (sala " + telaSala + ").", "erro");
+          }
+        }, 12000);
+      }
       break;
     case "aguardando_host":
       mensagemTransmissao("Aguardando quem transmite conectar...");
@@ -1483,6 +1629,7 @@ function processarMensagemTela(dados) {
 }
 
 function limparConexaoTela() {
+  clearTimeout(telaOfertaTimer);
   if (telaWs) {
     var ws = telaWs;
     telaWs = null;
@@ -1513,29 +1660,28 @@ document.querySelector("#jogo-tela").addEventListener("click", abrirTelaComparti
 
 document.querySelector("#abrir-navegador-tela").addEventListener("click", abrirNoNavegadorParaTransmitir);
 
-document.querySelectorAll("#preset-resolucao .botao-preset").forEach(function (botao) {
+document.querySelectorAll("#preset-resolucao .botao-preset, #live-resolucao .botao-preset").forEach(function (botao) {
   botao.addEventListener("click", function () {
-    document.querySelectorAll("#preset-resolucao .botao-preset").forEach(function (b) {
-      b.classList.remove("selecionado");
-    });
-    botao.classList.add("selecionado");
-    telaResolucao = botao.dataset.resolucao;
-    atualizarAvisoUpload();
+    definirResolucao(botao.dataset.resolucao);
   });
 });
 
-document.querySelectorAll("#preset-fps .botao-preset").forEach(function (botao) {
+document.querySelectorAll("#preset-fps .botao-preset, #live-fps .botao-preset").forEach(function (botao) {
   botao.addEventListener("click", function () {
-    document.querySelectorAll("#preset-fps .botao-preset").forEach(function (b) {
-      b.classList.remove("selecionado");
-    });
-    botao.classList.add("selecionado");
-    telaFps = parseInt(botao.dataset.fps, 10);
-    atualizarAvisoUpload();
+    definirFps(parseInt(botao.dataset.fps, 10));
   });
 });
 
 document.querySelector("#iniciar-transmissao").addEventListener("click", iniciarTransmissaoTela);
+
+document.querySelector("#trocar-janela").addEventListener("click", trocarJanelaTela);
+
+// Atualiza a lista da call automaticamente enquanto a hub está aberta.
+setInterval(function () {
+  if (telaCompartilhar && telaCompartilhar.classList.contains("ativa") && compartilharInstanciaAtual()) {
+    carregarTransmissoes();
+  }
+}, 10000);
 
 document.querySelector("#atualizar-transmissoes").addEventListener("click", carregarTransmissoes);
 
@@ -1552,6 +1698,16 @@ document.querySelector("#encerrar-transmissao").addEventListener("click", functi
 });
 
 document.querySelector("#parar-assistir").addEventListener("click", pararDeAssistir);
+
+document.querySelector("#copiar-link-tela").addEventListener("click", function () {
+  var botao = this;
+  if (navigator.clipboard && telaSala) {
+    navigator.clipboard.writeText(location.origin + "/?sala=" + telaSala).then(function () {
+      botao.textContent = "Link copiado!";
+      setTimeout(function () { botao.textContent = "Copiar link"; }, 2000);
+    });
+  }
+});
 
 document.querySelector("#voltar-transmissao").addEventListener("click", function () {
   if (telaEhHost) {
@@ -1613,7 +1769,12 @@ function renderAuth() {
   if (usuarioDiscord) {
     botaoLogin.style.display = "none";
     caixa.style.display = "";
-    document.querySelector("#auth-avatar").src = avatarUrlDiscord(usuarioDiscord);
+    var avatar = document.querySelector("#auth-avatar");
+    avatar.onerror = function () {
+      this.onerror = null;
+      this.src = "https://cdn.discordapp.com/embed/avatars/0.png";
+    };
+    avatar.src = avatarUrlDiscord(usuarioDiscord);
     document.querySelector("#auth-nome").textContent =
       usuarioDiscord.global_name || usuarioDiscord.username;
     // Na Activity a identidade vem do SDK — logout local não faria sentido.

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -95,6 +96,7 @@ class NovaTransmissao(BaseModel):
     nick: str = "Anônimo"
     resolucao: str = "720p"
     fps: int = 30
+    codigo: Optional[str] = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -1062,7 +1064,17 @@ def criar_transmissao(dados: NovaTransmissao):
     if dados.fps not in FPS_VALIDOS:
         raise HTTPException(status_code=400, detail="FPS inválido.")
 
-    sala = secrets.token_urlsafe(6)
+    sala = (dados.codigo or "").strip().lower()
+    if sala:
+        if not re.fullmatch(r"[a-z0-9_-]{3,16}", sala):
+            raise HTTPException(
+                status_code=400,
+                detail="Código da sala: use de 3 a 16 caracteres (letras, números, - ou _).")
+        if sala in salas_tela:
+            raise HTTPException(status_code=409, detail="Este código já está em uso. Escolha outro.")
+    else:
+        sala = secrets.token_urlsafe(6)
+
     salas_tela[sala] = {
         "host_ws": None,
         "host_nick": dados.nick,
@@ -1153,6 +1165,15 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                 continue
             if tipo == "sair":
                 break
+            if tipo == "config":
+                # Host mudou resolução/fps durante a transmissão.
+                nova_res = str(dados.get("resolucao", "")).lower()
+                novo_fps = dados.get("fps")
+                if nova_res in RESOLUCOES_VALIDAS and isinstance(novo_fps, int) and novo_fps in FPS_VALIDOS:
+                    transmissao["resolucao"] = nova_res
+                    transmissao["fps"] = novo_fps
+                    log_tela("config atualizada sala=%s res=%s fps=%s" % (sala, nova_res, novo_fps))
+                continue
             # Relay de oferta/ICE do host para o espectador alvo.
             if tipo in {"oferta", "ice"} and viewer_ws:
                 try:

@@ -14,6 +14,12 @@ Activity com backend em Python e jogos em navegador: Sudoku 9×9, Jogo da Velha
   (SDP/ICE) em `/ws/tela/{sala}`; o vídeo nunca passa pelo backend.
 - **Salas privadas**: a lista só aparece para quem está na mesma call
   (instância da Activity). Quem está fora entra apenas com o código da sala.
+- **Código personalizado**: ao iniciar, o host pode escolher um código curto e
+  fácil (3–16 caracteres: letras, números, `-` ou `_`) em vez do código
+  aleatório. Vale compartilhar `/?sala=<codigo>` ("Copiar link").
+- **Qualidade ao vivo**: durante a transmissão dá para trocar resolução
+  (480p/720p/1080p), FPS (30/60) e o programa/janela compartilhado sem
+  derrubar a conexão de ninguém.
 - Quando quem transmite sai (ou perde a conexão), a sala é encerrada e todos
   os espectadores são desconectados automaticamente.
 - Limite de 9 espectadores por transmissão. O upload do host é ~1 stream por
