@@ -90,12 +90,21 @@ class NovoRecordVelha(BaseModel):
     nick: str
 
 
+class NovaTransmissao(BaseModel):
+    instancia: Optional[str] = None
+    nick: str = "Anônimo"
+    resolucao: str = "720p"
+    fps: int = 30
+
+
 # ---------------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------------
 
 jogos: Dict[str, dict] = {}
 salas_velha: Dict[str, str] = {}
+# sala -> {"host_ws", "host_nick", "instancia", "resolucao", "fps", "viewers": {id: WebSocket}}
+salas_tela: Dict[str, dict] = {}
 conexoes_ws: Dict[str, List[WebSocket]] = {}
 conexoes_lobby: List[WebSocket] = []
 _reconnect_timers: Dict[str, asyncio.Task] = {}
@@ -982,6 +991,188 @@ async def ws_velha(websocket: WebSocket, sala: str):
                     _delayed_disconnect(sala, my_piece, jogo, nick)
                 )
                 _reconnect_timers[key] = task
+
+
+# ---------------------------------------------------------------------------
+# Compartilhar Tela — salas (sinalização WebRTC)
+# ---------------------------------------------------------------------------
+
+RESOLUCOES_VALIDAS = {"480p", "720p", "1080p"}
+FPS_VALIDOS = {30, 60}
+MAX_ESPECTADORES_TELA = 9
+
+
+def info_transmissao(sala: str, transmissao: dict) -> dict:
+    return {
+        "sala": sala,
+        "nick": transmissao["host_nick"],
+        "resolucao": transmissao["resolucao"],
+        "fps": transmissao["fps"],
+        "espectadores": len(transmissao["viewers"]),
+    }
+
+
+@app.post("/tela/novo")
+def criar_transmissao(dados: NovaTransmissao):
+    resolucao = dados.resolucao.lower()
+    if resolucao not in RESOLUCOES_VALIDAS:
+        raise HTTPException(status_code=400, detail="Resolução inválida.")
+    if dados.fps not in FPS_VALIDOS:
+        raise HTTPException(status_code=400, detail="FPS inválido.")
+
+    sala = secrets.token_urlsafe(6)
+    salas_tela[sala] = {
+        "host_ws": None,
+        "host_nick": dados.nick,
+        "instancia": (dados.instancia or "").strip()[:64] or None,
+        "resolucao": resolucao,
+        "fps": dados.fps,
+        "viewers": {},
+    }
+    return {"sala": sala, "resolucao": resolucao, "fps": dados.fps}
+
+
+@app.get("/tela/transmissoes")
+def listar_transmissoes(instancia: str = ""):
+    """Lista transmissões de uma instância da Activity (ou as públicas, se vazio)."""
+    instancia = instancia.strip()[:64] or None
+    return {
+        "transmissoes": [
+            info_transmissao(sala, t)
+            for sala, t in salas_tela.items()
+            if t["instancia"] == instancia
+        ]
+    }
+
+
+@app.get("/tela/sala/{sala}")
+def obter_transmissao(sala: str):
+    transmissao = salas_tela.get(sala)
+    if not transmissao:
+        raise HTTPException(status_code=404, detail="Transmissão não encontrada.")
+    return info_transmissao(sala, transmissao)
+
+
+async def _encerrar_transmissao(sala: str, transmissao: dict):
+    """Host saiu: avisa todos os espectadores e remove a sala."""
+    for ws in list(transmissao["viewers"].values()):
+        try:
+            await ws.send_json({"tipo": "transmissao_encerrada"})
+            await ws.close()
+        except Exception:
+            pass
+    salas_tela.pop(sala, None)
+
+
+@app.websocket("/ws/tela/{sala}")
+async def ws_tela(websocket: WebSocket, sala: str):
+    await websocket.accept()
+    papel = websocket.query_params.get("papel", "viewer")
+    nick = websocket.query_params.get("nick", "Anônimo")
+
+    transmissao = salas_tela.get(sala)
+    if not transmissao:
+        await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão não encontrada."})
+        await websocket.close()
+        return
+
+    if papel == "host":
+        await _ws_tela_host(websocket, sala, transmissao, nick)
+    else:
+        await _ws_tela_viewer(websocket, sala, transmissao, nick)
+
+
+async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
+    if transmissao["host_ws"] is not None:
+        await websocket.send_json({"tipo": "erro", "mensagem": "Já existe uma transmissão ativa nesta sala."})
+        await websocket.close()
+        return
+
+    transmissao["host_ws"] = websocket
+    transmissao["host_nick"] = nick
+    # Espectadores já na sala precisam abrir conexão WebRTC com o novo host.
+    for viewer_id in list(transmissao["viewers"].keys()):
+        try:
+            await websocket.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id})
+        except Exception:
+            pass
+    await websocket.send_json({"tipo": "host_pronto", "sala": sala})
+
+    try:
+        while True:
+            dados = await websocket.receive_json()
+            tipo = dados.get("tipo")
+            viewer_id = str(dados.get("viewer_id", ""))
+            viewer_ws = transmissao["viewers"].get(viewer_id)
+
+            if tipo == "ping":
+                continue
+            if tipo == "sair":
+                break
+            # Relay de oferta/ICE do host para o espectador alvo.
+            if tipo in {"oferta", "ice"} and viewer_ws:
+                try:
+                    await viewer_ws.send_json({"tipo": tipo, "dados": dados.get("dados")})
+                except Exception:
+                    pass
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        if transmissao.get("host_ws") is websocket:
+            await _encerrar_transmissao(sala, transmissao)
+
+
+async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str):
+    if len(transmissao["viewers"]) >= MAX_ESPECTADORES_TELA:
+        await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão cheia (máximo de 9 espectadores)."})
+        await websocket.close()
+        return
+
+    viewer_id = secrets.token_urlsafe(8)
+    transmissao["viewers"][viewer_id] = websocket
+    await websocket.send_json(info_transmissao(sala, transmissao) | {"tipo": "entrada_ok"})
+
+    host_ws = transmissao.get("host_ws")
+    if host_ws:
+        try:
+            await host_ws.send_json({"tipo": "viewer_entrou", "viewer_id": viewer_id, "nick": nick})
+        except Exception:
+            pass
+    else:
+        await websocket.send_json({"tipo": "aguardando_host"})
+
+    try:
+        while True:
+            dados = await websocket.receive_json()
+            tipo = dados.get("tipo")
+
+            if tipo == "ping":
+                continue
+            if tipo == "sair":
+                break
+            # Relay de resposta/ICE do espectador para o host.
+            if tipo in {"resposta", "ice"}:
+                host_ws = transmissao.get("host_ws")
+                if host_ws:
+                    try:
+                        await host_ws.send_json({
+                            "tipo": tipo,
+                            "viewer_id": viewer_id,
+                            "dados": dados.get("dados"),
+                        })
+                    except Exception:
+                        pass
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        if transmissao["viewers"].get(viewer_id) is websocket:
+            del transmissao["viewers"][viewer_id]
+            host_ws = transmissao.get("host_ws")
+            if host_ws:
+                try:
+                    await host_ws.send_json({"tipo": "viewer_saiu", "viewer_id": viewer_id, "nick": nick})
+                except Exception:
+                    pass
 
 
 # ---------------------------------------------------------------------------

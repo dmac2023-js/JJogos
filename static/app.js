@@ -976,6 +976,531 @@ async function conectarAoDiscord() {
 }
 
 // ---------------------------------------------------------------------------
+// Compartilhar Tela - estado e presets
+// ---------------------------------------------------------------------------
+var telaWs = null;
+var telaPingTimer = null;
+var telaSala = null;
+var telaEhHost = false;
+var telaStream = null;
+var telaPeers = {}; // host: viewer_id -> RTCPeerConnection
+var telaPeerViewer = null; // viewer: 1 conexão com o host
+var telaResolucao = "720p";
+var telaFps = 30;
+
+var TELA_PRESETS = {
+  "480p": { largura: 854, altura: 480, bitrate: 800000 },
+  "720p": { largura: 1280, altura: 720, bitrate: 1800000 },
+  "1080p": { largura: 1920, altura: 1080, bitrate: 3600000 },
+};
+var RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+var telaCompartilhar = document.querySelector("#tela-compartilhar");
+var telaTransmissaoEl = document.querySelector("#tela-transmissao");
+var mensagemTelaEl = document.querySelector("#mensagem-tela");
+var mensagemTransmissaoEl = document.querySelector("#mensagem-transmissao");
+var videoTransmissaoEl = document.querySelector("#video-transmissao");
+
+function obterInstanciaParam() {
+  var params = new URLSearchParams(location.search);
+  return params.get("instancia") || "";
+}
+
+function compartilharInstanciaAtual() {
+  if (obterInstanciaParam()) return obterInstanciaParam();
+  if (discordSdkGlobal && discordSdkGlobal.instanceId) return discordSdkGlobal.instanceId;
+  return "";
+}
+
+function mensagemTela(texto, tipo) {
+  mensagemTelaEl.textContent = texto;
+  mensagemTelaEl.className = "mensagem" + (tipo ? " " + tipo : "");
+}
+
+function mensagemTransmissao(texto, tipo) {
+  mensagemTransmissaoEl.textContent = texto;
+  mensagemTransmissaoEl.className = "mensagem" + (tipo ? " " + tipo : "");
+}
+
+function bitrateEfetivo() {
+  var base = TELA_PRESETS[telaResolucao].bitrate;
+  return telaFps === 60 ? Math.round(base * 1.6) : base;
+}
+
+function atualizarAvisoUpload() {
+  var mbpsPorEspectador = bitrateEfetivo() / 1000000;
+  var total = (mbpsPorEspectador * 9).toFixed(1);
+  document.querySelector("#aviso-upload").textContent =
+    "Vídeo direto entre você e cada espectador (P2P). Com 9 espectadores, seu upload chega a ~" +
+    total + " Mbps (" + mbpsPorEspectador.toFixed(1) + " Mbps por pessoa). Para muita gente, prefira 720p 30fps.";
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - hub
+// ---------------------------------------------------------------------------
+function abrirTelaCompartilhar() {
+  mostrarTela(telaCompartilhar);
+  mensagemTela("");
+  var noNavegador = !discordSdkGlobal;
+  document.querySelector("#tela-aviso-navegador").style.display = noNavegador ? "none" : "";
+  document.querySelector("#tela-config-host").style.display = noNavegador ? "" : "none";
+  document.querySelector("#abrir-navegador-tela").style.display = "";
+  atualizarAvisoUpload();
+  carregarTransmissoes();
+}
+
+async function abrirNoNavegadorParaTransmitir() {
+  var url = location.origin + "/?transmitir=1";
+  var instancia = compartilharInstanciaAtual();
+  if (instancia) url += "&instancia=" + encodeURIComponent(instancia);
+
+  if (discordSdkGlobal) {
+    try {
+      await discordSdkGlobal.commands.openExternalLink({ url: url });
+      return;
+    } catch (e) { /* fallback abaixo */ }
+  }
+  window.open(url, "_blank");
+}
+
+async function carregarTransmissoes() {
+  var container = document.querySelector("#lista-transmissoes");
+  var url = "./tela/transmissoes";
+  var instancia = compartilharInstanciaAtual();
+  if (instancia) url += "?instancia=" + encodeURIComponent(instancia);
+
+  try {
+    var res = await fetch(url);
+    var dados = await res.json();
+    var lista = dados.transmissoes || [];
+    container.innerHTML = "";
+
+    if (lista.length === 0) {
+      container.innerHTML = '<p class="vazio">Nenhuma transmissão ativa.</p>';
+      return;
+    }
+
+    lista.forEach(function (t) {
+      var item = document.createElement("div");
+      item.className = "sala-item";
+      item.innerHTML =
+        '<div class="sala-item-info">' +
+        "<strong>" + t.nick + "</strong>" +
+        "<small>" + t.resolucao + " &middot; " + t.fps + " fps &middot; sala " + t.sala + "</small>" +
+        "</div>" +
+        '<span class="sala-item-jogadores">&#128247; ' + t.espectadores + "/9</span>";
+      item.addEventListener("click", function () {
+        assistirTransmissao(t.sala);
+      });
+      container.appendChild(item);
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="vazio">Erro ao carregar transmissões.</p>';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - host
+// ---------------------------------------------------------------------------
+async function iniciarTransmissaoTela() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    mensagemTela("Seu navegador não suporta captura de tela.", "erro");
+    return;
+  }
+
+  var preset = TELA_PRESETS[telaResolucao];
+  try {
+    telaStream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        width: { ideal: preset.largura },
+        height: { ideal: preset.altura },
+        frameRate: { ideal: telaFps, max: telaFps },
+      },
+      audio: false,
+    });
+  } catch (e) {
+    mensagemTela("Captura cancelada ou negada.", "erro");
+    return;
+  }
+
+  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  var instancia = compartilharInstanciaAtual() || null;
+
+  try {
+    var res = await fetch("./tela/novo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instancia: instancia, nick: nick, resolucao: telaResolucao, fps: telaFps }),
+    });
+    var dados = await res.json();
+    if (!res.ok) throw new Error(dados.detail || "Erro ao criar transmissão.");
+    telaSala = dados.sala;
+  } catch (e) {
+    telaStream.getTracks().forEach(function (t) { t.stop(); });
+    telaStream = null;
+    mensagemTela(e.message, "erro");
+    return;
+  }
+
+  telaEhHost = true;
+  configurarTelaTransmissaoHost();
+  conectarWsTela(true);
+
+  // Se o usuário parar a captura pelo botão do próprio navegador, encerra tudo.
+  telaStream.getVideoTracks()[0].addEventListener("ended", function () {
+    encerrarTransmissao(true);
+  });
+}
+
+function configurarTelaTransmissaoHost() {
+  mostrarTela(telaTransmissaoEl);
+  mensagemTransmissao("Você está transmitindo em " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+  document.querySelector("#transmissao-papel").textContent = "Transmitindo";
+  document.querySelector("#transmissao-codigo-valor").textContent = telaSala;
+  document.querySelector("#transmissao-codigo-display").style.display = "";
+  document.querySelector("#transmissao-viewers-contador").textContent = "0";
+  document.querySelector("#transmissao-viewers-bar").style.display = "";
+  document.querySelector("#encerrar-transmissao").style.display = "";
+  document.querySelector("#parar-assistir").style.display = "none";
+  videoTransmissaoEl.muted = true;
+  videoTransmissaoEl.srcObject = telaStream;
+}
+
+function criarPeerParaViewer(viewerId) {
+  if (telaPeers[viewerId]) {
+    telaPeers[viewerId].close();
+    delete telaPeers[viewerId];
+  }
+
+  var pc = new RTCPeerConnection(RTC_CONFIG);
+  telaPeers[viewerId] = pc;
+
+  telaStream.getTracks().forEach(function (track) {
+    pc.addTrack(track, telaStream);
+  });
+
+  var sender = pc.getSenders().filter(function (s) { return s.track && s.track.kind === "video"; })[0];
+  if (sender && sender.getParameters) {
+    var params = sender.getParameters();
+    params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
+    params.encodings[0].maxBitrate = bitrateEfetivo();
+    params.encodings[0].maxFramerate = telaFps;
+    sender.setParameters(params).catch(function () {});
+  }
+
+  pc.onicecandidate = function (evento) {
+    if (evento.candidate) {
+      enviarTela({ tipo: "ice", viewer_id: viewerId, dados: evento.candidate.toJSON() });
+    }
+  };
+
+  pc.onconnectionstatechange = function () {
+    if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+      if (telaPeers[viewerId]) {
+        delete telaPeers[viewerId];
+        atualizarContadorViewers(-1);
+      }
+    }
+  };
+
+  pc.createOffer()
+    .then(function (oferta) { return pc.setLocalDescription(oferta); })
+    .then(function () {
+      enviarTela({ tipo: "oferta", viewer_id: viewerId, dados: pc.localDescription.sdp });
+    })
+    .catch(function (e) { console.warn("Falha ao criar oferta:", e); });
+
+  atualizarContadorViewers(1);
+}
+
+function atualizarContadorViewers(delta) {
+  var el = document.querySelector("#transmissao-viewers-contador");
+  var atual = parseInt(el.textContent, 10) || 0;
+  el.textContent = Math.max(0, atual + delta);
+}
+
+function encerrarTransmissao(silencioso) {
+  limparConexaoTela();
+  if (telaEhHost && telaStream) {
+    telaStream.getTracks().forEach(function (t) { t.stop(); });
+  }
+  telaStream = null;
+  telaEhHost = false;
+  videoTransmissaoEl.srcObject = null;
+  document.querySelector("#transmissao-codigo-display").style.display = "none";
+  document.querySelector("#transmissao-viewers-bar").style.display = "none";
+  if (!silencioso) {
+    mostrarTela(telaCompartilhar);
+    carregarTransmissoes();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - espectador
+// ---------------------------------------------------------------------------
+async function assistirTransmissao(codigo) {
+  codigo = (codigo || "").trim();
+  if (!codigo) return;
+
+  try {
+    var res = await fetch("./tela/sala/" + encodeURIComponent(codigo));
+    if (!res.ok) throw new Error("Transmissão não encontrada.");
+  } catch (e) {
+    mensagemTela(e.message === "Failed to fetch" ? "Erro de conexão." : e.message, "erro");
+    return;
+  }
+
+  telaEhHost = false;
+  telaSala = codigo;
+  mostrarTela(telaTransmissaoEl);
+  mensagemTransmissao("Conectando à transmissão...");
+  document.querySelector("#transmissao-papel").textContent = "Assistindo";
+  document.querySelector("#transmissao-codigo-display").style.display = "none";
+  document.querySelector("#transmissao-viewers-bar").style.display = "none";
+  document.querySelector("#encerrar-transmissao").style.display = "none";
+  document.querySelector("#parar-assistir").style.display = "";
+  videoTransmissaoEl.srcObject = null;
+  conectarWsTela(false);
+}
+
+function processarOfertaHost(sdp) {
+  if (telaPeerViewer) {
+    telaPeerViewer.close();
+  }
+
+  var pc = new RTCPeerConnection(RTC_CONFIG);
+  telaPeerViewer = pc;
+
+  pc.ontrack = function (evento) {
+    videoTransmissaoEl.srcObject = evento.streams[0];
+  };
+
+  pc.onicecandidate = function (evento) {
+    if (evento.candidate) {
+      enviarTela({ tipo: "ice", dados: evento.candidate.toJSON() });
+    }
+  };
+
+  pc.onconnectionstatechange = function () {
+    if (pc.connectionState === "failed") {
+      mensagemTransmissao("Falha de conexão P2P com quem transmite.", "erro");
+    }
+  };
+
+  pc.setRemoteDescription({ type: "offer", sdp: sdp })
+    .then(function () { return pc.createAnswer(); })
+    .then(function (resposta) { return pc.setLocalDescription(resposta); })
+    .then(function () {
+      enviarTela({ tipo: "resposta", dados: pc.localDescription.sdp });
+    })
+    .catch(function (e) {
+      console.warn("Falha ao responder oferta:", e);
+      mensagemTransmissao("Erro ao conectar na transmissão.", "erro");
+    });
+}
+
+function pararDeAssistir() {
+  limparConexaoTela();
+  telaEhHost = false;
+  videoTransmissaoEl.srcObject = null;
+  mostrarTela(telaCompartilhar);
+  carregarTransmissoes();
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - WebSocket de sinalização
+// ---------------------------------------------------------------------------
+function enviarTela(obj) {
+  if (telaWs && telaWs.readyState === WebSocket.OPEN) {
+    telaWs.send(JSON.stringify(obj));
+  }
+}
+
+function conectarWsTela(host) {
+  limparConexaoTela();
+
+  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
+  var url = protocolo + "//" + location.host + "/ws/tela/" + encodeURIComponent(telaSala) +
+    "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick);
+
+  telaWs = new WebSocket(url);
+
+  clearInterval(telaPingTimer);
+  telaPingTimer = setInterval(function () {
+    enviarTela({ tipo: "ping" });
+  }, 20000);
+
+  telaWs.onmessage = function (evento) {
+    try {
+      processarMensagemTela(JSON.parse(evento.data));
+    } catch (e) {
+      console.error("Erro ao processar mensagem da tela:", e);
+    }
+  };
+
+  telaWs.onclose = function (evento) {
+    clearInterval(telaPingTimer);
+    if (!telaSala) return; // fechamento proposital já tratado
+    console.warn("WS tela fechado:", evento.code);
+    if (telaEhHost) {
+      encerrarTransmissao(false);
+      mensagemTela("Conexão com o servidor foi encerrada.", "erro");
+    } else {
+      pararDeAssistir();
+      mensagemTela("Conexão com o servidor foi encerrada.", "erro");
+    }
+  };
+
+  telaWs.onerror = function () {};
+}
+
+function processarMensagemTela(dados) {
+  switch (dados.tipo) {
+    case "entrada_ok":
+      mensagemTransmissao("Assistindo " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps).");
+      break;
+    case "aguardando_host":
+      mensagemTransmissao("Aguardando quem transmite conectar...");
+      break;
+    case "host_pronto":
+      break;
+    case "viewer_entrou":
+      if (telaEhHost) criarPeerParaViewer(dados.viewer_id);
+      break;
+    case "viewer_saiu":
+      if (telaEhHost && telaPeers[dados.viewer_id]) {
+        telaPeers[dados.viewer_id].close();
+        delete telaPeers[dados.viewer_id];
+        atualizarContadorViewers(-1);
+      }
+      break;
+    case "oferta":
+      if (!telaEhHost) processarOfertaHost(dados.dados);
+      break;
+    case "resposta":
+      if (telaEhHost && telaPeers[dados.viewer_id]) {
+        telaPeers[dados.viewer_id].setRemoteDescription({ type: "answer", sdp: dados.dados })
+          .catch(function (e) { console.warn("Falha ao aplicar resposta:", e); });
+      }
+      break;
+    case "ice":
+      if (telaEhHost && telaPeers[dados.viewer_id]) {
+        telaPeers[dados.viewer_id].addIceCandidate(dados.dados).catch(function () {});
+      } else if (!telaEhHost && telaPeerViewer) {
+        telaPeerViewer.addIceCandidate(dados.dados).catch(function () {});
+      }
+      break;
+    case "transmissao_encerrada":
+      mensagemTransmissao("A transmissão foi encerrada.", "erro");
+      if (telaPeerViewer) {
+        telaPeerViewer.close();
+        telaPeerViewer = null;
+      }
+      videoTransmissaoEl.srcObject = null;
+      setTimeout(pararDeAssistir, 2000);
+      break;
+    case "erro":
+      if (telaEhHost) {
+        mensagemTransmissao(dados.mensagem, "erro");
+        encerrarTransmissao(false);
+      } else {
+        mensagemTransmissao(dados.mensagem, "erro");
+        setTimeout(pararDeAssistir, 2000);
+      }
+      break;
+  }
+}
+
+function limparConexaoTela() {
+  if (telaWs) {
+    try { enviarTela({ tipo: "sair" }); } catch (e) { /* ignore */ }
+    var ws = telaWs;
+    telaWs = null;
+    telaSala = null;
+    clearInterval(telaPingTimer);
+    try { ws.close(); } catch (e) { /* ignore */ }
+  }
+  Object.keys(telaPeers).forEach(function (id) {
+    telaPeers[id].close();
+  });
+  telaPeers = {};
+  if (telaPeerViewer) {
+    telaPeerViewer.close();
+    telaPeerViewer = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compartilhar Tela - event listeners
+// ---------------------------------------------------------------------------
+document.querySelector("#jogo-tela").addEventListener("click", abrirTelaCompartilhar);
+
+document.querySelector("#abrir-navegador-tela").addEventListener("click", abrirNoNavegadorParaTransmitir);
+
+document.querySelectorAll("#preset-resolucao .botao-preset").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    document.querySelectorAll("#preset-resolucao .botao-preset").forEach(function (b) {
+      b.classList.remove("selecionado");
+    });
+    botao.classList.add("selecionado");
+    telaResolucao = botao.dataset.resolucao;
+    atualizarAvisoUpload();
+  });
+});
+
+document.querySelectorAll("#preset-fps .botao-preset").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    document.querySelectorAll("#preset-fps .botao-preset").forEach(function (b) {
+      b.classList.remove("selecionado");
+    });
+    botao.classList.add("selecionado");
+    telaFps = parseInt(botao.dataset.fps, 10);
+    atualizarAvisoUpload();
+  });
+});
+
+document.querySelector("#iniciar-transmissao").addEventListener("click", iniciarTransmissaoTela);
+
+document.querySelector("#atualizar-transmissoes").addEventListener("click", carregarTransmissoes);
+
+document.querySelector("#assistir-codigo").addEventListener("click", function () {
+  assistirTransmissao(document.querySelector("#codigo-tela-input").value);
+});
+
+document.querySelector("#codigo-tela-input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") assistirTransmissao(this.value);
+});
+
+document.querySelector("#encerrar-transmissao").addEventListener("click", function () {
+  encerrarTransmissao(false);
+});
+
+document.querySelector("#parar-assistir").addEventListener("click", pararDeAssistir);
+
+document.querySelector("#voltar-transmissao").addEventListener("click", function () {
+  if (telaEhHost) {
+    encerrarTransmissao(true);
+  } else {
+    pararDeAssistir();
+  }
+});
+
+document.querySelector("#copiar-codigo-tela").addEventListener("click", function () {
+  var botao = this;
+  if (navigator.clipboard && telaSala) {
+    navigator.clipboard.writeText(telaSala).then(function () {
+      botao.textContent = "Copiado!";
+      botao.classList.add("copiado");
+      setTimeout(function () {
+        botao.textContent = "Copiar";
+        botao.classList.remove("copiado");
+      }, 2000);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Inicialização
 // ---------------------------------------------------------------------------
 window.addEventListener("error", function (e) {
@@ -988,6 +1513,21 @@ window.addEventListener("unhandledrejection", function (e) {
 
 carregarHistorico();
 conectarAoDiscord();
+
+// Links diretos: ?transmitir=1&instancia=... (gerado pelo botão da Activity)
+// e ?sala=<codigo> (link de espectador compartilhado manualmente).
+(function () {
+  var params = new URLSearchParams(location.search);
+  var salaCompartilhada = params.get("sala");
+  var querTransmitir = params.get("transmitir") === "1";
+
+  if (salaCompartilhada) {
+    abrirTelaCompartilhar();
+    assistirTransmissao(salaCompartilhada);
+  } else if (querTransmitir) {
+    abrirTelaCompartilhar();
+  }
+})();
 
 // Auto-reconnect after Discord iframe reload
 (function () {

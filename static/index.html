@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
-    <link rel="stylesheet" href="./style.css?v=20260919-9" />
+    <link rel="stylesheet" href="./style.css?v=20260922-1" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -129,6 +129,19 @@
       .ranking-panel { margin-top: 16px; border: 1px solid #34384f; border-radius: 14px; padding: 16px; background: #1b1e30; }
       .ranking-panel h2 { font-size: 16px; margin-bottom: 10px; color: #c8baff; }
 
+      /* Compartilhar Tela */
+      .aviso-navegador { padding: 14px 16px; border: 1px solid #6b5b95; border-radius: 12px; background: #24213d; margin-bottom: 18px; }
+      .aviso-navegador p { margin: 0 0 12px; color: #c9ccda; font-size: 14px; }
+      .subtitulo-secao { margin: 0 0 10px; font-size: 15px; color: #c8baff; }
+      .grupo-preset { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+      .preset-label { width: 82px; color: #aeb2c7; font-size: 13px; flex-shrink: 0; }
+      .preset-opcoes { display: flex; gap: 8px; flex: 1; }
+      .botao-preset { flex: 1; padding: 10px 0; border: 1px solid #454b69; border-radius: 10px; background: #171a29; color: #f4f6ff; font-size: 14px; cursor: pointer; }
+      .botao-preset:hover { border-color: #9c7cff; }
+      .botao-preset.selecionado { border-color: #8664ff; background: #7655e8; font-weight: bold; }
+      .aviso-upload { margin: 6px 0 14px; color: #aeb2c7; font-size: 12px; line-height: 1.5; }
+      .video-transmissao { display: block; width: 100%; max-height: 60vh; border-radius: 12px; background: #000; margin-top: 6px; }
+
       footer { margin-top: 24px; color: #777d98; font-size: 13px; text-align: center; }
       footer a { color: #aaa0ff; text-decoration: none; }
       footer a:hover { color: #c8baff; }
@@ -180,6 +193,14 @@
           <span>
             <strong>Jogo da Velha</strong>
             <small>Contra a máquina ou outros jogadores.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
+        <button id="jogo-tela" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">&#128247;</span>
+          <span>
+            <strong>Compartilhar Tela</strong>
+            <small>Transmita sua tela para até 9 espectadores.</small>
           </span>
           <span class="seta">&rarr;</span>
         </button>
@@ -345,6 +366,82 @@
         <div id="lista-espectacao"><p class="vazio">Carregando salas...</p></div>
       </section>
 
+      <!-- Tela: Compartilhar Tela (hub) -->
+      <section id="tela-compartilhar" class="tela">
+        <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
+        <div class="titulo-tela">
+          <h2>Compartilhar Tela</h2>
+          <p>Transmita sua tela para quem está na call ou assista à transmissão de alguém.</p>
+        </div>
+
+        <div id="tela-aviso-navegador" class="aviso-navegador" style="display:none;">
+          <p>Por limitação do Discord, a captura de tela só pode ser iniciada em uma aba do navegador.</p>
+          <button id="abrir-navegador-tela" class="botao principal">Abrir no navegador para transmitir</button>
+        </div>
+
+        <div id="tela-config-host" style="display:none;">
+          <h3 class="subtitulo-secao">Qualidade da transmissão</h3>
+          <div class="grupo-preset">
+            <span class="preset-label">Resolução</span>
+            <div class="preset-opcoes" id="preset-resolucao">
+              <button class="botao-preset" data-resolucao="480p">480p</button>
+              <button class="botao-preset selecionado" data-resolucao="720p">720p</button>
+              <button class="botao-preset" data-resolucao="1080p">1080p</button>
+            </div>
+          </div>
+          <div class="grupo-preset">
+            <span class="preset-label">FPS</span>
+            <div class="preset-opcoes" id="preset-fps">
+              <button class="botao-preset selecionado" data-fps="30">30 fps</button>
+              <button class="botao-preset" data-fps="60">60 fps</button>
+            </div>
+          </div>
+          <p class="aviso-upload" id="aviso-upload"></p>
+          <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
+        </div>
+
+        <div id="tela-assistir-bloco" style="margin-top: 22px;">
+          <h3 class="subtitulo-secao">Assistir</h3>
+          <div id="lista-transmissoes"><p class="vazio">Nenhuma transmissão ativa.</p></div>
+          <div class="sala-input" style="margin-top: 10px;">
+            <input type="text" id="codigo-tela-input" placeholder="Ou digite o código da transmissão" maxlength="12" />
+            <button id="assistir-codigo" class="botao">Assistir</button>
+          </div>
+          <button id="atualizar-transmissoes" class="botao" style="margin-top: 10px; width:100%;">Atualizar lista</button>
+        </div>
+
+        <div id="mensagem-tela" class="mensagem"></div>
+      </section>
+
+      <!-- Tela: Transmissão em andamento (host ou espectador) -->
+      <section id="tela-transmissao" class="tela">
+        <div class="cabecalho-jogo">
+          <button class="voltar" id="voltar-transmissao" data-tela="tela-compartilhar">&larr; Voltar</button>
+          <div class="informacoes-jogo">
+            <span id="transmissao-papel" class="etiqueta">Assistindo</span>
+          </div>
+        </div>
+
+        <div id="mensagem-transmissao" class="mensagem">Conectando...</div>
+
+        <div id="transmissao-codigo-display" class="sala-codigo-display" style="display:none;">
+          <span class="sala-codigo-label">Código:</span>
+          <span id="transmissao-codigo-valor" class="sala-codigo-valor"></span>
+          <button id="copiar-codigo-tela" class="botao-copiar" title="Copiar código">Copiar</button>
+        </div>
+
+        <video id="video-transmissao" class="video-transmissao" autoplay playsinline controls></video>
+
+        <div id="transmissao-viewers-bar" class="espectadores-bar" style="display:none;">
+          &#128065; <span id="transmissao-viewers-contador">0</span> assistindo
+        </div>
+
+        <div class="acoes">
+          <button id="encerrar-transmissao" class="botao" style="display:none;">Encerrar transmissão</button>
+          <button id="parar-assistir" class="botao" style="display:none;">Parar de assistir</button>
+        </div>
+      </section>
+
       <footer>
         <p>Mais jogos serão adicionados em breve.</p>
         <p style="margin-top: 6px;"><a href="/politica.html">Política de Privacidade</a> &middot; <a href="/termos.html">Termos de Serviço</a></p>
@@ -362,6 +459,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260919-9"></script>
+    <script src="./app.js?v=20260922-1"></script>
   </body>
 </html>
