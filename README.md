@@ -28,11 +28,17 @@ Activity com backend em Python e jogos em navegador: Sudoku 9×9, Jogo da Velha
 ## Login com Discord (site no navegador)
 
 O site tem login via OAuth2 (escopo `identify`) com botão "Entrar com Discord".
-Para funcionar, cadastre estes Redirect URIs no Developer Portal em
-**OAuth2 → Redirects**:
+Cadastre **exatamente** este Redirect URI no Developer Portal em
+**OAuth2 → Redirects** (e nenhum outro de produção):
 
-- `https://jogos7.onrender.com/auth/callback` (produção)
-- `http://localhost:8080/auth/callback` (desenvolvimento local)
+- `https://jogos7.onrender.com/auth/callback` (produção e callback canônico)
+- `http://localhost:8080/auth/callback` (opcional, desenvolvimento local;
+  defina `OAUTH_REDIRECT_URI` no `.env` para usá-lo)
+
+O mesmo `redirect_uri` é usado no authorize e na troca do code pelo token
+(obrigatório para o Discord aceitar). Opcionalmente defina
+`OAUTH_REDIRECT_URI=https://jogos7.onrender.com/auth/callback` também no
+ambiente do Render para fixá-lo no servidor.
 
 A sessão fica no `localStorage` e o token é renovado automaticamente
 (`/token/refresh`) quando expira. Dentro da Activity o login não é necessário —

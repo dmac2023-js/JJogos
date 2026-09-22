@@ -29,6 +29,7 @@ ARQUIVO_RECORDES = PASTA_BASE / "recordes.json"
 DISCORD_APPLICATION_ID = os.getenv("DISCORD_APPLICATION_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY", "")
+OAUTH_REDIRECT_PADRAO = "https://jogos7.onrender.com/auth/callback"
 
 app = FastAPI(title="Jogos no Discord")
 
@@ -64,6 +65,7 @@ class RespostaSudoku(BaseModel):
 
 class CodigoAutorizacao(BaseModel):
     code: str
+    redirect_uri: Optional[str] = None
 
 
 class NovoRecord(BaseModel):
@@ -447,7 +449,10 @@ def saude():
 
 @app.get("/config")
 def configuracao_publica():
-    return {"application_id": DISCORD_APPLICATION_ID}
+    return {
+        "application_id": DISCORD_APPLICATION_ID,
+        "redirect_uri": os.getenv("OAUTH_REDIRECT_URI", "").strip() or None,
+    }
 
 
 async def discord_interactions(request: Request):
@@ -479,6 +484,12 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
     if not DISCORD_APPLICATION_ID or not DISCORD_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
 
+    # O Discord exige que o redirect_uri do token bata exatamente com o usado
+    # no authorize. O cliente envia o mesmo valor; fallback para env/padrão.
+    redirect_uri = ((dados.redirect_uri or "").strip()
+                    or os.getenv("OAUTH_REDIRECT_URI", "").strip()
+                    or OAUTH_REDIRECT_PADRAO)
+
     resposta = requests.post(
         "https://discord.com/api/oauth2/token",
         data={
@@ -486,12 +497,18 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
             "client_secret": DISCORD_CLIENT_SECRET,
             "grant_type": "authorization_code",
             "code": dados.code,
+            "redirect_uri": redirect_uri,
         },
         timeout=15,
     )
 
     if resposta.status_code != 200:
-        raise HTTPException(status_code=400, detail="Não foi possível autenticar com o Discord.")
+        try:
+            corpo = resposta.json()
+            motivo = corpo.get("error_description") or corpo.get("error") or resposta.text[:200]
+        except Exception:
+            motivo = resposta.text[:200]
+        raise HTTPException(status_code=400, detail="Discord recusou o login: " + str(motivo))
 
     return resposta.json()
 
@@ -1044,6 +1061,7 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
         "resolucao": transmissao["resolucao"],
         "fps": transmissao["fps"],
         "espectadores": len(transmissao["viewers"]),
+        "host_conectado": transmissao.get("host_ws") is not None,
     }
 
 

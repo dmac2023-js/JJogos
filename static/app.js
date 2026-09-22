@@ -1009,6 +1009,13 @@ function obterInstanciaParam() {
   return params.get("instancia") || params.get("instance_id") || "";
 }
 
+// Origem REAL do app. Dentro da Activity o location.origin é o proxy do
+// Discord (ex.: 123.discordsays.com) — links/redirects devem apontar o site.
+function appOrigin() {
+  if (/\.discordsays\.com$/i.test(location.hostname)) return "https://jogos7.onrender.com";
+  return location.origin;
+}
+
 // True dentro da Activity (mesmo se o SDK falhar ao carregar).
 function dentroDaActivity() {
   if (discordSdkGlobal) return true;
@@ -1187,7 +1194,9 @@ function abrirTelaCompartilhar() {
 }
 
 async function abrirNoNavegadorParaTransmitir() {
-  var url = location.origin + "/?transmitir=1";
+  // Sempre o site real: dentro da Activity location.origin é o proxy do
+  // Discord (discordsays.com) e o WS do host pode não funcionar por lá.
+  var url = appOrigin() + "/?transmitir=1";
   var instancia = compartilharInstanciaAtual();
   if (instancia) url += "&instancia=" + encodeURIComponent(instancia);
 
@@ -1560,9 +1569,23 @@ function processarMensagemTela(dados) {
       mensagemTransmissao("Conectado a " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps). Aguardando vídeo...", "sucesso");
       clearTimeout(telaOfertaTimer);
       if (!telaEhHost) {
-        telaOfertaTimer = setTimeout(function () {
-          if (!telaEhHost && telaSala && !telaPeerViewer) {
-            mensagemTransmissao("Conectado ao servidor, mas o vídeo ainda não chegou. Confirme que quem transmite está transmitindo (sala " + telaSala + ").", "erro");
+        telaOfertaTimer = setTimeout(async function () {
+          if (telaEhHost || !telaSala || telaPeerViewer) return;
+          var codigo = telaSala;
+          try {
+            var res = await fetch("./tela/sala/" + encodeURIComponent(codigo));
+            if (res.status === 404) {
+              encerrarViewerTela("A transmissão foi encerrada (sala " + codigo + ").");
+              return;
+            }
+            var info = await res.json();
+            if (info.host_conectado === false) {
+              mensagemTransmissao("Quem transmite não está conectado ao servidor. Peça para ele abrir a transmissão de novo (sala " + codigo + ").", "erro");
+            } else {
+              mensagemTransmissao("Conectado ao servidor, mas o vídeo ainda não chegou. Confirme que quem transmite está transmitindo (sala " + codigo + ").", "erro");
+            }
+          } catch (e) {
+            mensagemTransmissao("Conectado ao servidor, mas o vídeo ainda não chegou (sala " + codigo + ").", "erro");
           }
         }, 12000);
       }
@@ -1796,10 +1819,15 @@ async function iniciarLoginDiscord() {
       : String(Math.random()).slice(2) + String(Math.random()).slice(2);
     sessionStorage.setItem("oauth-state", state);
 
+    // redirect_uri canônico: precisa existir nos Redirects do portal e ser
+    // idêntico no authorize E na troca do code pelo token.
+    var redirect = config.redirect_uri || (appOrigin() + "/auth/callback");
+    sessionStorage.setItem("oauth-redirect", redirect);
+
     var url = "https://discord.com/api/oauth2/authorize?" + new URLSearchParams({
       client_id: config.application_id,
       response_type: "code",
-      redirect_uri: location.origin + "/auth/callback",
+      redirect_uri: redirect,
       scope: "identify",
       state: state,
     });
@@ -1818,7 +1846,9 @@ async function processarCallbackOAuth() {
 
   var state = params.get("state");
   var guardado = sessionStorage.getItem("oauth-state");
+  var redirectGuardado = sessionStorage.getItem("oauth-redirect") || (appOrigin() + "/auth/callback");
   sessionStorage.removeItem("oauth-state");
+  sessionStorage.removeItem("oauth-redirect");
   history.replaceState({}, "", "/");
 
   if (!state || !guardado || state !== guardado) {
@@ -1832,7 +1862,7 @@ async function processarCallbackOAuth() {
     var res = await fetch("./token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code }),
+      body: JSON.stringify({ code: code, redirect_uri: redirectGuardado }),
     });
     var token = await res.json();
     if (!res.ok) throw new Error(token.detail || "Falha ao trocar o código.");
@@ -1853,7 +1883,7 @@ async function processarCallbackOAuth() {
   } catch (e) {
     console.warn("OAuth callback falhou:", e);
     abrirTelaCompartilhar();
-    mensagemTela("Não foi possível concluir o login com o Discord.", "erro");
+    mensagemTela("Não foi possível concluir o login: " + e.message, "erro");
   }
 }
 
