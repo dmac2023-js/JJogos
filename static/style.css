@@ -209,3 +209,8 @@ footer a:hover { color: #c8baff; }
 .multi-tile.oculta .multi-tile-media canvas, .multi-tile.oculta .multi-tile-media video { display: none; }
 .multi-tile-rodape { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1b1e30; font-size: 13px; color: #c9ccda; }
 .multi-tile-rodape img, .multi-tile-rodape .ini { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #34275d; border: 1px solid #4b3b78; display: grid; place-items: center; font-weight: bold; font-size: 12px; color: #c8baff; flex-shrink: 0; }
+.multi-membros-lista { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #34384f; }
+.multi-membro { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #22263a; border: 1px solid #454b69; font-size: 12px; color: #c9ccda; max-width: 180px; }
+.multi-membro img, .multi-membro .ini { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #34275d; border: 1px solid #4b3b78; display: grid; place-items: center; font-size: 10px; font-weight: bold; color: #c8baff; flex-shrink: 0; }
+.multi-membro strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.multi-membro .etiqueta { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #34384f; color: #aeb2c7; flex-shrink: 0; }

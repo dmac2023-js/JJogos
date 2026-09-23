@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-05" />
+    <link rel="stylesheet" href="./style.css?v=20260924-06" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -238,6 +238,29 @@
       #transmissao-qualidade.bloqueada::after {
         content: "Fixo 720p 30fps na multi-tela"; display: block; margin-top: 8px;
         color: #c8baff; font-size: 12px;
+      }
+      .multi-membros-lista {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+        margin-top: 10px; padding-top: 10px; border-top: 1px solid #34384f;
+      }
+      .multi-membro {
+        display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+        border-radius: 999px; background: #22263a; border: 1px solid #454b69;
+        font-size: 12px; color: #c9ccda; max-width: 180px;
+      }
+      .multi-membro img, .multi-membro .ini {
+        width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+        background: #34275d; border: 1px solid #4b3b78; display: grid;
+        place-items: center; font-size: 10px; font-weight: bold; color: #c8baff;
+        flex-shrink: 0;
+      }
+      .multi-membro strong {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-weight: 600;
+      }
+      .multi-membro .etiqueta {
+        font-size: 10px; padding: 1px 6px; border-radius: 999px;
+        background: #34384f; color: #aeb2c7; flex-shrink: 0;
       }
       @media (max-width: 640px) {
         .multi-grid { grid-template-columns: 1fr; }
@@ -609,64 +632,81 @@
           <p>Seu celular (Chrome) não permite capturar a tela do aparelho. Ao iniciar, vamos transmitir pela <strong>câmera</strong> (frente/verso) + microfone — mesma qualidade e lista de espectadores.</p>
         </div>
 
-        <div id="tela-config-host" style="display:none;">
-          <h3 class="subtitulo-secao">Qualidade da transmissão</h3>
+        <!-- Painel único de criação -->
+        <div id="painel-criar" style="padding:14px; border:1px solid #33365a; border-radius:12px; background:#14162a;">
+          <h3 class="subtitulo-secao" style="margin-top:0;">Criar transmissão</h3>
+
           <div class="grupo-preset">
-            <span class="preset-label">Resolução</span>
-            <div class="preset-opcoes" id="preset-resolucao">
-              <button class="botao-preset" data-resolucao="480p">480p</button>
-              <button class="botao-preset selecionado" data-resolucao="720p">720p</button>
-              <button class="botao-preset" data-resolucao="1080p">1080p</button>
+            <span class="preset-label">Sala</span>
+            <div class="preset-opcoes" id="op-tipo-sala">
+              <button type="button" class="botao-preset selecionado" data-tipo="publica">Pública</button>
+              <button type="button" class="botao-preset" data-tipo="privada">Privada</button>
             </div>
           </div>
+
+          <div class="grupo-preset" id="grupo-codigo-sala" style="display:none;">
+            <span class="preset-label">Código</span>
+            <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Personalize — ex.: tela-joao" maxlength="16" />
+          </div>
+
           <div class="grupo-preset">
-            <span class="preset-label">FPS</span>
-            <div class="preset-opcoes" id="preset-fps">
-              <button class="botao-preset selecionado" data-fps="30">30 fps</button>
-              <button class="botao-preset" data-fps="60">60 fps</button>
+            <span class="preset-label">Tipo</span>
+            <div class="preset-opcoes" id="op-modo-tela">
+              <button type="button" class="botao-preset selecionado" data-modo="normal">Única</button>
+              <button type="button" class="botao-preset" data-modo="multi">Multi-tela</button>
             </div>
           </div>
-          <div class="grupo-preset">
-            <span class="preset-label">Código da sala</span>
-            <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Opcional — ex.: tela-joao" maxlength="16" />
+
+          <div id="bloco-qualidade">
+            <div class="grupo-preset">
+              <span class="preset-label">Resolução</span>
+              <div class="preset-opcoes" id="preset-resolucao">
+                <button class="botao-preset" data-resolucao="480p">480p</button>
+                <button class="botao-preset selecionado" data-resolucao="720p">720p</button>
+                <button class="botao-preset" data-resolucao="1080p">1080p</button>
+              </div>
+            </div>
+            <div class="grupo-preset">
+              <span class="preset-label">FPS</span>
+              <div class="preset-opcoes" id="preset-fps">
+                <button class="botao-preset selecionado" data-fps="30">30 fps</button>
+                <button class="botao-preset" data-fps="60">60 fps</button>
+              </div>
+            </div>
           </div>
-          <label class="grupo-preset" style="cursor:pointer; align-items:center;">
-            <span class="preset-label" style="margin:0;">Lista</span>
-            <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
-              <input type="checkbox" id="sala-publica-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
-              Sala pública (aparece na lista para todos)
-            </span>
-          </label>
-          <label class="grupo-preset" style="cursor:pointer; align-items:center;">
+
+          <div id="nota-multi" class="aviso-upload" style="display:none; color:#c8baff; margin-top:0;">
+            Multi-tela: <strong>720p 30fps fixo</strong>, até 8 telas ao mesmo tempo.
+            A sala vive enquanto houver alguém nela.
+          </div>
+
+          <label class="grupo-preset" id="grupo-audio" style="cursor:pointer; align-items:center;">
             <span class="preset-label" style="margin:0;">Áudio</span>
             <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
               <input type="checkbox" id="capturar-audio-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
               Compartilhar áudio (aba/sistema)
             </span>
           </label>
+
           <p class="aviso-upload" id="aviso-upload"></p>
           <p class="aviso-upload" style="color:#c8baff;">
             Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba) ou
             <strong>Share system audio</strong> (tela). Sem isso o Chrome não envia som.
           </p>
-          <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
-        </div>
 
-        <div id="bloco-multi-tela" style="margin-top: 18px; padding: 14px; border: 1px solid #33365a; border-radius: 12px; background: #14162a;">
-          <h3 class="subtitulo-secao">Sala multi-tela</h3>
-          <p class="aviso-upload" style="margin-top:0;">
-            Até 8 pessoas com tela ao mesmo tempo (720p 30fps fixo). A sala vive enquanto houver alguém nela.
-          </p>
-          <button id="criar-sala-multi" class="botao principal" style="width:100%; text-align:center; margin-bottom:10px;">Criar sala multi-tela</button>
-          <div class="sala-input">
-            <input type="text" id="codigo-multi-input" placeholder="Ou digite o código da multi-tela" maxlength="16" />
-            <button id="entrar-multi-codigo" class="botao">Entrar</button>
+          <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
+
+          <div id="entrar-multi-bloco" style="display:none; margin-top:12px;">
+            <div class="sala-input">
+              <input type="text" id="codigo-multi-input" placeholder="Já tem código da multi-tela?" maxlength="16" />
+              <button id="entrar-multi-codigo" class="botao">Entrar</button>
+            </div>
+            <div id="lista-salas-multi" style="margin-top:10px;"><p class="vazio">Nenhuma sala multi-tela pública.</p></div>
           </div>
-          <div id="lista-salas-multi" style="margin-top:10px;"><p class="vazio">Nenhuma sala multi-tela pública.</p></div>
         </div>
 
         <div id="tela-assistir-bloco" style="margin-top: 22px;">
-          <h3 class="subtitulo-secao" id="assistir-titulo-lista">Transmissões na sua call</h3>
+          <h3 class="subtitulo-secao" id="assistir-titulo-lista">Transmissões públicas</h3>
           <div id="lista-transmissoes"><p class="vazio">Nenhuma transmissão ativa.</p></div>
           <div class="sala-input" style="margin-top: 10px;">
             <input type="text" id="codigo-tela-input" placeholder="Ou digite o código da transmissão" maxlength="16" />
@@ -761,13 +801,17 @@
           <button id="copiar-codigo-multi" class="botao-copiar" title="Copiar código">Copiar</button>
         </div>
 
-        <div id="multi-membros" class="espectadores-bar">&#128101; <span id="multi-membros-total">0</span>/8 na sala</div>
+        <div id="multi-membros" class="espectadores-bar">
+          &#128101; <span id="multi-membros-total">0</span>/8 na sala
+          <div id="multi-membros-lista" class="multi-membros-lista"></div>
+        </div>
 
         <div id="mensagem-multi" class="mensagem"></div>
 
         <div class="acoes" style="margin-top:0; margin-bottom:14px;">
           <button id="multi-abrir-tela" class="botao principal">Compartilhar minha tela</button>
           <button id="multi-fechar-tela" class="botao" style="display:none;">Encerrar minha tela</button>
+          <button id="multi-voltar-assistir" class="botao" style="display:none;">Voltar a assistir</button>
           <button id="sair-sala-multi" class="botao">Sair da sala</button>
         </div>
 
@@ -791,6 +835,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-05"></script>
+    <script src="./app.js?v=20260924-06"></script>
   </body>
 </html>
