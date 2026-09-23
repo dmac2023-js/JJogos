@@ -214,3 +214,9 @@ footer a:hover { color: #c8baff; }
 .multi-membro img, .multi-membro .ini { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #34275d; border: 1px solid #4b3b78; display: grid; place-items: center; font-size: 10px; font-weight: bold; color: #c8baff; flex-shrink: 0; }
 .multi-membro strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .multi-membro .etiqueta { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #34384f; color: #aeb2c7; flex-shrink: 0; }
+.multi-tile-voltar {
+  margin-left: auto; flex-shrink: 0; padding: 6px 10px; border: 1px solid #8664ff;
+  border-radius: 8px; background: #2a2350; color: #c8baff; font-size: 12px;
+  font-weight: bold; cursor: pointer; white-space: nowrap;
+}
+.multi-tile-voltar:hover { background: #7655e8; color: #fff; }

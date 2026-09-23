@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-06" />
+    <link rel="stylesheet" href="./style.css?v=20260924-07" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -234,6 +234,12 @@
       .multi-tile-rodape strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .multi-tile-eu .multi-tile-rodape { border-top: 2px solid #8664ff; }
       .etiqueta-eu { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: #2a2350; color: #c8baff; font-size: 10px; }
+      .multi-tile-voltar {
+        margin-left: auto; flex-shrink: 0; padding: 6px 10px; border: 1px solid #8664ff;
+        border-radius: 8px; background: #2a2350; color: #c8baff; font-size: 12px;
+        font-weight: bold; cursor: pointer; white-space: nowrap;
+      }
+      .multi-tile-voltar:hover { background: #7655e8; color: #fff; }
       #transmissao-qualidade.bloqueada { opacity: .45; pointer-events: none; }
       #transmissao-qualidade.bloqueada::after {
         content: "Fixo 720p 30fps na multi-tela"; display: block; margin-top: 8px;
@@ -835,6 +841,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-06"></script>
+    <script src="./app.js?v=20260924-07"></script>
   </body>
 </html>

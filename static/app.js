@@ -4422,6 +4422,13 @@ function criarTileMulti(live) {
     "<strong>" + escapeHtml(nick) + "</strong>" +
     (ehEu ? '<span class="etiqueta-eu">Você</span>' : "");
 
+  var btnVoltar = document.createElement("button");
+  btnVoltar.type = "button";
+  btnVoltar.className = "multi-tile-voltar";
+  btnVoltar.textContent = "Voltar a assistir";
+  btnVoltar.style.display = "none";
+  rodape.appendChild(btnVoltar);
+
   el.appendChild(media);
   el.appendChild(rodape);
   document.querySelector("#multi-grid").appendChild(el);
@@ -4438,6 +4445,7 @@ function criarTileMulti(live) {
     btnOcultar: btnOcultar,
     btnMini: btnMini,
     btnCheia: btnCheia,
+    btnVoltar: btnVoltar,
     live: live,
     assistindo: false,
     oculta: false,
@@ -4461,6 +4469,41 @@ function criarTileMulti(live) {
     redeTimer: null,
   };
   multiTiles[sala] = tile;
+
+  function atualizarVoltarTile() {
+    // Mostra "Voltar a assistir" no rodapé quando o vídeo está fechado (_).
+    var fechado = el.classList.contains("minimizado") || tile.oculta ||
+      (!tile.assistindo && !ehEu && !tile.eu);
+    btnVoltar.style.display = fechado ? "" : "none";
+  }
+  tile.atualizarVoltar = atualizarVoltarTile;
+
+  btnVoltar.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    el.classList.remove("minimizado");
+    btnMini.textContent = "▁";
+    if (tile.oculta) {
+      tile.oculta = false;
+      el.classList.remove("oculta");
+      btnOcultar.textContent = "👁";
+    }
+    if (!tile.eu && !tile.assistindo) ligarViewerMulti(tile);
+    if (tile.eu && tile.preview) {
+      var pr = tile.preview.play();
+      if (pr && pr.catch) pr.catch(function () {});
+    }
+    atualizarVoltarTile();
+  });
+
+  btnMini.addEventListener("click", function () {
+    el.classList.toggle("minimizado");
+    btnMini.textContent = el.classList.contains("minimizado") ? "▔" : "▁";
+    if (el.classList.contains("cheia")) {
+      el.classList.remove("cheia");
+      btnCheia.textContent = "⛶";
+    }
+    atualizarVoltarTile();
+  });
 
   // Host: preview local no próprio tile (mudo).
   if (ehEu && telaStream) {
@@ -4494,7 +4537,8 @@ function criarTileMulti(live) {
   // Auto-assiste lives (mutadas). Clique no media também religa se oculto.
   media.addEventListener("click", function (ev) {
     if (ev.target === btnVol || ev.target === btnOcultar ||
-        ev.target === btnMini || ev.target === btnCheia) return;
+        ev.target === btnMini || ev.target === btnCheia ||
+        ev.target === btnVoltar) return;
     if (tile.oculta) {
       tile.oculta = false;
       el.classList.remove("oculta");
@@ -4503,6 +4547,7 @@ function criarTileMulti(live) {
     } else if (!tile.assistindo) {
       ligarViewerMulti(tile);
     }
+    atualizarVoltarTile();
   });
 
   btnVol.addEventListener("click", function () {
@@ -4527,15 +4572,7 @@ function criarTileMulti(live) {
       btnOcultar.textContent = "🙈";
       desligarViewerMulti(tile);
     }
-  });
-
-  btnMini.addEventListener("click", function () {
-    el.classList.toggle("minimizado");
-    btnMini.textContent = el.classList.contains("minimizado") ? "▔" : "▁";
-    if (el.classList.contains("cheia")) {
-      el.classList.remove("cheia");
-      btnCheia.textContent = "⛶";
-    }
+    atualizarVoltarTile();
   });
 
   btnCheia.addEventListener("click", function (ev) {
@@ -4551,10 +4588,12 @@ function criarTileMulti(live) {
       el.classList.remove("minimizado");
       btnCheia.textContent = "✕";
       btnMini.textContent = "▁";
+      atualizarVoltarTile();
     }
   });
 
   ligarViewerMulti(tile);
+  atualizarVoltarTile();
   return tile;
 }
 
@@ -4616,6 +4655,7 @@ function desligarViewerMulti(tile) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, tile.canvas.width, tile.canvas.height);
   if (!tile.oculta) tile.placeholder.textContent = "Clique para assistir";
+  if (tile.atualizarVoltar) tile.atualizarVoltar();
 }
 
 function ligarViewerMulti(tile) {
@@ -4627,6 +4667,7 @@ function ligarViewerMulti(tile) {
   tile.relay = dentroDaActivity();
   tile.placeholder.textContent = "Conectando...";
   abrirWsViewerMulti(tile);
+  if (tile.atualizarVoltar) tile.atualizarVoltar();
 }
 
 function abrirWsViewerMulti(tile) {
