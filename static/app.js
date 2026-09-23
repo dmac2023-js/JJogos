@@ -6256,9 +6256,8 @@ function campoGerarSolo() {
 }
 
 function campoMoverMinas(primeiro) {
-  if (!campoMinas || campoMinas.indexOf(primeiro) < 0) return;
+  if (!campoMinas) return;
   var total = campoLinhas * campoColunas;
-  var conjunto = new Set(campoMinas);
   var proibido = new Set();
   var r0 = Math.floor(primeiro / campoColunas);
   var c0 = primeiro % campoColunas;
@@ -6270,7 +6269,8 @@ function campoMoverMinas(primeiro) {
       }
     }
   }
-  conjunto.delete(primeiro);
+  var conjunto = new Set(campoMinas);
+  proibido.forEach(function (i) { conjunto.delete(i); });
   for (var i = 0; i < total && conjunto.size < campoBombasTotais; i++) {
     if (!conjunto.has(i) && !proibido.has(i)) conjunto.add(i);
   }
@@ -6328,6 +6328,7 @@ function campoRevelarSolo(idx) {
   if (campoReveladas[idx] || campoBandeiras[idx]) return;
   if (!campoPrimeiroClique) {
     campoPrimeiroClique = true;
+    campoGerarSolo();
     campoMoverMinas(idx);
     campoIniciarTimer();
   }
@@ -6419,7 +6420,6 @@ function iniciarCampoSolo(dificuldade) {
   campoLinhas = dim.l;
   campoColunas = dim.c;
   campoBombasTotais = dim.b;
-  campoGerarSolo();
   var difL = document.querySelector("#campo-dificuldade-label");
   if (difL) difL.textContent = campoNomeDif[campoDificuldade] || campoDificuldade;
   document.querySelector("#campo-sala-bar").style.display = "none";
