@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260923-01" />
+    <link rel="stylesheet" href="./style.css?v=20260923-02" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -131,6 +131,14 @@
 
       .ranking-panel { margin-top: 16px; border: 1px solid #34384f; border-radius: 14px; padding: 16px; background: #1b1e30; }
       .ranking-panel h2 { font-size: 16px; margin-bottom: 10px; color: #c8baff; }
+
+      .placar-times { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 0 auto 14px; padding: 12px 14px; border: 1px solid #34384f; border-radius: 14px; background: #1b1e30; max-width: 420px; }
+      .placar-lado { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; }
+      .placar-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #34275d; border: 2px solid #4b3b78; display: grid; place-items: center; font-weight: bold; font-size: 18px; color: #c8baff; overflow: hidden; }
+      .placar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+      .placar-nick { font-size: 12px; color: #aeb2c7; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+      .placar-gol { font-size: 28px; font-weight: bold; color: #c8baff; font-variant-numeric: tabular-nums; line-height: 1; }
+      .placar-x { color: #aeb2c7; font-size: 20px; font-weight: bold; }
 
       /* Compartilhar Tela */
       .aviso-navegador { padding: 14px 16px; border: 1px solid #6b5b95; border-radius: 12px; background: #24213d; margin-bottom: 18px; }
@@ -327,8 +335,21 @@
         <div id="sudoku-online-bar" class="sala-codigo-display" style="display:none;">
           <span class="sala-codigo-label">Sala:</span>
           <span id="sudoku-online-codigo" class="sala-codigo-valor"></span>
-          <span id="sudoku-online-placar" style="color:#c8baff; font-weight:bold;">0 × 0</span>
           <span id="sudoku-online-status" style="color:#aeb2c7; font-size:13px;"></span>
+        </div>
+
+        <div id="placar-times-sudoku" class="placar-times" style="display:none;">
+          <div class="placar-lado" data-slot="p1">
+            <span class="placar-avatar" id="placar-sudoku-avatar-p1">?</span>
+            <span class="placar-nick" id="placar-sudoku-nick-p1">—</span>
+            <span class="placar-gol" id="placar-sudoku-gol-p1">0</span>
+          </div>
+          <span class="placar-x">×</span>
+          <div class="placar-lado" data-slot="p2">
+            <span class="placar-avatar" id="placar-sudoku-avatar-p2">?</span>
+            <span class="placar-nick" id="placar-sudoku-nick-p2">—</span>
+            <span class="placar-gol" id="placar-sudoku-gol-p2">0</span>
+          </div>
         </div>
 
         <div id="sudoku-online-acoes" class="acoes" style="display:none;">
@@ -438,6 +459,20 @@
           <span class="sala-codigo-label">Código da sala:</span>
           <span id="sala-codigo-valor" class="sala-codigo-valor"></span>
           <button id="copiar-codigo" class="botao-copiar" title="Copiar código">Copiar</button>
+        </div>
+
+        <div id="placar-times-velha" class="placar-times" style="display:none;">
+          <div class="placar-lado" data-slot="X">
+            <span class="placar-avatar" id="placar-velha-avatar-x">?</span>
+            <span class="placar-nick" id="placar-velha-nick-x">—</span>
+            <span class="placar-gol" id="placar-velha-gol-x">0</span>
+          </div>
+          <span class="placar-x">×</span>
+          <div class="placar-lado" data-slot="O">
+            <span class="placar-avatar" id="placar-velha-avatar-o">?</span>
+            <span class="placar-nick" id="placar-velha-nick-o">—</span>
+            <span class="placar-gol" id="placar-velha-gol-o">0</span>
+          </div>
         </div>
 
         <div class="jogo-conteudo">
@@ -625,6 +660,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260923-01"></script>
+    <script src="./app.js?v=20260923-02"></script>
   </body>
 </html>

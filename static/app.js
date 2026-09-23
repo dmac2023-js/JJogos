@@ -50,21 +50,30 @@ function avatarAtual() {
   try { return avatarUrlDiscord(usuarioDiscord); } catch (e) { return null; }
 }
 
-/** Espera a identidade (OAuth no site, SDK na Activity) antes de criar sala. */
+/** Espera a identidade (OAuth no site, SDK na Activity) antes de criar sala.
+ *  Timeout curto: na Activity o SDK pode demorar — nunca trava o botão. */
 async function garantirIdentidade() {
   if (usuarioDiscord) return usuarioDiscord;
   try {
     var cru = localStorage.getItem("usuario-discord");
     if (cru) {
-      await restaurarSessaoDiscord();
+      await Promise.race([
+        restaurarSessaoDiscord(),
+        new Promise(function (r) { setTimeout(r, 1200); }),
+      ]);
       if (usuarioDiscord) return usuarioDiscord;
     }
   } catch (e) { /* ignore */ }
   if (dentroDaActivity()) {
-    for (var i = 0; i < 4 && !usuarioDiscord; i++) {
-      await conectarAoDiscord();
+    for (var i = 0; i < 3 && !usuarioDiscord; i++) {
+      try {
+        await Promise.race([
+          conectarAoDiscord(),
+          new Promise(function (r) { setTimeout(r, 1500); }),
+        ]);
+      } catch (e) { /* segue sem identidade */ }
       if (!usuarioDiscord) {
-        await new Promise(function (r) { setTimeout(r, 350); });
+        await new Promise(function (r) { setTimeout(r, 250); });
       }
     }
   }
@@ -328,6 +337,8 @@ const VELHA_MAX_RECONNECT = 5;
 let velhaPingTimer = null;
 let lobbyWs = null;
 let lobbyPingTimer = null;
+let velhaPlacar = { X: 0, O: 0 };
+let velhaJogadores = { X: { nick: "—", avatar: null }, O: { nick: "—", avatar: null } };
 
 const telaModoVelha = document.querySelector("#tela-modo-velha");
 const telaDificuldadeVelha = document.querySelector("#tela-dificuldade-velha");
@@ -420,6 +431,31 @@ function mostrarCodigoSala(codigo) {
 
 function esconderCodigoSala() {
   document.querySelector("#sala-codigo-display").style.display = "none";
+  var placar = document.querySelector("#placar-times-velha");
+  if (placar) placar.style.display = "none";
+}
+
+function mostrarPlacarVelha(visivel) {
+  var placar = document.querySelector("#placar-times-velha");
+  if (placar) placar.style.display = visivel ? "" : "none";
+}
+
+function atualizarPlacarVelha() {
+  mostrarPlacarVelha(velhaModo !== null);
+  preencherAvatarPlacar(
+    document.querySelector("#placar-velha-avatar-x"),
+    velhaJogadores.X.nick, velhaJogadores.X.avatar);
+  preencherAvatarPlacar(
+    document.querySelector("#placar-velha-avatar-o"),
+    velhaJogadores.O.nick, velhaJogadores.O.avatar);
+  var nx = document.querySelector("#placar-velha-nick-x");
+  var no = document.querySelector("#placar-velha-nick-o");
+  var gx = document.querySelector("#placar-velha-gol-x");
+  var go = document.querySelector("#placar-velha-gol-o");
+  if (nx) nx.textContent = velhaJogadores.X.nick || "Aguardando...";
+  if (no) no.textContent = velhaJogadores.O.nick || "Aguardando...";
+  if (gx) gx.textContent = String(velhaPlacar.X || 0);
+  if (go) go.textContent = String(velhaPlacar.O || 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -520,25 +556,33 @@ function renderizarSalasEspectacao(salas) {
 // Jogo da Velha — vs Máquina
 // ---------------------------------------------------------------------------
 async function iniciarVelhaMaquina(dificuldade) {
+  await garantirIdentidade();
   velhaModo = "maquina";
   velhaDificuldade = dificuldade;
   velhaMinhaPeca = "X";
   velhaEspectador = false;
+  velhaPlacar = { X: 0, O: 0 };
+  velhaJogadores = {
+    X: { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() },
+    O: { nick: "Máquina", avatar: null },
+  };
   mostrarTela(telaVelha);
   esconderCodigoSala();
+  mostrarPlacarVelha(true);
+  atualizarPlacarVelha();
   atualizarVelhaMensagem("Carregando...");
   document.querySelector("#reiniciar-velha").style.display = "";
   document.querySelector("#sair-sala-velha").style.display = "none";
   document.querySelector("#espectadores-bar").style.display = "none";
 
-  var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
-  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  var nome = nomeUsuario();
+  var nick = nomeExibicao();
 
   try {
     var res = await fetch("./velha/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modo: "maquina", dificuldade: dificuldade, nome: nome, nick: nick }),
+      body: JSON.stringify({ modo: "maquina", dificuldade: dificuldade, nome: nome, nick: nick, avatar: avatarAtual() }),
     });
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar jogo.");
@@ -573,6 +617,8 @@ async function jogarVelhaMaquina(posicao) {
     velhaTabuleiro._ativo = dados.jogo_ativo;
     velhaTabuleiro._resultado = dados.resultado;
     velhaTabuleiro._minhaVez = dados.sua_vez;
+    if (dados.placar) velhaPlacar = dados.placar;
+    if (velhaModo) atualizarPlacarVelha();
     desenharTabuleiro(velhaTabuleiro);
     atualizarVelhaVez();
 
@@ -582,6 +628,7 @@ async function jogarVelhaMaquina(posicao) {
         atualizarVelhaMensagem("Empate!", "");
       } else if (dados.resultado === velhaMinhaPeca) {
         atualizarVelhaMensagem("Você venceu! Parabéns!", "sucesso");
+        salvarRecordVelha();
       } else {
         atualizarVelhaMensagem("A máquina venceu!", "erro");
       }
@@ -594,16 +641,16 @@ async function jogarVelhaMaquina(posicao) {
 }
 
 async function salvarRecordVelha() {
-  if (velhaModo !== "multiplayer") return;
   await garantirIdentidade();
   var nome = nomeUsuario();
   var nick = nomeExibicao();
   var avatar = avatarAtual();
+  var dif = velhaModo === "maquina" ? (velhaDificuldade || "facil") : "facil";
   try {
     await fetch("./velha/recordes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dificuldade: "facil", nome: nome, nick: nick, avatar: avatar }),
+      body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar }),
     });
     carregarRankingVelha();
   } catch (e) { /* ignore */ }
@@ -652,6 +699,8 @@ function conectarWsVelha(sala, nome, nick, espectador) {
 
   var params = "nome=" + encodeURIComponent(nome) + "&nick=" + encodeURIComponent(nick);
   if (espectador) params += "&espectador=true";
+  var avatar = avatarAtual();
+  if (avatar) params += "&avatar=" + encodeURIComponent(avatar);
 
   var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocolo + "//" + location.host + "/ws/velha/" + sala + "?" + params;
@@ -728,8 +777,20 @@ function processarMensagemVelha(dados) {
       velhaTabuleiro._resultado = dados.resultado;
       velhaTabuleiro._minhaVez = dados.sua_vez;
       if (!velhaEspectador) velhaMinhaPeca = dados.minha_peca;
+      if (dados.placar) velhaPlacar = dados.placar;
+      if (dados.jogador_x || dados.avatar_x) {
+        velhaJogadores.X = { nick: dados.jogador_x || velhaJogadores.X.nick, avatar: dados.avatar_x || velhaJogadores.X.avatar };
+      }
+      if (dados.jogador_o || dados.avatar_o) {
+        velhaJogadores.O = { nick: dados.jogador_o || velhaJogadores.O.nick, avatar: dados.avatar_o || velhaJogadores.O.avatar };
+      }
+      if (velhaModo) atualizarPlacarVelha();
       desenharTabuleiro(velhaTabuleiro);
       atualizarVelhaVez();
+      if (!dados.jogo_ativo && dados.resultado && dados.resultado !== "empate"
+          && velhaModo === "multiplayer" && dados.resultado === velhaMinhaPeca) {
+        salvarRecordVelha();
+      }
       break;
 
     case "inicio":
@@ -739,7 +800,9 @@ function processarMensagemVelha(dados) {
         dados.jogador_x + " (X) vs " + dados.jogador_o + " (O) — " + comeca + " começa!"
       );
       document.querySelector("#reiniciar-velha").style.display = "none";
-
+      if (dados.jogador_x) velhaJogadores.X = { nick: dados.jogador_x, avatar: dados.avatar_x || null };
+      if (dados.jogador_o) velhaJogadores.O = { nick: dados.jogador_o, avatar: dados.avatar_o || null };
+      atualizarPlacarVelha();
       break;
 
     case "esperando":
@@ -747,6 +810,12 @@ function processarMensagemVelha(dados) {
       atualizarVelhaMensagem(dados.mensagem);
       vezLabel.textContent = "Você é " + velhaMinhaPeca;
       vezLabel.className = "indicador-vez " + velhaMinhaPeca.toLowerCase();
+      if (velhaMinhaPeca === "X" && velhaJogadores) {
+        velhaJogadores.X = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() };
+      } else if (velhaMinhaPeca === "O") {
+        velhaJogadores.O = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() };
+      }
+      atualizarPlacarVelha();
       break;
 
     case "oponente_saiu reiniciando":
@@ -826,8 +895,11 @@ async function criarSalaVelha() {
     velhaModo = "multiplayer";
     velhaReconnectAttempts = 0;
     velhaSala = dados.sala;
+    velhaPlacar = { X: 0, O: 0 };
+    velhaJogadores = { X: { nick: nick, avatar: avatar }, O: { nick: "Aguardando...", avatar: null } };
     mostrarTela(telaVelha);
     mostrarCodigoSala(dados.sala);
+    atualizarPlacarVelha();
     atualizarVelhaMensagem("Aguardando oponente...");
     vezLabel.textContent = "Aguardando...";
     vezLabel.className = "indicador-vez";
@@ -856,11 +928,14 @@ async function entrarSalaVelha(codigo) {
   var nome = nomeUsuario();
   var nick = nomeExibicao();
 
-  velhaModo = "multiplayer";
-  velhaReconnectAttempts = 0;
-  mostrarTela(telaVelha);
-  esconderCodigoSala();
-  atualizarVelhaMensagem("Entrando na sala...");
+    velhaModo = "multiplayer";
+    velhaReconnectAttempts = 0;
+    velhaPlacar = { X: 0, O: 0 };
+    velhaJogadores = { X: { nick: "—", avatar: null }, O: { nick: "—", avatar: null } };
+    mostrarTela(telaVelha);
+    esconderCodigoSala();
+    atualizarPlacarVelha();
+    atualizarVelhaMensagem("Entrando na sala...");
   vezLabel.textContent = "Entrando...";
   vezLabel.className = "indicador-vez";
   document.querySelector("#reiniciar-velha").style.display = "none";
@@ -1039,6 +1114,7 @@ var sudokuSala = null;
 var sudokuSlot = null;
 var sudokuFase = null;
 var sudokuPlacar = { p1: 0, p2: 0 };
+var sudokuUltimosJogadores = [];
 var sudokuMeuTempo = 0;
 var sudokuTerminou = false;
 var sudokuPingTimer = null;
@@ -1046,8 +1122,10 @@ var sudokuPingTimer = null;
 function sudokuOnlineBar(visivel) {
   var bar = document.querySelector("#sudoku-online-bar");
   var acoes = document.querySelector("#sudoku-online-acoes");
+  var placar = document.querySelector("#placar-times-sudoku");
   if (bar) bar.style.display = visivel ? "" : "none";
   if (acoes) acoes.style.display = visivel ? "" : "none";
+  if (placar) placar.style.display = visivel ? "" : "none";
 }
 
 function sudokuStatus(texto) {
@@ -1055,9 +1133,37 @@ function sudokuStatus(texto) {
   if (el) el.textContent = texto || "";
 }
 
+function preencherAvatarPlacar(el, nick, avatar) {
+  if (!el) return;
+  if (avatar) {
+    el.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="" />';
+  } else {
+    el.textContent = (nick || "?").charAt(0).toUpperCase();
+  }
+}
+
+function atualizarPlacarTimesSudoku() {
+  var placar = document.querySelector("#placar-times-sudoku");
+  if (placar) placar.style.display = sudokuOnlineAtivo ? "" : "none";
+  var js = sudokuUltimosJogadores || [];
+  var p1 = js[0] || {};
+  var p2 = js[1] || {};
+  var a = { nick: p1.nick || "Aguardando...", avatar: p1.avatar, gol: sudokuPlacar.p1 || 0 };
+  var b = { nick: p2.nick || "Aguardando...", avatar: p2.avatar, gol: sudokuPlacar.p2 || 0 };
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p1"), a.nick, a.avatar);
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p2"), b.nick, b.avatar);
+  var n1 = document.querySelector("#placar-sudoku-nick-p1");
+  var n2 = document.querySelector("#placar-sudoku-nick-p2");
+  var g1 = document.querySelector("#placar-sudoku-gol-p1");
+  var g2 = document.querySelector("#placar-sudoku-gol-p2");
+  if (n1) n1.textContent = a.nick;
+  if (n2) n2.textContent = b.nick;
+  if (g1) g1.textContent = String(a.gol);
+  if (g2) g2.textContent = String(b.gol);
+}
+
 function sudokuPlacarTexto() {
-  var el = document.querySelector("#sudoku-online-placar");
-  if (el) el.textContent = (sudokuPlacar.p1 || 0) + " × " + (sudokuPlacar.p2 || 0);
+  atualizarPlacarTimesSudoku();
 }
 
 function mostrarBotao(sel, on) {
@@ -1077,6 +1183,7 @@ function fecharSudokuOnline(motivo) {
   sudokuSlot = null;
   sudokuFase = null;
   sudokuTerminou = false;
+  sudokuUltimosJogadores = [];
   sudokuOnlineBar(false);
   mostrarBotao("#sudoku-pedir-revanche", false);
   mostrarBotao("#sudoku-responder-sim", false);
@@ -1130,6 +1237,7 @@ function processarMensagemSudoku(d) {
 
     case "estado_sudoku":
       sudokuPlacar = d.placar || sudokuPlacar;
+      sudokuUltimosJogadores = d.jogadores || [];
       sudokuPlacarTexto();
       sudokuFase = d.fase;
       if (d.meu_slot) sudokuSlot = d.meu_slot;
@@ -1202,6 +1310,7 @@ function processarMensagemSudoku(d) {
 
     case "vencedor_rodada":
       sudokuPlacar = d.placar || sudokuPlacar;
+      if (d.jogadores) sudokuUltimosJogadores = d.jogadores;
       sudokuPlacarTexto();
       if (d.slot === sudokuSlot) {
         pararCronometro();
@@ -1294,9 +1403,10 @@ async function criarSalaSudoku() {
     sudokuOnlineAtivo = true;
     sudokuSala = dados.sala;
     document.querySelector("#sudoku-online-codigo").textContent = dados.sala;
-    document.querySelector("#sudoku-online-placar").textContent = "0 × 0";
     sudokuPlacar = { p1: 0, p2: 0 };
+    sudokuUltimosJogadores = [];
     sudokuOnlineBar(true);
+    atualizarPlacarTimesSudoku();
     mostrarMensagem("Sala criada: " + dados.sala + ". Aguardando oponente...", "sucesso");
     sudokuStatus("Aguardando oponente...");
     // se não escolheu dificuldade explícita, assume a atual
@@ -1328,9 +1438,10 @@ async function entrarSalaSudoku(codigo) {
     // valida sala existente via listagem (públicas) ou tenta WS direto (privadas)
     sudokuOnlineAtivo = true;
     document.querySelector("#sudoku-online-codigo").textContent = codigo;
-    document.querySelector("#sudoku-online-placar").textContent = "0 × 0";
     sudokuPlacar = { p1: 0, p2: 0 };
+    sudokuUltimosJogadores = [];
     sudokuOnlineBar(true);
+    atualizarPlacarTimesSudoku();
     mostrarTela(telaJogo);
     mostrarMensagem("Entrando na sala " + codigo + "...", "");
     sudokuStatus("Entrando...");
@@ -1474,45 +1585,50 @@ async function carregarParticipantesDiscord() {
 }
 
 async function conectarAoDiscord() {
-  try {
-    var respostaConfiguracao = await fetch("./config");
-    if (!respostaConfiguracao.ok) return;
-    var configuracao = await respostaConfiguracao.json();
-    if (!configuracao.application_id) return;
-
-    var mod;
+  if (conexaoDiscordPromise) return conexaoDiscordPromise;
+  conexaoDiscordPromise = (async function () {
     try {
-      mod = await import("/sdk/npm/@discord/embedded-app-sdk/+esm");
-    } catch (importErr) {
-      console.warn("SDK import failed (likely not in Discord iframe):", importErr);
-      return;
-    }
+      var respostaConfiguracao = await fetch("./config");
+      if (!respostaConfiguracao.ok) return;
+      var configuracao = await respostaConfiguracao.json();
+      if (!configuracao.application_id) return;
 
-    var DiscordSDK = mod.DiscordSDK;
-    discordSdkGlobal = new DiscordSDK(configuracao.application_id);
-    await discordSdkGlobal.ready();
+      var mod;
+      try {
+        mod = await import("/sdk/npm/@discord/embedded-app-sdk/+esm");
+      } catch (importErr) {
+        console.warn("SDK import failed (likely not in Discord iframe):", importErr);
+        return;
+      }
 
-    var autenticou = false;
-    try {
-      var opcoes = await discordSdkGlobal.commands.authenticate();
-      usuarioDiscord = opcoes.user || opcoes;
-      autenticou = !!usuarioDiscord;
-      console.log("Discord user identified:", usuarioDiscord && usuarioDiscord.username);
-    } catch (e) {
-      console.warn("Não foi possível autenticar:", e);
-    }
+      var DiscordSDK = mod.DiscordSDK;
+      discordSdkGlobal = new DiscordSDK(configuracao.application_id);
+      await discordSdkGlobal.ready();
 
-    if (autenticou) {
-      elementoStatus.textContent = "Conectado ao Discord";
-      elementoStatus.classList.add("conectado");
-    } else {
-      elementoStatus.textContent = "Discord (sem login)";
-      elementoStatus.classList.remove("conectado");
+      var autenticou = false;
+      try {
+        var opcoes = await discordSdkGlobal.commands.authenticate();
+        usuarioDiscord = opcoes.user || opcoes;
+        autenticou = !!usuarioDiscord;
+        console.log("Discord user identified:", usuarioDiscord && usuarioDiscord.username);
+      } catch (e) {
+        console.warn("Não foi possível autenticar:", e);
+      }
+
+      if (autenticou) {
+        elementoStatus.textContent = "Conectado ao Discord";
+        elementoStatus.classList.add("conectado");
+      } else {
+        elementoStatus.textContent = "Discord (sem login)";
+        elementoStatus.classList.remove("conectado");
+      }
+      renderAuth();
+    } catch (erro) {
+      console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
+      conexaoDiscordPromise = null;
     }
-    renderAuth();
-  } catch (erro) {
-    console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
-  }
+  })();
+  return conexaoDiscordPromise;
 }
 
 // ---------------------------------------------------------------------------
@@ -1549,6 +1665,7 @@ var relayCfgOk = false;
 var relaySemOutput = 0;
 var ultimoErroRelay = "";
 var relayCodecAtual = "vp8";
+var relayDecoderFallbackTentado = false;
 
 // Áudio do relay (Activity não tem WebRTC): Opus via WebCodecs.
 var relayAudioEncoder = null;
@@ -1829,6 +1946,7 @@ async function trocarJanelaTela() {
 function iniciarDecoderRelay(resolucao, codec) {
   pararDecoderRelay();
   relayCodecAtual = codec || relayCodecAtual || "vp8";
+  relayDecoderFallbackTentado = false;
   var dims = { "480p": [854, 480], "720p": [1280, 720], "1080p": [1920, 1080] }[resolucao] || [1280, 720];
   var canvas = document.querySelector("#canvas-relay");
   canvas.width = dims[0];
@@ -1872,7 +1990,7 @@ function iniciarDecoderRelay(resolucao, codec) {
     error: function (e) {
       var texto = String(e && e.message ? e.message : e);
       ultimoErroRelay = texto;
-      logRelayDiag("decoder_error", { msg: texto, quadros: relayQuadros });
+      logRelayDiag("decoder_error", { msg: texto, quadros: relayQuadros, codec: relayCodecAtual });
       if (relayDecoder && relayDecoder.state !== "closed") {
         try { relayDecoder.close(); } catch (err) { /* ignore */ }
       }
@@ -1884,6 +2002,15 @@ function iniciarDecoderRelay(resolucao, codec) {
           texto + "). Recarregue a Activity.", "erro");
         return;
       }
+      // Config inválida (ex.: H.264 não suportado no viewer) → tenta VP8 1x.
+      if (!relayDecoderFallbackTentado && relayCodecAtual !== "vp8") {
+        relayDecoderFallbackTentado = true;
+        relayCodecAtual = "vp8";
+        logRelayDiag("decoder_fallback_vp8", { antes: texto });
+        iniciarDecoderRelay(resolucao, "vp8");
+        mensagemTransmissao("Codec do transmissor incompatível — tentando VP8...", "");
+        return;
+      }
       iniciarDecoderRelay(resolucao, relayCodecAtual);
       ultimoErroRelay = texto;
       // Não sobrescreve com "aguardando" — deixa o erro visível.
@@ -1891,22 +2018,61 @@ function iniciarDecoderRelay(resolucao, codec) {
         texto + "). Tentando de novo...", "erro");
     },
   });
-  try {
-    var cfgDec = { optimizeForLatency: true };
-    // Codec vinha do host (H.264/VP8) — default VP8.
-    if (relayCodecAtual === "h264") {
-      cfgDec.codec = "avc1.42001f";
-    } else {
-      cfgDec.codec = "vp8";
-    }
-    relayDecoder.configure(cfgDec);
-    relayCfgOk = relayDecoder.state === "configured";
-    logRelayDiag("decoder_cfg", { state: relayDecoder.state, codec: cfgDec.codec });
-  } catch (e) {
-    ultimoErroRelay = "configure: " + e.message;
-    logRelayDiag("configure_erro", { msg: e.message, codec: relayCodecAtual });
-    mensagemTransmissao("Falha ao configurar o decodificador (" + e.message + ").", "erro");
+
+  // isConfigSupported ANTES de configure — senão lança "Unsupported configuration".
+  var candidatos = [];
+  if (relayCodecAtual === "h264") {
+    candidatos.push("avc1.42001f");
+    candidatos.push("vp8");
+  } else {
+    candidatos.push("vp8");
+    candidatos.push("avc1.42001f");
   }
+
+  function tentarCfg(lista) {
+    if (!lista.length || !relayDecoder) {
+      logRelayDiag("configure_sem_codec");
+      mensagemTransmissao("Nenhum codec de vídeo suportado neste cliente.", "erro");
+      return;
+    }
+    var codecStr = lista[0];
+    var resto = lista.slice(1);
+    var cfgDec = { codec: codecStr, optimizeForLatency: true };
+    var promessa = (typeof VideoDecoder.isConfigSupported === "function")
+      ? VideoDecoder.isConfigSupported(cfgDec)
+      : Promise.resolve({ supported: true });
+
+    promessa.then(function (sup) {
+      if (!relayDecoder) return;
+      if (sup && sup.supported === false) {
+        logRelayDiag("decoder_nao_suportado", { codec: codecStr });
+        tentarCfg(resto);
+        return;
+      }
+      try {
+        relayDecoder.configure(cfgDec);
+        relayCfgOk = relayDecoder.state === "configured";
+        relayCodecAtual = (codecStr.indexOf("avc") === 0) ? "h264" : "vp8";
+        logRelayDiag("decoder_cfg", { state: relayDecoder.state, codec: codecStr, ok: relayCfgOk });
+        if (!relayCfgOk) tentarCfg(resto);
+      } catch (err) {
+        logRelayDiag("configure_erro", { msg: err.message, codec: codecStr });
+        tentarCfg(resto);
+      }
+    }).catch(function () {
+      if (!relayDecoder) return;
+      try {
+        relayDecoder.configure(cfgDec);
+        relayCfgOk = relayDecoder.state === "configured";
+        logRelayDiag("decoder_cfg", { state: relayDecoder.state, codec: codecStr, via: "catch" });
+      } catch (err) {
+        logRelayDiag("configure_erro", { msg: err.message, codec: codecStr });
+        tentarCfg(resto);
+      }
+    });
+  }
+
+  tentarCfg(candidatos);
 }
 
 function pararDecoderRelay() {
@@ -2268,34 +2434,20 @@ async function iniciarEncoderRelay() {
     },
   });
 
-  // Tenta H.264 (costuma ser mais eficiente); se não suportar, VP8.
-  var codecEscolhido = "vp8";
-  if (typeof VideoEncoder !== "undefined" && VideoEncoder.isConfigSupported) {
-    try {
-      var testH264 = {
-        codec: "avc1.42001f",
-        width: canvas.width,
-        height: canvas.height,
-        framerate: telaFps,
-        bitrate: bitrateRelay(),
-      };
-      var sup = await VideoEncoder.isConfigSupported(testH264);
-      if (sup && sup.supported) codecEscolhido = "h264";
-    } catch (e) { /* fica com vp8 */ }
-  }
-  relayCodecAtual = codecEscolhido;
-  enviarTela({ tipo: "relay_codec", codec: codecEscolhido });
-  logRelayDiag("encoder_codec", { codec: codecEscolhido });
+  // Prefere VP8 no relay: o viewer da Activity nem sempre tem H.264 em WebCodecs.
+  // (H.264 quebrava com "Unsupported configuration" no decoder.)
+  relayCodecAtual = "vp8";
+  enviarTela({ tipo: "relay_codec", codec: "vp8" });
+  logRelayDiag("encoder_codec", { codec: "vp8" });
 
   function cfgEncoder(w, h) {
     return {
-      codec: codecEscolhido === "h264" ? "avc1.42001f" : "vp8",
+      codec: "vp8",
       width: w,
       height: h,
       framerate: telaFps,
       bitrate: bitrateRelay(),
       latencyMode: "realtime",
-      contentHint: "detail",
     };
   }
 
@@ -2305,7 +2457,7 @@ async function iniciarEncoderRelay() {
     // contentHint/latencyMode podem não existir — reconfigura sem.
     try {
       relayEncoder.configure({
-        codec: codecEscolhido === "h264" ? "avc1.42001f" : "vp8",
+        codec: "vp8",
         width: canvas.width,
         height: canvas.height,
         framerate: telaFps,
@@ -2936,16 +3088,12 @@ function processarMensagemTela(dados) {
     case "relay_codec":
       if (dados.codec) {
         relayCodecAtual = dados.codec;
-        if (telaModoRelay && !telaEhHost && relayDecoder) {
-          // Reconfigura o decoder com o codec do host (h264/vp8).
-          try {
-            relayDecoder.configure({
-              codec: relayCodecAtual === "h264" ? "avc1.42001f" : "vp8",
-              optimizeForLatency: true,
-            });
-            relayTemKey = false;
-            logRelayDiag("decoder_recfg", { codec: relayCodecAtual });
-          } catch (e) { /* ignora */ }
+        if (telaModoRelay && !telaEhHost) {
+          // Recria decoder com o codec anunciado (usa isConfigSupported internamente).
+          iniciarDecoderRelay(
+            (telaResolucao || "720p"),
+            dados.codec
+          );
         }
       }
       break;

@@ -476,6 +476,7 @@ def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str,
         "sala": sala,
         "dificuldade": dificuldade if modo == "maquina" else None,
         "dono": "X" if modo == "multiplayer" else None,
+        "placar": {"X": 0, "O": 0},
     }
     jogos[jogo_id] = jogo
     if sala:
@@ -500,6 +501,9 @@ def estado_para_cliente(jogo: dict, jogador: str = "X") -> dict:
         "jogador_atual": jogo["jogador_atual"],
         "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
         "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
+        "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
+        "avatar_o": (jogo["jogador_o"] or {}).get("avatar"),
+        "placar": jogo.get("placar", {"X": 0, "O": 0}),
         "jogo_ativo": jogo["jogo_ativo"],
         "resultado": jogo["resultado"],
         "sua_vez": jogo["jogador_atual"] == jogador and jogo["jogo_ativo"],
@@ -853,6 +857,8 @@ def mover_velha(dados: MoverJogoVelha):
     if vencedor:
         jogo["jogo_ativo"] = False
         jogo["resultado"] = vencedor
+        jogo.setdefault("placar", {"X": 0, "O": 0})
+        jogo["placar"][vencedor] = jogo["placar"].get(vencedor, 0) + 1
         return estado_para_cliente(jogo, "X")
     if not espacos_vazios(jogo["tabuleiro"]):
         jogo["jogo_ativo"] = False
@@ -868,6 +874,8 @@ def mover_velha(dados: MoverJogoVelha):
     if vencedor:
         jogo["jogo_ativo"] = False
         jogo["resultado"] = vencedor
+        jogo.setdefault("placar", {"X": 0, "O": 0})
+        jogo["placar"][vencedor] = jogo["placar"].get(vencedor, 0) + 1
     elif not espacos_vazios(jogo["tabuleiro"]):
         jogo["jogo_ativo"] = False
         jogo["resultado"] = "empate"
@@ -1132,6 +1140,7 @@ async def ws_velha(websocket: WebSocket, sala: str):
 
     my_piece = None
     is_reconnect = False
+    avatar_q = query.get("avatar") or None
     # Verifica primeiro se o nick já ocupa um lugar (reconexão), ANTES de
     # preencher vagas livres. Com o criador pré-atribuído como "X" na criação,
     # o criador deve voltar a ser "X" e não virar "O" acidentalmente.
@@ -1149,9 +1158,13 @@ async def ws_velha(websocket: WebSocket, sala: str):
             t.cancel()
     elif not jogo["jogador_x"]:
         jogo["jogador_x"] = {"nome": nome, "nick": nick}
+        if avatar_q:
+            jogo["jogador_x"]["avatar"] = avatar_q
         my_piece = "X"
     elif not jogo["jogador_o"]:
         jogo["jogador_o"] = {"nome": nome, "nick": nick}
+        if avatar_q:
+            jogo["jogador_o"]["avatar"] = avatar_q
         my_piece = "O"
     else:
         await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
@@ -1167,6 +1180,8 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "tipo": "inicio",
                 "jogador_x": jogo["jogador_x"]["nick"],
                 "jogador_o": jogo["jogador_o"]["nick"],
+                "avatar_x": jogo["jogador_x"].get("avatar"),
+                "avatar_o": jogo["jogador_o"].get("avatar"),
                 "quem_comeca": jogo["jogador_atual"],
             })
             await websocket.send_json(estado_para_cliente(jogo, my_piece))
@@ -1176,6 +1191,8 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "tipo": "inicio",
                 "jogador_x": jogo["jogador_x"]["nick"],
                 "jogador_o": jogo["jogador_o"]["nick"],
+                "avatar_x": jogo["jogador_x"].get("avatar"),
+                "avatar_o": jogo["jogador_o"].get("avatar"),
                 "quem_comeca": primeiro,
             })
             await transmitir_sala(sala, estado_para_cliente(jogo, "X"), {id(websocket)})
@@ -1215,6 +1232,8 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 if vencedor:
                     jogo["jogo_ativo"] = False
                     jogo["resultado"] = vencedor
+                    jogo.setdefault("placar", {"X": 0, "O": 0})
+                    jogo["placar"][vencedor] = jogo["placar"].get(vencedor, 0) + 1
                 elif not espacos_vazios(jogo["tabuleiro"]):
                     jogo["jogo_ativo"] = False
                     jogo["resultado"] = "empate"
@@ -1849,6 +1868,7 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                         "nick": p["nick"],
                         "tempo": p["tempo_fim"],
                         "placar": s["placar"],
+                        "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
                         "todos": bool((s["slots"]["p1"] or {}).get("completou", False)
                                       and (s["slots"]["p2"] or {}).get("completou", False)),
                     })
@@ -1859,6 +1879,7 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                         "tipo": "ambos_acabaram",
                         "tempos": s["tempos_rodada"],
                         "placar": s["placar"],
+                        "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
                     })
                     # Sem revanche pendente → encerra.
                     if not s.get("revanche_de"):
@@ -1878,6 +1899,7 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                     "por_slot": slot,
                     "para": p_outro.get("nick"),
                     "placar": s["placar"],
+                    "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
                 })
                 continue
 

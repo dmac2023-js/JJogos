@@ -129,6 +129,15 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .ranking-panel { margin-top: 16px; border: 1px solid #34384f; border-radius: 14px; padding: 16px; background: #1b1e30; }
 .ranking-panel h2 { font-size: 16px; margin-bottom: 10px; color: #c8baff; }
 
+/* Placar universal estilo times: foto em cima, gols ao lado */
+.placar-times { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 0 auto 14px; padding: 12px 14px; border: 1px solid #34384f; border-radius: 14px; background: #1b1e30; max-width: 420px; }
+.placar-lado { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; }
+.placar-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #34275d; border: 2px solid #4b3b78; display: grid; place-items: center; font-weight: bold; font-size: 18px; color: #c8baff; overflow: hidden; }
+.placar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.placar-nick { font-size: 12px; color: #aeb2c7; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.placar-gol { font-size: 28px; font-weight: bold; color: #c8baff; font-variant-numeric: tabular-nums; line-height: 1; }
+.placar-x { color: #aeb2c7; font-size: 20px; font-weight: bold; }
+
 footer { margin-top: 24px; color: #777d98; font-size: 13px; text-align: center; }
 footer a { color: #aaa0ff; text-decoration: none; }
 footer a:hover { color: #c8baff; }
