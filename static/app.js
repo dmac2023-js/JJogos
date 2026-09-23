@@ -1006,12 +1006,36 @@ var relayTemKey = false;
 var relayQuadros = 0;
 var relayRxEnviado = false;
 var relayPartes = {};
+var relayCfgOk = false;
+var relaySemOutput = 0;
+var ultimoErroRelay = "";
+
+function logRelayDiag(etapa, extra) {
+  var msg = { tipo: "relay_diag", etapa: etapa };
+  if (extra) {
+    if (extra.msg) msg.msg = String(extra.msg).slice(0, 200);
+    if (typeof extra.quadros === "number") msg.quadros = extra.quadros;
+    if (typeof extra.k === "number") msg.k = extra.k;
+    if (typeof extra.bytes === "number") msg.bytes = extra.bytes;
+    if (extra.state) msg.state = String(extra.state);
+  }
+  enviarTela(msg);
+}
 
 // Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
 // real da sala em vez de adivinhar.
 async function diagnosticarRelaySemVideo() {
   if (!telaModoRelay || relayFrameOk || !telaSala) return;
   var codigo = telaSala;
+  if (relayQuadros > 0) {
+    // Quadros chegam no JS — o problema é decode/desenho, não a rede.
+    logRelayDiag("sem_video", { quadros: relayQuadros, msg: ultimoErroRelay || ("cfg=" + relayCfgOk) });
+    mensagemTransmissao(
+      "Recebi " + relayQuadros + " quadros, mas o vídeo não abriu" +
+      (ultimoErroRelay ? " (" + ultimoErroRelay + ")" : "") +
+      ". Recarregue a Activity (Ctrl+F5).", "erro");
+    return;
+  }
   try {
     var res = await fetch("./tela/sala/" + encodeURIComponent(codigo));
     if (res.status === 404) {
@@ -1232,10 +1256,16 @@ function iniciarDecoderRelay(resolucao) {
   var canvas = document.querySelector("#canvas-relay");
   canvas.width = dims[0];
   canvas.height = dims[1];
+  canvas.style.display = "";
   relayQuadros = 0;
   relayRxEnviado = false;
   relayPartes = {};
+  relayCfgOk = false;
+  relaySemOutput = 0;
+  ultimoErroRelay = "";
   if (typeof VideoDecoder === "undefined") {
+    ultimoErroRelay = "sem VideoDecoder";
+    logRelayDiag("sem_videodecoder");
     mensagemTransmissao("Seu cliente não suporta o modo de vídeo compatível.", "erro");
     return;
   }
@@ -1248,18 +1278,23 @@ function iniciarDecoderRelay(resolucao) {
       try {
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
         desenhados++;
+        relaySemOutput = 0;
         if (desenhados === 1) {
           relayFrameOk = true;
           clearTimeout(telaRelayTimer);
+          logRelayDiag("desenhou", { quadros: relayQuadros });
           mensagemTransmissao("Recebendo vídeo de quem transmite.", "sucesso");
         }
       } catch (e) {
-        console.warn("drawImage relay:", e);
+        ultimoErroRelay = "draw: " + e.message;
+        logRelayDiag("draw_erro", { msg: e.message });
       }
-      frame.close();
+      try { frame.close(); } catch (e2) { /* ignore */ }
     },
     error: function (e) {
-      console.warn("Decoder relay:", e);
+      var texto = String(e && e.message ? e.message : e);
+      ultimoErroRelay = texto;
+      logRelayDiag("decoder_error", { msg: texto, quadros: relayQuadros });
       if (relayDecoder && relayDecoder.state !== "closed") {
         try { relayDecoder.close(); } catch (err) { /* ignore */ }
       }
@@ -1268,15 +1303,25 @@ function iniciarDecoderRelay(resolucao) {
       errosDecoder++;
       if (errosDecoder > 3) {
         mensagemTransmissao("Falha ao decodificar o vídeo (" +
-          (e && e.message ? e.message : e) + "). Recarregue a Activity.", "erro");
+          texto + "). Recarregue a Activity.", "erro");
         return;
       }
       iniciarDecoderRelay(resolucao);
+      ultimoErroRelay = texto;
+      // Não sobrescreve com "aguardando" — deixa o erro visível.
       mensagemTransmissao("Vídeo chegou mas falhou ao decodificar (" +
-        (e && e.message ? e.message : e) + "). Tentando de novo...", "erro");
+        texto + "). Tentando de novo...", "erro");
     },
   });
-  relayDecoder.configure({ codec: "vp8", optimizeForLatency: true });
+  try {
+    relayDecoder.configure({ codec: "vp8", optimizeForLatency: true });
+    relayCfgOk = relayDecoder.state === "configured";
+    logRelayDiag("decoder_cfg", { state: relayDecoder.state });
+  } catch (e) {
+    ultimoErroRelay = "configure: " + e.message;
+    logRelayDiag("configure_erro", { msg: e.message });
+    mensagemTransmissao("Falha ao configurar o decodificador (" + e.message + ").", "erro");
+  }
 }
 
 function pararDecoderRelay() {
@@ -1294,7 +1339,10 @@ function receberRelay(buffer) {
 }
 
 function decodificarRelayFrame(ehKey, timestamp, payload) {
-  if (!relayDecoder || relayDecoder.state === "closed") return;
+  if (!relayDecoder || relayDecoder.state === "closed") {
+    if (!relayDecoder) logRelayDiag("decode_sem_decoder", { quadros: relayQuadros });
+    return;
+  }
   if (!payload || payload.byteLength < 1) return;
   // VP8 exige keyframe para começar (viewer pode entrar no meio do GOP).
   if (!ehKey && !relayTemKey) return;
@@ -1304,6 +1352,9 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
   if (!relayRxEnviado) {
     relayRxEnviado = true;
     enviarTela({ tipo: "quadro_rx" });
+    logRelayDiag("primeiro_decode", {
+      k: ehKey ? 1 : 0, bytes: payload.byteLength, quadros: relayQuadros
+    });
   }
   try {
     relayDecoder.decode({
@@ -1311,15 +1362,21 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
       timestamp: timestamp,
       data: payload,
     });
+    relaySemOutput++;
+    // Envia N decodes sem output do decoder → problema de decode.
+    if (relaySemOutput === 30 && !relayFrameOk) {
+      logRelayDiag("sem_output", { quadros: relayQuadros, state: relayDecoder.state });
+    }
   } catch (e) {
-    console.warn("decode relay:", e);
+    ultimoErroRelay = "decode: " + e.message;
     relayTemKey = false;
+    logRelayDiag("decode_erro", { msg: e.message, k: ehKey ? 1 : 0, quadros: relayQuadros });
   }
   if (!relayFrameOk) {
     clearTimeout(telaRelayTimer);
     telaRelayTimer = setTimeout(function () {
       if (!relayFrameOk && telaModoRelay) {
-        mensagemTransmissao("Quadros chegam (" + relayQuadros + "), mas o vídeo não foi exibido. Recarregue a Activity.", "erro");
+        diagnosticarRelaySemVideo();
       }
     }, 8000);
   }
@@ -1992,7 +2049,10 @@ function processarMensagemTela(dados) {
       break;
     case "relay_pronto":
       if (telaModoRelay && !relayFrameOk) {
-        mensagemTransmissao("Transmitindo via relay — aguardando os primeiros quadros...", "sucesso");
+        // Não sobrescreve erro de decoder já mostrado.
+        if (!ultimoErroRelay) {
+          mensagemTransmissao("Transmitindo via relay — aguardando os primeiros quadros...", "sucesso");
+        }
         clearTimeout(telaRelayTimer);
         telaRelayTimer = setTimeout(function () {
           if (!relayFrameOk && telaModoRelay) {

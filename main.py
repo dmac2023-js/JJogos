@@ -1287,6 +1287,16 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                 # Viewer da Activity confirmou que o quadro chegou no JS.
                 log_tela("viewer recebeu quadro sala=%s" % sala)
                 continue
+            if tipo == "relay_diag":
+                # Diagnóstico do decoder/canvas na Activity (etapa → Render log).
+                log_tela("relay_diag sala=%s etapa=%s%s%s%s" % (
+                    sala,
+                    dados.get("etapa", "?"),
+                    (" q=%s" % dados["quadros"]) if dados.get("quadros") is not None else "",
+                    (" k=%s" % dados["k"]) if dados.get("k") is not None else "",
+                    (" %s" % str(dados.get("msg") or dados.get("state") or "")[:160]),
+                ))
+                continue
             if tipo == "sair":
                 break
             if tipo == "config":
@@ -1366,6 +1376,14 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
                 continue
             if tipo == "quadro_rx":
                 log_tela("viewer recebeu quadro sala=%s" % sala)
+                continue
+            if tipo == "relay_diag":
+                log_tela("relay_diag sala=%s etapa=%s%s%s" % (
+                    sala,
+                    dados.get("etapa", "?"),
+                    (" q=%s" % dados["quadros"]) if dados.get("quadros") is not None else "",
+                    (" %s" % str(dados.get("msg") or dados.get("state") or "")[:160]),
+                ))
                 continue
             if tipo == "sair":
                 break
