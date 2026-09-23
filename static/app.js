@@ -643,6 +643,8 @@ async function jogarVelhaMaquina(posicao) {
 
 async function salvarRecordVelha() {
   await garantirIdentidade();
+  // Anônimo não entra em rankings.
+  if (ehAnonimoNick(nomeExibicao())) return;
   var nome = nomeUsuario();
   var nick = nomeExibicao();
   var avatar = avatarAtual();
@@ -655,6 +657,11 @@ async function salvarRecordVelha() {
     });
     carregarRankingVelha();
   } catch (e) { /* ignore */ }
+}
+
+function ehAnonimoNick(nick) {
+  var n = (nick || "").trim().toLowerCase();
+  return n === "anônimo" || n === "anonimo";
 }
 
 async function carregarRankingVelha() {
@@ -831,6 +838,23 @@ function processarMensagemVelha(dados) {
         vezLabel.textContent = "Você é " + velhaMinhaPeca;
         vezLabel.className = "indicador-vez " + velhaMinhaPeca.toLowerCase();
       }
+      break;
+
+    case "vitoria_desistencia":
+      // Oponente saiu: vitória para quem ficou; sala desfaz em seguida.
+      velhaTabuleiro._ativo = false;
+      velhaTabuleiro._resultado = dados.vencedor || velhaMinhaPeca;
+      if (dados.vencedor && velhaMinhaPeca) {
+        velhaTabuleiro._resultado = dados.vencedor;
+      }
+      atualizarVelhaVez();
+      if (dados.vencedor === velhaMinhaPeca) {
+        atualizarVelhaMensagem(dados.mensagem || "Oponente saiu. Você venceu!", "sucesso");
+        salvarRecordVelha();
+      } else {
+        atualizarVelhaMensagem(dados.mensagem || "Oponente saiu.", "");
+      }
+      mostrarPlacarVelha(true);
       break;
 
     case "oponente_desconectou":
@@ -1319,6 +1343,19 @@ function processarMensagemSudoku(d) {
       sudokuPlacar = d.placar || sudokuPlacar;
       if (d.jogadores) sudokuUltimosJogadores = d.jogadores;
       sudokuPlacarTexto();
+      if (d.desistencia) {
+        // Oponente saiu: vitória para quem ficou; sala desfaz em seguida.
+        if (d.slot === sudokuSlot) {
+          pararCronometro();
+          sudokuTerminou = true;
+          mostrarMensagem(d.mensagem || "Oponente saiu. Você venceu!", "sucesso");
+          sudokuStatus("Você venceu!");
+        } else {
+          mostrarMensagem(d.mensagem || "Oponente saiu.", "");
+          sudokuStatus((d.nick || "Oponente") + " venceu");
+        }
+        break;
+      }
       if (d.slot === sudokuSlot) {
         pararCronometro();
         sudokuTerminou = true;
@@ -1372,9 +1409,14 @@ function processarMensagemSudoku(d) {
       break;
 
     case "sala_sudoku_encerrada":
-      fecharSudokuOnline(d.motivo === "lider_saiu" || d.motivo === "lider_desconectou"
-        ? "O líder saiu. A sala foi encerrada."
-        : "A sala foi encerrada.");
+      if (d.motivo === "oponente_desistiu" || d.motivo === "lider_desconectou") {
+        // Vitória já foi mostrada via vencedor_rodada — só sai da sala.
+        fecharSudokuOnline("");
+      } else {
+        fecharSudokuOnline(d.motivo === "lider_saiu" || d.motivo === "lider_desconectou"
+          ? "O líder saiu. A sala foi encerrada."
+          : "A sala foi encerrada.");
+      }
       mostrarTela(telaDificuldade);
       carregarSalasSudoku();
       break;
@@ -2686,16 +2728,15 @@ function abrirTelaCompartilhar() {
   document.querySelector("#tela-config-host").style.display = naActivity ? "none" : "";
   document.querySelector("#abrir-navegador-tela").style.display = "";
 
-  // Lista é privada: só existe para quem tem a instância da call. Sem ela,
-  // quem está fora entra apenas com o código.
-  var temInstancia = !!compartilharInstanciaAtual();
-  document.querySelector("#lista-transmissoes").style.display = temInstancia ? "" : "none";
-  document.querySelector("#atualizar-transmissoes").style.display = temInstancia ? "" : "none";
-  document.querySelector("#assistir-titulo-lista").style.display = temInstancia ? "" : "none";
+  // Lista sempre visível: salas públicas + da call (se houver instância).
+  document.querySelector("#lista-transmissoes").style.display = "";
+  document.querySelector("#atualizar-transmissoes").style.display = "";
+  document.querySelector("#assistir-titulo-lista").style.display = "";
+  document.querySelector("#assistir-titulo-lista").textContent =
+    compartilharInstanciaAtual() ? "Transmissões (sua call + públicas)" : "Transmissões públicas";
 
   atualizarAvisoUpload();
-  if (temInstancia) carregarTransmissoes();
-  else document.querySelector("#lista-transmissoes").innerHTML = '<p class="vazio">Nenhuma transmissão ativa.</p>';
+  carregarTransmissoes();
 }
 
 async function abrirNoNavegadorParaTransmitir() {
@@ -2734,10 +2775,15 @@ async function carregarTransmissoes() {
     lista.forEach(function (t) {
       var item = document.createElement("div");
       item.className = "sala-item";
+      var avatarHtml = t.avatar
+        ? '<img class="sala-item-avatar" src="' + escapeHtml(t.avatar) + '" alt="" />'
+        : '<span class="sala-item-avatar sala-item-avatar-inicial">' + escapeHtml((t.nick || "?").charAt(0).toUpperCase()) + "</span>";
       item.innerHTML =
         '<div class="sala-item-info">' +
-        "<strong>" + t.nick + "</strong>" +
-        "<small>" + t.resolucao + " &middot; " + t.fps + " fps &middot; sala " + t.sala + "</small>" +
+        avatarHtml +
+        "<span><strong>" + escapeHtml(t.nick) + "</strong>" +
+        (t.publica ? ' <span class="etiqueta-publica">pública</span>' : "") +
+        "<small>" + t.resolucao + " &middot; " + t.fps + " fps &middot; sala " + escapeHtml(t.sala) + "</small></span>" +
         "</div>" +
         '<span class="sala-item-jogadores">&#128247; ' + t.espectadores + "/9</span>";
       item.addEventListener("click", function () {
@@ -2806,13 +2852,24 @@ async function iniciarTransmissaoTela() {
 
   await garantirIdentidade();
   var nick = nomeExibicao();
+  var avatar = avatarAtual();
   var instancia = compartilharInstanciaAtual() || null;
+  var chkPublica = document.querySelector("#sala-publica-tela");
+  var publica = chkPublica ? !!chkPublica.checked : true;
 
   try {
     var res = await fetch("./tela/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instancia: instancia, nick: nick, resolucao: telaResolucao, fps: telaFps, codigo: codigoCustom || null }),
+      body: JSON.stringify({
+        instancia: instancia,
+        nick: nick,
+        avatar: avatar,
+        resolucao: telaResolucao,
+        fps: telaFps,
+        codigo: codigoCustom || null,
+        publica: publica,
+      }),
     });
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar transmissão.");
@@ -3036,9 +3093,13 @@ function conectarWsTela(host, tentativa) {
   telaTentativa = tentativa || 1;
 
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  var avatar = avatarAtual() || "";
+  var logado = usuarioDiscord ? "1" : "0";
   var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocolo + "//" + location.host + "/ws/tela/" + encodeURIComponent(telaSala) +
     "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick) +
+    "&avatar=" + encodeURIComponent(avatar) +
+    "&logado=" + logado +
     (!host && telaModoRelay ? "&transporte=relay" : "");
 
   var ws = new WebSocket(url);
@@ -3218,9 +3279,50 @@ function processarMensagemTela(dados) {
       }
       break;
     case "viewers_total":
+    case "viewers_lista":
       if (telaEhHost) {
         document.querySelector("#transmissao-viewers-contador").textContent = String(dados.total || 0);
+        var barEl = document.querySelector("#transmissao-viewers-bar");
+        var listaEl = document.querySelector("#transmissao-viewers-lista");
+        if (listaEl && dados.viewers) {
+          listaEl.innerHTML = "";
+          dados.viewers.forEach(function (v) {
+            var chip = document.createElement("span");
+            chip.className = "viewer-chip" + (v.logado ? " logado" : " anon");
+            chip.title = v.logado ? (v.nick + " (Discord)") : (v.nick + " (site)");
+            if (v.avatar) {
+              var img = document.createElement("img");
+              img.src = v.avatar;
+              img.alt = "";
+              chip.appendChild(img);
+            } else {
+              var ini = document.createElement("span");
+              ini.className = "viewer-inicial";
+              ini.textContent = (v.nick || "?").charAt(0).toUpperCase();
+              chip.appendChild(ini);
+            }
+            var nome = document.createElement("small");
+            nome.textContent = v.logado ? v.nick : (v.nick === "Anônimo" ? "Anônimo" : v.nick);
+            chip.appendChild(nome);
+            if (telaEhHost && v.id) {
+              var btnX = document.createElement("button");
+              btnX.type = "button";
+              btnX.className = "viewer-expulsar";
+              btnX.title = "Expulsar";
+              btnX.textContent = "×";
+              btnX.addEventListener("click", function () {
+                enviarTela({ tipo: "expulsar_viewer", viewer_id: v.id });
+              });
+              chip.appendChild(btnX);
+            }
+            listaEl.appendChild(chip);
+          });
+        }
+        if (barEl) barEl.style.display = "";
       }
+      break;
+    case "expulso":
+      encerrarViewerTela(dados.mensagem || "Você foi expulso da sala.");
       break;
     case "aguardando_host":
       mensagemTransmissao("Aguardando quem transmite conectar...");

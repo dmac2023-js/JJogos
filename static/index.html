@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-02" />
+    <link rel="stylesheet" href="./style.css?v=20260924-03" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -111,10 +111,21 @@
       .sala-lista { margin-top: 16px; }
       .sala-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; margin-bottom: 8px; border: 1px solid #454b69; border-radius: 10px; background: #1b1e30; cursor: pointer; }
       .sala-item:hover { border-color: #9c7cff; background: #24213d; }
-      .sala-item-info { flex: 1; }
+      .sala-item-info { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+      .sala-item-info > span { display: flex; flex-direction: column; min-width: 0; }
       .sala-item-info strong { display: block; font-size: 14px; }
       .sala-item-info small { color: #aeb2c7; font-size: 12px; }
       .sala-item-jogadores { font-size: 12px; color: #c8baff; white-space: nowrap; }
+      .sala-item-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #34275d; border: 2px solid #4b3b78; flex-shrink: 0; }
+      .sala-item-avatar-inicial { display: grid; place-items: center; font-weight: bold; font-size: 14px; color: #c8baff; width: 32px; height: 32px; border-radius: 50%; background: #34275d; border: 2px solid #4b3b78; flex-shrink: 0; box-sizing: border-box; }
+      .etiqueta-publica { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1e3d2a; color: #85e0ae; font-size: 10px; font-weight: normal; vertical-align: middle; }
+      .viewers-lista { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+      .viewer-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 999px; background: #24213d; border: 1px solid #34384f; font-size: 12px; color: #c8baff; max-width: 160px; }
+      .viewer-chip img, .viewer-chip .viewer-inicial { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #34275d; border: 1px solid #4b3b78; display: grid; place-items: center; font-size: 11px; font-weight: bold; color: #c8baff; flex-shrink: 0; box-sizing: border-box; }
+      .viewer-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .viewer-chip.anon { opacity: .75; border-style: dashed; }
+      .viewer-expulsar { margin-left: 2px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: #5a2a3a; color: #ffb0c0; font-size: 12px; line-height: 1; cursor: pointer; padding: 0; }
+      .viewer-expulsar:hover { background: #8a3048; color: #fff; }
 
       .popup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.6); display: none; place-items: center; z-index: 100; }
       .popup-overlay.ativo { display: grid; }
@@ -560,6 +571,13 @@
             <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Opcional — ex.: tela-joao" maxlength="16" />
           </div>
           <label class="grupo-preset" style="cursor:pointer; align-items:center;">
+            <span class="preset-label" style="margin:0;">Lista</span>
+            <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
+              <input type="checkbox" id="sala-publica-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
+              Sala pública (aparece na lista para todos)
+            </span>
+          </label>
+          <label class="grupo-preset" style="cursor:pointer; align-items:center;">
             <span class="preset-label" style="margin:0;">Áudio</span>
             <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
               <input type="checkbox" id="capturar-audio-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
@@ -644,6 +662,7 @@
 
         <div id="transmissao-viewers-bar" class="espectadores-bar" style="display:none;">
           &#128065; <span id="transmissao-viewers-contador">0</span> assistindo
+          <div id="transmissao-viewers-lista" class="viewers-lista"></div>
         </div>
 
         <div class="acoes">
@@ -669,6 +688,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-02"></script>
+    <script src="./app.js?v=20260924-03"></script>
   </body>
 </html>

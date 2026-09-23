@@ -111,9 +111,11 @@ class NovaSalaSudoku(BaseModel):
 class NovaTransmissao(BaseModel):
     instancia: Optional[str] = None
     nick: str = "Anônimo"
+    avatar: Optional[str] = None
     resolucao: str = "720p"
     fps: int = 30
     codigo: Optional[str] = None
+    publica: bool = False
 
 
 class RefreshTokenRequest(BaseModel):
@@ -126,7 +128,9 @@ class RefreshTokenRequest(BaseModel):
 
 jogos: Dict[str, dict] = {}
 salas_velha: Dict[str, str] = {}
-# sala -> {"host_ws", "host_nick", "instancia", "resolucao", "fps", "viewers": {id: WebSocket}}
+# sala -> {"host_ws", "host_nick", "host_avatar", "publica", "instancia",
+#          "resolucao", "fps", "viewers": {id: WebSocket},
+#          "viewers_info": {id: {"nick", "avatar", "logado"}}}
 salas_tela: Dict[str, dict] = {}
 conexoes_ws: Dict[str, List[WebSocket]] = {}
 conexoes_lobby: List[WebSocket] = []
@@ -1070,6 +1074,43 @@ async def ws_lobby(websocket: WebSocket):
 # WebSocket — Jogo da Velha (multiplayer + espectadores)
 # ---------------------------------------------------------------------------
 
+async def _vitoria_por_desistencia(sala: str, jogo: dict, peca_saiu: str, nick_saiu: str):
+    """Oponente saiu: vitória para quem ficou, placar++, depois desfaz a sala."""
+    peca_ficou = "O" if peca_saiu == "X" else "X"
+    slot_saiu = f"jogador_{peca_saiu.lower()}"
+    slot_ficou = f"jogador_{peca_ficou.lower()}"
+    jogo[slot_saiu] = None
+    ficou = jogo.get(slot_ficou)
+    if not ficou:
+        limpar_sala(sala)
+        await transmitir_salas_lobby()
+        return
+
+    jogo["jogo_ativo"] = False
+    jogo["resultado"] = peca_ficou
+    placar = jogo.setdefault("placar", {"X": 0, "O": 0})
+    placar[peca_ficou] = placar.get(peca_ficou, 0) + 1
+
+    # Estado com vitória para quem ficou (e espectadores).
+    await transmitir_sala(sala, estado_para_cliente(jogo, peca_ficou))
+    await transmitir_sala(sala, {
+        "tipo": "vitoria_desistencia",
+        "mensagem": "Oponente saiu da sala. Você venceu!",
+        "vencedor": peca_ficou,
+        "nick_vencedor": ficou.get("nick", "—"),
+        "nick_saiu": nick_saiu,
+    })
+    # Dá tempo do cliente mostrar a vitória antes de derrubar a sala.
+    await asyncio.sleep(2.5)
+    for ws in list(conexoes_ws.get(sala, [])):
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    limpar_sala(sala)
+    await transmitir_salas_lobby()
+
+
 async def _delayed_disconnect(sala: str, piece: str, jogo: dict, nick: str):
     await asyncio.sleep(RECONNECT_GRACE_SECONDS)
     key = f"{sala}:{piece}"
@@ -1078,31 +1119,22 @@ async def _delayed_disconnect(sala: str, piece: str, jogo: dict, nick: str):
     slot = jogo.get(slot_key)
     if not slot or slot["nick"] != nick:
         return
-    # O dono da sala caiu e não voltou: encerra a sala e remove o oponente.
-    if jogo.get("dono") == piece:
-        await _fechar_sala_por_dono(sala, jogo)
-        return
-    jogo[slot_key] = None
-    if not jogo["jogador_x"] and not jogo["jogador_o"]:
+    # Quem ficou vence; sala desfaz (independente de dono ou oponente).
+    outro = "O" if piece == "X" else "X"
+    if jogo.get(f"jogador_{outro.lower()}"):
+        await _vitoria_por_desistencia(sala, jogo, piece, nick)
+    else:
+        # Ninguém mais na sala.
+        jogo[slot_key] = None
         try:
             await transmitir_sala(sala, {"tipo": "oponente_desconectou", "nick": nick})
         except Exception:
             pass
         limpar_sala(sala)
-    else:
-        reiniciar_jogo(jogo)
         try:
-            await transmitir_sala(sala, {
-                "tipo": "oponente_saiu reiniciando",
-                "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
-                "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
-            })
+            await transmitir_salas_lobby()
         except Exception:
             pass
-    try:
-        await transmitir_salas_lobby()
-    except Exception:
-        pass
 
 
 @app.websocket("/ws/velha/{sala}")
@@ -1252,27 +1284,18 @@ async def ws_velha(websocket: WebSocket, sala: str):
 
             elif tipo == "sair":
                 _saiu_explicitamente = True
-                # O dono saiu: encerra a sala e remove o oponente/espectadores.
-                if jogo.get("dono") == my_piece:
-                    await _fechar_sala_por_dono(sala, jogo, excluido=websocket)
+                # Saiu: quem ficou vence por desistência e a sala desfaz.
+                outro = "O" if my_piece == "X" else "X"
+                if jogo.get(f"jogador_{outro.lower()}"):
+                    await _vitoria_por_desistencia(sala, jogo, my_piece, nick)
                     break
+                # Ninguém mais: só limpa e sai.
                 if my_piece == "X":
                     jogo["jogador_x"] = None
                 else:
                     jogo["jogador_o"] = None
-
-                if not jogo["jogador_x"] and not jogo["jogador_o"]:
-                    await transmitir_sala(sala, {"tipo": "oponente_desconectou", "nick": nick})
-                    limpar_sala(sala)
-                    await transmitir_salas_lobby()
-                    break
-
-                reiniciar_jogo(jogo)
-                await transmitir_sala(sala, {
-                    "tipo": "oponente_saiu reiniciando",
-                    "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
-                    "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
-                })
+                await transmitir_sala(sala, {"tipo": "oponente_desconectou", "nick": nick})
+                limpar_sala(sala)
                 await transmitir_salas_lobby()
                 break
 
@@ -1311,6 +1334,8 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
     info = {
         "sala": sala,
         "nick": transmissao["host_nick"],
+        "avatar": transmissao.get("host_avatar"),
+        "publica": bool(transmissao.get("publica")),
         "resolucao": transmissao["resolucao"],
         "fps": transmissao["fps"],
         "espectadores": len(transmissao["viewers"]),
@@ -1319,6 +1344,25 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
     if transmissao.get("relay_codec"):
         info["codec"] = transmissao["relay_codec"]
     return info
+
+
+def lista_viewers_info(transmissao: dict) -> list:
+    return list(transmissao.get("viewers_info", {}).values())
+
+
+async def _notificar_viewers_lista(transmissao: dict):
+    """Host vê quem está assistindo (nick/avatar, Discord ou Anônimo)."""
+    host = transmissao.get("host_ws")
+    if not host:
+        return
+    try:
+        await host.send_json({
+            "tipo": "viewers_lista",
+            "total": len(transmissao["viewers"]),
+            "viewers": lista_viewers_info(transmissao),
+        })
+    except Exception:
+        pass
 
 
 def purgar_transmissoes_obsoletas() -> None:
@@ -1352,34 +1396,33 @@ def criar_transmissao(dados: NovaTransmissao):
     salas_tela[sala] = {
         "host_ws": None,
         "host_nick": dados.nick,
+        "host_avatar": dados.avatar or None,
+        "publica": bool(dados.publica),
         "instancia": (dados.instancia or "").strip()[:64] or None,
         "resolucao": resolucao,
         "fps": dados.fps,
         "viewers": {},
+        "viewers_info": {},
         "relay_ws": {},  # espectadores da Activity (vídeo via WS binário)
         "criado_em": time.time(),
     }
-    log_tela("sala criada sala=%s res=%s fps=%s instancia=%s" % (
-        sala, resolucao, dados.fps, salas_tela[sala]["instancia"] or "-"))
+    log_tela("sala criada sala=%s res=%s fps=%s publica=%s instancia=%s" % (
+        sala, resolucao, dados.fps, dados.publica,
+        salas_tela[sala]["instancia"] or "-"))
     return {"sala": sala, "resolucao": resolucao, "fps": dados.fps}
 
 
 @app.get("/tela/transmissoes")
 def listar_transmissoes(instancia: str = ""):
-    """Lista as transmissões de UMA instância da call.
-
-    Salas são privadas: sem instância (call) não há lista — quem está fora
-    só entra pelo código da sala.
-    """
+    """Lista transmissões públicas + as da instância da call (se houver)."""
     purgar_transmissoes_obsoletas()
     instancia = instancia.strip()[:64] or None
-    if not instancia:
-        return {"transmissoes": []}
     return {
         "transmissoes": [
             info_transmissao(sala, t)
             for sala, t in salas_tela.items()
-            if t["instancia"] == instancia and t["host_ws"] is not None
+            if t["host_ws"] is not None
+            and (t.get("publica") or (instancia and t["instancia"] == instancia))
         ]
     }
 
@@ -1407,12 +1450,7 @@ async def _encerrar_transmissao(sala: str, transmissao: dict, motivo: str):
 
 
 async def _notificar_total(transmissao: dict):
-    host = transmissao.get("host_ws")
-    if host:
-        try:
-            await host.send_json({"tipo": "viewers_total", "total": len(transmissao["viewers"])})
-        except Exception:
-            pass
+    await _notificar_viewers_lista(transmissao)
 
 
 async def _notificar_relay_total(transmissao: dict):
@@ -1473,6 +1511,7 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
         except Exception:
             pass
     await websocket.send_json({"tipo": "host_pronto", "sala": sala})
+    await _notificar_viewers_lista(transmissao)
     # Relay (Activity): avisa os espectadores e o host (inicia o encoder).
     for ws in list(relay_ws_map.values()):
         try:
@@ -1590,6 +1629,15 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                     transmissao["fps"] = novo_fps
                     log_tela("config atualizada sala=%s res=%s fps=%s" % (sala, nova_res, novo_fps))
                 continue
+            # Host gerencia a sala: expulsa um espectador (máx. 9 na tela).
+            if tipo == "expulsar_viewer" and viewer_id and viewer_ws:
+                try:
+                    await viewer_ws.send_json({"tipo": "expulso", "mensagem": "Você foi expulso da sala pelo anfitrião."})
+                    await viewer_ws.close()
+                except Exception:
+                    pass
+                log_tela("host expulsou viewer sala=%s id=%s" % (sala, viewer_id[:8]))
+                continue
             # Relay de oferta/ICE do host para o espectador alvo (só WebRTC).
             if tipo in {"oferta", "ice"} and viewer_ws and viewer_id not in relay_ws_map:
                 try:
@@ -1606,7 +1654,8 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
             log_tela("conexao antiga de host ignorada sala=" + sala)
 
 
-async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str, transporte: str):
+async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str,
+                          transporte: str, avatar: Optional[str] = None, logado: bool = False):
     if len(transmissao["viewers"]) >= MAX_ESPECTADORES_TELA:
         log_tela("viewer recusado (sala cheia) sala=" + sala)
         await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão cheia (máximo de 9 espectadores)."})
@@ -1616,10 +1665,16 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
     viewer_id = secrets.token_urlsafe(8)
     eh_relay = transporte == "relay"
     transmissao["viewers"][viewer_id] = websocket
+    transmissao.setdefault("viewers_info", {})[viewer_id] = {
+        "id": viewer_id,
+        "nick": nick or ("Anônimo" if not logado else "—"),
+        "avatar": avatar or None,
+        "logado": bool(logado),
+    }
     if eh_relay:
         transmissao.setdefault("relay_ws", {})[viewer_id] = websocket
-    log_tela("viewer conectado sala=%s nick=%s transporte=%s total=%d" % (
-        sala, nick, transporte, len(transmissao["viewers"])))
+    log_tela("viewer conectado sala=%s nick=%s logado=%s transporte=%s total=%d" % (
+        sala, nick, logado, transporte, len(transmissao["viewers"])))
     await websocket.send_json(info_transmissao(sala, transmissao) | {"tipo": "entrada_ok"})
     await _notificar_total(transmissao)
     if eh_relay:
@@ -1674,6 +1729,9 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
                 continue
             if tipo == "sair":
                 break
+            # Host expulsa um espectador (gerencia a sala: máx. 9 na tela).
+            if tipo == "expulsar_viewer":
+                continue  # só o host envia — tratado no loop do host
             # Relay de resposta/ICE do espectador WebRTC para o host.
             if tipo in {"resposta", "ice"} and not eh_relay:
                 host_ws = transmissao.get("host_ws")
@@ -1691,6 +1749,7 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
     finally:
         if transmissao["viewers"].get(viewer_id) is websocket:
             del transmissao["viewers"][viewer_id]
+            transmissao.get("viewers_info", {}).pop(viewer_id, None)
             if relay_ws_map.get(viewer_id) is websocket:
                 del relay_ws_map[viewer_id]
             log_tela("viewer desconectado sala=%s nick=%s total=%d" % (
@@ -1713,6 +1772,8 @@ async def ws_tela(websocket: WebSocket, sala: str):
     papel = websocket.query_params.get("papel", "viewer")
     nick = websocket.query_params.get("nick", "Anônimo")
     transporte = websocket.query_params.get("transporte", "webrtc")
+    avatar = websocket.query_params.get("avatar") or None
+    logado = websocket.query_params.get("logado", "") in ("1", "true", "True")
 
     transmissao = salas_tela.get(sala)
     if not transmissao:
@@ -1724,7 +1785,7 @@ async def ws_tela(websocket: WebSocket, sala: str):
     if papel == "host":
         await _ws_tela_host(websocket, sala, transmissao, nick)
     else:
-        await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte)
+        await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte, avatar, logado)
 
 
 # ---------------------------------------------------------------------------
@@ -1940,7 +2001,30 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                 break
 
             if tipo == "sair":
-                # Líder saiu → sala encerra. Se não, só desconecta o slot.
+                # Saiu: se tem oponente na rodada, quem ficou vence e sala desfaz.
+                outro = "p2" if slot == "p1" else "p1"
+                p_outro = (s.get("slots", {}) or {}).get(outro)
+                if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws"):
+                    s["slots"][slot]["ws"] = None
+                    s["vencedor_rodada"] = outro
+                    s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                    s["fase"] = "parcial"
+                    try:
+                        await p_outro["ws"].send_json({
+                            "tipo": "vencedor_rodada",
+                            "slot": outro,
+                            "nick": p_outro.get("nick", "—"),
+                            "tempo": 0,
+                            "desistencia": True,
+                            "placar": s["placar"],
+                            "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+                            "mensagem": "Oponente saiu. Você venceu!",
+                        })
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+                    await encerrar_sala_sudoku(sala, "oponente_desistiu")
+                    break
                 if s.get("lider") == slot:
                     await encerrar_sala_sudoku(sala, "lider_saiu")
                     break
@@ -1958,16 +2042,57 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
         if s and s.get("slots", {}).get(slot, {}) is not None and \
                 s["slots"][slot] and s["slots"][slot].get("ws") is websocket:
             s["slots"][slot]["ws"] = None
-            # Líder desconectou → encerra (com pequena tolerância? sem: pede saída)
-            if s.get("lider") == slot:
-                await encerrar_sala_sudoku(sala, "lider_desconectou")
+            outro = "p2" if slot == "p1" else "p1"
+            p_outro = s.get("slots", {}).get(outro)
+            # Rodada em andamento e ainda tem alguém: quem ficou vence, sala desfaz.
+            if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws") is not None:
+                s["vencedor_rodada"] = outro
+                s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                s["fase"] = "parcial"
+                try:
+                    await p_outro["ws"].send_json({
+                        "tipo": "vencedor_rodada",
+                        "slot": outro,
+                        "nick": p_outro.get("nick", "—"),
+                        "tempo": 0,
+                        "desistencia": True,
+                        "placar": s["placar"],
+                        "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+                        "mensagem": "Oponente saiu. Você venceu!",
+                    })
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+                await encerrar_sala_sudoku(sala, "oponente_desistiu")
+            elif s.get("lider") == slot:
+                # Líder desconectou sem oponente ativo → encerra.
+                if s.get("fase") == "jogando" and p_outro and p_outro.get("ws"):
+                    # Oponente ficou sozinho jogando: vitória dele.
+                    s["vencedor_rodada"] = outro
+                    s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                    s["fase"] = "parcial"
+                    try:
+                        await p_outro["ws"].send_json({
+                            "tipo": "vencedor_rodada",
+                            "slot": outro,
+                            "nick": p_outro.get("nick", "—"),
+                            "tempo": 0,
+                            "desistencia": True,
+                            "placar": s["placar"],
+                            "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+                            "mensagem": "O líder saiu. Você venceu!",
+                        })
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+                    await encerrar_sala_sudoku(sala, "lider_desconectou")
+                else:
+                    await encerrar_sala_sudoku(sala, "lider_desconectou")
             else:
                 await broadcast_sudoku(sala, estado_sudoku_para(s, slot))
-                # Oponente caiu antes do fim da rodada → encerra para não travar
                 if s.get("fase") == "jogando":
                     await encerrar_sala_sudoku(sala, "oponente_desconectou")
                 elif s.get("fase") == "esperando":
-                    # mantém sala aberta para novo join do p2? líder ainda aí.
                     pass
                 await _notificar_salas_sudoku_lobby()
 
