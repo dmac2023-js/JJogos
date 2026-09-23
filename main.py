@@ -1179,14 +1179,14 @@ async def _avisar_relay_sem_quadros(transmissao: dict):
     await asyncio.sleep(12)
     if transmissao.get("_relay_bytes_log") or not transmissao.get("relay_ws"):
         return
-    log_tela("relay sem quadros apos 12s (host possivelmente com JS antigo) sala=%s" %
+    log_tela("relay sem quadros apos 12s sala=%s" %
              next((s for s, t in salas_tela.items() if t is transmissao), "?"))
     for ws in list(transmissao.get("relay_ws", {}).values()):
         try:
             await ws.send_json({
                 "tipo": "relay_erro",
-                "mensagem": "Quem transmite está com o site desatualizado. Peça para ele "
-                            "atualizar a aba com Ctrl+F5 e transmitir de novo.",
+                "mensagem": "Quem transmite não enviou vídeo em 12s. Peça para ele "
+                            "Ctrl+F5 na aba de transmissão e transmitir de novo.",
             })
         except Exception:
             pass

@@ -1001,6 +1001,7 @@ var relayForcarKey = false;
 var relayDecoder = null;
 var relayProntoEnviado = false;
 var relayHostOk = false;
+var relayEncoderVisibilityListener = null;
 
 // Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
 // real da sala em vez de adivinhar.
@@ -1273,18 +1274,33 @@ async function iniciarEncoderRelay() {
   canvas.height = preset.altura;
   var ctx = canvas.getContext("2d", { alpha: false });
 
+  var video = videoTransmissaoEl;
+  var tsUs = 0;
+  var ultimoKey = 0;
+  var ticksSemVideo = 0;
+  var inicioSemChunk = performance.now();
+  var saidasRecebidas = 0;
+
   relayEncoder = new VideoEncoder({
     output: function (chunk) {
-      if (!telaWs || telaWs.readyState !== WebSocket.OPEN) return;
-      var dados = chunk.data();
-      var pacote = new Uint8Array(5 + dados.byteLength);
-      pacote[0] = chunk.type === "key" ? 1 : 2;
-      new DataView(pacote.buffer).setUint32(1, chunk.timestamp);
-      pacote.set(new Uint8Array(dados), 5);
-      try { telaWs.send(pacote); } catch (e) { /* ignore */ }
-      if (!relayProntoEnviado) {
-        relayProntoEnviado = true;
-        enviarTela({ tipo: "relay_pronto" });
+      try {
+        saidasRecebidas++;
+        if (!telaWs || telaWs.readyState !== WebSocket.OPEN) return;
+        // EncodedVideoChunk NÃO tem data() no Chrome atual (só copyTo).
+        var dados = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(dados);
+        var pacote = new Uint8Array(5 + dados.byteLength);
+        pacote[0] = chunk.type === "key" ? 1 : 2;
+        new DataView(pacote.buffer).setUint32(1, chunk.timestamp);
+        pacote.set(dados, 5);
+        telaWs.send(pacote);
+        if (!relayProntoEnviado) {
+          relayProntoEnviado = true;
+          enviarTela({ tipo: "relay_pronto" });
+        }
+      } catch (e) {
+        enviarTela({ tipo: "relay_erro", mensagem: "Falha ao enviar quadro do encoder: " + e.message });
+        pararEncoderRelay();
       }
     },
     error: function (e) {
@@ -1309,20 +1325,29 @@ async function iniciarEncoderRelay() {
     return;
   }
 
-  // drawImage -> VideoFrame(canvas) -> encode: não depende de
-  // MediaStreamTrackProcessor (pode não existir no navegador do host).
-  var video = videoTransmissaoEl;
-  var tsUs = 0;
-  var ultimoKey = 0;
-  var ticksSemVideo = 0;
-  var ticksSemChunk = 0;
+  // Aba em segundo plano: Chrome pausa/throttla timers — reforça o play e
+  // força keyframe ao voltar para a frente.
+  function aoVoltarAba() {
+    if (!document.hidden && relayAtivo && video) {
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+      relayForcarKey = true;
+    }
+  }
+  document.addEventListener("visibilitychange", aoVoltarAba);
+  relayEncoderVisibilityListener = aoVoltarAba;
+
   relayDrawTimer = setInterval(function () {
     if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
+    if (video && video.paused) {
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+    }
     if (!video || video.readyState < 2 || !video.videoWidth) {
       ticksSemVideo++;
-      if (ticksSemVideo === 150) { // ~5s a 30fps
+      if (ticksSemVideo === 300) { // ~10s mesmo com timer throttado
         enviarTela({ tipo: "relay_erro", mensagem: "O vídeo da captura não carregou no transmissor (readyState=" +
-          (video ? video.readyState : "nulo") + "). Ctrl+F5 na aba e transmita de novo." });
+          (video ? video.readyState : "nulo") + ", escondido=" + document.hidden + "). Ctrl+F5 e transmita de novo." });
         pararEncoderRelay();
       }
       return;
@@ -1342,14 +1367,19 @@ async function iniciarEncoderRelay() {
     var agora = performance.now();
     var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
     if (forcar) { ultimoKey = agora; relayForcarKey = false; }
-    try { relayEncoder.encode(frame, { keyFrame: forcar }); } catch (e) { /* ignore */ }
+    try {
+      relayEncoder.encode(frame, { keyFrame: forcar });
+    } catch (e) {
+      enviarTela({ tipo: "relay_erro", mensagem: "encode() falhou: " + e.message });
+      frame.close();
+      pararEncoderRelay();
+      return;
+    }
     frame.close();
-    if (!relayProntoEnviado) {
-      ticksSemChunk++;
-      if (ticksSemChunk === 150) {
-        enviarTela({ tipo: "relay_erro", mensagem: "O encoder não produziu quadros em 5s." });
-        pararEncoderRelay();
-      }
+    if (!relayProntoEnviado && (performance.now() - inicioSemChunk) > 6000) {
+      enviarTela({ tipo: "relay_erro", mensagem: "Encoder sem chunk em 6s (saidas=" + saidasRecebidas +
+        ", estado=" + relayEncoder.state + ", escondido=" + document.hidden + ")." });
+      pararEncoderRelay();
     }
   }, Math.max(16, Math.floor(1000 / telaFps)));
 }
@@ -1359,6 +1389,10 @@ function pararEncoderRelay() {
   relayProntoEnviado = false;
   clearInterval(relayDrawTimer);
   relayDrawTimer = null;
+  if (relayEncoderVisibilityListener) {
+    document.removeEventListener("visibilitychange", relayEncoderVisibilityListener);
+    relayEncoderVisibilityListener = null;
+  }
   if (relayEncoder) {
     try { if (relayEncoder.state !== "closed") relayEncoder.close(); } catch (e) { /* ignore */ }
     relayEncoder = null;
@@ -1842,9 +1876,7 @@ function processarMensagemTela(dados) {
     case "relay_erro":
       if (telaModoRelay) {
         clearTimeout(telaRelayTimer);
-        mensagemTransmissao((dados.mensagem && dados.mensagem.indexOf("desatualizado") >= 0
-          ? dados.mensagem
-          : "Quem transmite teve um erro no encoder: " + (dados.mensagem || "erro desconhecido")), "erro");
+        mensagemTransmissao(dados.mensagem || "Quem transmite teve um erro no encoder.", "erro");
       }
       break;
     case "viewers_total":
