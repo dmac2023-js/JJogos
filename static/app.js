@@ -26,11 +26,60 @@ const todasTelas = document.querySelectorAll(".tela");
 const nomesDificuldade = { facil: "Fácil", medio: "Médio", dificil: "Difícil" };
 
 // ---------------------------------------------------------------------------
+// Identidade Discord (site OAuth + Activity SDK) — evita "Anônimo" por corrida
+// ---------------------------------------------------------------------------
+var conexaoDiscordPromise = null;
+
+function escapeHtml(texto) {
+  return String(texto == null ? "" : texto)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function nomeExibicao() {
+  if (!usuarioDiscord) return "Anônimo";
+  return usuarioDiscord.global_name || usuarioDiscord.username;
+}
+
+function nomeUsuario() {
+  return usuarioDiscord ? usuarioDiscord.username : "Anônimo";
+}
+
+function avatarAtual() {
+  if (!usuarioDiscord) return null;
+  try { return avatarUrlDiscord(usuarioDiscord); } catch (e) { return null; }
+}
+
+/** Espera a identidade (OAuth no site, SDK na Activity) antes de criar sala. */
+async function garantirIdentidade() {
+  if (usuarioDiscord) return usuarioDiscord;
+  try {
+    var cru = localStorage.getItem("usuario-discord");
+    if (cru) {
+      await restaurarSessaoDiscord();
+      if (usuarioDiscord) return usuarioDiscord;
+    }
+  } catch (e) { /* ignore */ }
+  if (dentroDaActivity()) {
+    for (var i = 0; i < 4 && !usuarioDiscord; i++) {
+      await conectarAoDiscord();
+      if (!usuarioDiscord) {
+        await new Promise(function (r) { setTimeout(r, 350); });
+      }
+    }
+  }
+  return usuarioDiscord;
+}
+
+// ---------------------------------------------------------------------------
 // Navegação entre telas
 // ---------------------------------------------------------------------------
 function mostrarTela(tela) {
   todasTelas.forEach((item) => item.classList.remove("ativa"));
   tela.classList.add("ativa");
+  if (!tela || tela.id !== "tela-transmissao") {
+    document.body.classList.remove("modo-cheia-transmissao");
+  }
 }
 
 function mostrarMensagem(texto, tipo = "") {
@@ -176,10 +225,14 @@ async function carregarRecordes(dificuldade) {
     lista.forEach(function (recorde, i) {
       const registro = document.createElement("div");
       registro.className = "registro-recorde";
+      var avatarHtml = recorde.avatar
+        ? '<img class="recorde-avatar" src="' + escapeHtml(recorde.avatar) + '" alt="" />'
+        : '<span class="recorde-avatar placeholder">' + escapeHtml((recorde.nick || "?").charAt(0).toUpperCase()) + '</span>';
       registro.innerHTML =
         '<span class="recorde-posicao">' + (medallas[i] || "") + "</span>" +
-        '<span class="recorde-info"><strong>' + recorde.nick + "</strong>" +
-        "<small>" + recorde.nome + "</small></span>" +
+        avatarHtml +
+        '<span class="recorde-info"><strong>' + escapeHtml(recorde.nick) + "</strong>" +
+        "<small>" + escapeHtml(recorde.nome || "") + "</small></span>" +
         '<span class="recorde-tempo">' + formatarTempo(recorde.tempo_segundos) + "</span>";
       elementoRecordes.appendChild(registro);
     });
@@ -189,8 +242,10 @@ async function carregarRecordes(dificuldade) {
 }
 
 async function salvarRecorde() {
-  const nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
-  const nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  await garantirIdentidade();
+  const nome = nomeUsuario();
+  const nick = nomeExibicao();
+  const avatar = avatarAtual();
 
   try {
     await fetch("./sudoku/recordes", {
@@ -200,6 +255,7 @@ async function salvarRecorde() {
         dificuldade: dificuldadeAtual,
         nome: nome,
         nick: nick,
+        avatar: avatar,
         tempo_segundos: tempoAtual(),
       }),
     });
@@ -231,9 +287,22 @@ async function verificarResposta() {
 
     if (dados.correto) {
       pararCronometro();
-      salvarHistorico();
-      salvarRecorde();
-      mostrarMensagem(dados.mensagem + " Tempo: " + formatarTempo(tempoAtual()) + ".", "sucesso");
+      if (sudokuOnlineAtivo && sudokuWs && sudokuWs.readyState === WebSocket.OPEN && !sudokuTerminou) {
+        // Corrida online: avisa a sala o tempo (progresso continua oculto).
+        sudokuTerminou = true;
+        try {
+          sudokuWs.send(JSON.stringify({ tipo: "concluiu", tempo: tempoAtual() }));
+        } catch (e) { /* ignore */ }
+        mostrarMensagem("Você terminou em " + formatarTempo(tempoAtual()) + "! Aguardando o oponente...", "sucesso");
+        mostrarBotao("#sudoku-pedir-revanche", true);
+        mostrarBotao("#sudoku-parar", true);
+      } else if (!sudokuOnlineAtivo) {
+        salvarHistorico();
+        salvarRecorde();
+        mostrarMensagem(dados.mensagem + " Tempo: " + formatarTempo(tempoAtual()) + ".", "sucesso");
+      } else {
+        mostrarMensagem(dados.mensagem + " Tempo: " + formatarTempo(tempoAtual()) + ".", "sucesso");
+      }
     } else {
       mostrarMensagem(dados.mensagem, "erro");
     }
@@ -526,15 +595,50 @@ async function jogarVelhaMaquina(posicao) {
 
 async function salvarRecordVelha() {
   if (velhaModo !== "multiplayer") return;
-  var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
-  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  await garantirIdentidade();
+  var nome = nomeUsuario();
+  var nick = nomeExibicao();
+  var avatar = avatarAtual();
   try {
     await fetch("./velha/recordes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dificuldade: velhaDificuldade, nome: nome, nick: nick }),
+      body: JSON.stringify({ dificuldade: "facil", nome: nome, nick: nick, avatar: avatar }),
     });
+    carregarRankingVelha();
   } catch (e) { /* ignore */ }
+}
+
+async function carregarRankingVelha() {
+  var container = document.querySelector("#lista-ranking-velha");
+  if (!container) return;
+  try {
+    var res = await fetch("./velha/ranking");
+    var dados = await res.json();
+    var lista = dados.ranking || [];
+    var medallas = ["\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49"];
+    if (!lista.length) {
+      container.innerHTML = '<p class="vazio">Nenhuma vitória ainda.</p>';
+      return;
+    }
+    container.innerHTML = "";
+    lista.slice(0, 3).forEach(function (r, i) {
+      var img = r.avatar
+        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
+        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + '</span>';
+      var el = document.createElement("div");
+      el.className = "registro-recorde";
+      el.innerHTML =
+        '<span class="recorde-posicao">' + (medallas[i] || (i + 1)) + "</span>" +
+        img +
+        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + "</strong>" +
+        "<small>" + escapeHtml(r.nome || "") + "</small></span>" +
+        '<span class="recorde-tempo">' + (r.vitorias || 0) + "v</span>";
+      container.appendChild(el);
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="vazio">Erro ao carregar ranking.</p>';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -705,14 +809,16 @@ function processarMensagemVelha(dados) {
 }
 
 async function criarSalaVelha() {
-  var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
-  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  await garantirIdentidade();
+  var nome = nomeUsuario();
+  var nick = nomeExibicao();
+  var avatar = avatarAtual();
 
   try {
     var res = await fetch("./velha/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modo: "multiplayer", nome: nome, nick: nick }),
+      body: JSON.stringify({ modo: "multiplayer", nome: nome, nick: nick, avatar: avatar }),
     });
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
@@ -745,9 +851,10 @@ async function criarSalaVelha() {
   }
 }
 
-function entrarSalaVelha(codigo) {
-  var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
-  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+async function entrarSalaVelha(codigo) {
+  await garantirIdentidade();
+  var nome = nomeUsuario();
+  var nick = nomeExibicao();
 
   velhaModo = "multiplayer";
   velhaReconnectAttempts = 0;
@@ -812,7 +919,10 @@ document.querySelector("#sair-sala-velha").addEventListener("click", function ()
     velhaWs.close();
     velhaWs = null;
   }
+  velhaSala = null;
+  velhaModo = null;
   mostrarTela(telaLobbyVelha);
+  carregarRankingVelha();
 });
 
 document.querySelector("#copiar-codigo").addEventListener("click", function () {
@@ -835,10 +945,18 @@ document.querySelector("#copiar-codigo").addEventListener("click", function () {
 // ---------------------------------------------------------------------------
 document.querySelector("#jogo-sudoku").addEventListener("click", function () {
   mostrarTela(telaDificuldade);
+  carregarSalasSudoku();
 });
 
 document.querySelectorAll("#tela-dificuldade .botao-dificuldade").forEach(function (botao) {
   botao.addEventListener("click", function () {
+    // Solo: encerra uma eventual sala online aberta.
+    if (sudokuOnlineAtivo) {
+      if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+        try { sudokuWs.send(JSON.stringify({ tipo: "sair" })); } catch (e) { /* ignore */ }
+      }
+      fecharSudokuOnline(null);
+    }
     iniciarSudoku(botao.dataset.dificuldade);
   });
 });
@@ -871,10 +989,37 @@ document.querySelectorAll("#tela-dificuldade-velha .botao-dificuldade").forEach(
 
 document.querySelectorAll(".voltar").forEach(function (botao) {
   botao.addEventListener("click", function () {
+    // Sair da velha pela seta precisa fechar a sala no servidor.
+    if (botao.id === "voltar-velha" && velhaModo === "multiplayer" && velhaSala) {
+      localStorage.removeItem("velha-reconnect");
+      esconderCodigoSala();
+      if (velhaWs && velhaWs.readyState === WebSocket.OPEN) {
+        try { velhaWs.send(JSON.stringify({ tipo: "sair" })); } catch (e) { /* ignore */ }
+      }
+      if (velhaWs) {
+        velhaWs.close();
+        velhaWs = null;
+      }
+      velhaSala = null;
+      velhaModo = null;
+    }
+    // Sair do sudoku online (tela-jogo → voltar) encerra a sala.
+    if (sudokuOnlineAtivo && botao.dataset.tela === "tela-dificuldade") {
+      if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+        try { sudokuWs.send(JSON.stringify({ tipo: "sair" })); } catch (e) { /* ignore */ }
+      }
+      fecharSudokuOnline(null);
+      carregarSalasSudoku();
+    }
     var telaId = botao.dataset.tela;
     mostrarTela(document.querySelector("#" + telaId));
+    if (telaId === "tela-lobby-velha" || telaId === "tela-modo-velha") {
+      carregarRankingVelha();
+    }
   });
 });
+
+carregarRankingVelha();
 
 document.querySelector("#verificar").addEventListener("click", verificarResposta);
 document.querySelector("#reiniciar").addEventListener("click", function () {
@@ -883,6 +1028,393 @@ document.querySelector("#reiniciar").addEventListener("click", function () {
 
 document.querySelector("#fechar-popup-convite").addEventListener("click", function () {
   document.querySelector("#popup-convite").classList.remove("ativo");
+});
+
+// ---------------------------------------------------------------------------
+// Sudoku online — salas, WS, countdown, placar, revanche
+// ---------------------------------------------------------------------------
+var sudokuOnlineAtivo = false;
+var sudokuWs = null;
+var sudokuSala = null;
+var sudokuSlot = null;
+var sudokuFase = null;
+var sudokuPlacar = { p1: 0, p2: 0 };
+var sudokuMeuTempo = 0;
+var sudokuTerminou = false;
+var sudokuPingTimer = null;
+
+function sudokuOnlineBar(visivel) {
+  var bar = document.querySelector("#sudoku-online-bar");
+  var acoes = document.querySelector("#sudoku-online-acoes");
+  if (bar) bar.style.display = visivel ? "" : "none";
+  if (acoes) acoes.style.display = visivel ? "" : "none";
+}
+
+function sudokuStatus(texto) {
+  var el = document.querySelector("#sudoku-online-status");
+  if (el) el.textContent = texto || "";
+}
+
+function sudokuPlacarTexto() {
+  var el = document.querySelector("#sudoku-online-placar");
+  if (el) el.textContent = (sudokuPlacar.p1 || 0) + " × " + (sudokuPlacar.p2 || 0);
+}
+
+function mostrarBotao(sel, on) {
+  var el = document.querySelector(sel);
+  if (el) el.style.display = on ? "" : "none";
+}
+
+function fecharSudokuOnline(motivo) {
+  sudokuOnlineAtivo = false;
+  clearInterval(sudokuPingTimer);
+  sudokuPingTimer = null;
+  if (sudokuWs) {
+    try { sudokuWs.close(); } catch (e) { /* ignore */ }
+    sudokuWs = null;
+  }
+  sudokuSala = null;
+  sudokuSlot = null;
+  sudokuFase = null;
+  sudokuTerminou = false;
+  sudokuOnlineBar(false);
+  mostrarBotao("#sudoku-pedir-revanche", false);
+  mostrarBotao("#sudoku-responder-sim", false);
+  mostrarBotao("#sudoku-responder-nao", false);
+  mostrarBotao("#sudoku-parar", false);
+  if (motivo) mostrarMensagem(motivo, "erro");
+}
+
+function conectarWsSudoku(sala) {
+  if (sudokuWs) {
+    try { sudokuWs.close(); } catch (e) { /* ignore */ }
+  }
+  var nome = nomeUsuario();
+  var nick = nomeExibicao();
+  var avatar = avatarAtual() || "";
+  var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
+  var url = protocolo + "//" + location.host + "/ws/sudoku/" + encodeURIComponent(sala) +
+    "?nome=" + encodeURIComponent(nome) +
+    "&nick=" + encodeURIComponent(nick) +
+    (avatar ? "&avatar=" + encodeURIComponent(avatar) : "");
+
+  var ws = new WebSocket(url);
+  sudokuWs = ws;
+  sudokuSala = sala;
+
+  clearInterval(sudokuPingTimer);
+  sudokuPingTimer = setInterval(function () {
+    if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+      sudokuWs.send(JSON.stringify({ tipo: "ping" }));
+    }
+  }, 20000);
+
+  ws.onmessage = function (ev) {
+    if (typeof ev.data !== "string") return;
+    try { processarMensagemSudoku(JSON.parse(ev.data)); } catch (e) { console.warn(e); }
+  };
+  ws.onclose = function () {
+    if (sudokuOnlineAtivo && sudokuFase !== "fim") {
+      // desconectado sem motivo claro — não fecha a UI se só foi reaberta
+    }
+  };
+  ws.onerror = function () {};
+}
+
+function processarMensagemSudoku(d) {
+  switch (d.tipo) {
+    case "erro":
+      fecharSudokuOnline(d.mensagem || "Erro na sala.");
+      mostrarTela(telaDificuldade);
+      break;
+
+    case "estado_sudoku":
+      sudokuPlacar = d.placar || sudokuPlacar;
+      sudokuPlacarTexto();
+      sudokuFase = d.fase;
+      if (d.meu_slot) sudokuSlot = d.meu_slot;
+      if (d.sala) {
+        document.querySelector("#sudoku-online-codigo").textContent = d.sala;
+      }
+      if (d.fase === "esperando") {
+        sudokuStatus(d.meu_slot === "p1" ? "Aguardando oponente..." : "Aguardando...");
+        mostrarMensagem("Aguardando o outro jogador...", "");
+      } else if (d.fase === "jogando") {
+        sudokuStatus("Jogando!");
+      } else if (d.fase === "fim" || d.fase === "parcial") {
+        if (d.vencedor_rodada) {
+          var nick = "";
+          var outro = d.jogadores ? (d.jogadores[0].slot === d.vencedor_rodada ? d.jogadores[0] : d.jogadores[1]) : null;
+          if (outro) nick = outro.nick;
+          var t = (d.tempos_rodada || {})[d.vencedor_rodada] || 0;
+          mostrarMensagem(nick + " venceu e terminou em " + formatarTempo(t) + ".", "sucesso");
+          sudokuStatus(nick + " venceu");
+        }
+      }
+      // botões pós-rodada
+      if (d.fase === "parcial" || (d.vencedor_rodada && !d.todos)) {
+        // perdeu mas ainda pode terminar ou pedir revanche
+        if (!sudokuTerminou) {
+          mostrarBotao("#sudoku-pedir-revanche", true);
+          mostrarBotao("#sudoku-parar", true);
+        }
+      }
+      if (d.revanche_de && d.revanche_de !== sudokuSlot) {
+        mostrarBotao("#sudoku-responder-sim", true);
+        mostrarBotao("#sudoku-responder-nao", true);
+      }
+      break;
+
+    case "contagem":
+      sudokuOnlineAtivo = true;
+      sudokuFase = "contagem";
+      if (d.n > 0) {
+        mostrarMensagem("Começa em " + d.n + "...", "");
+        sudokuStatus("Contagem: " + d.n);
+      } else {
+        mostrarMensagem("Vai!", "sucesso");
+        sudokuStatus("Vai!");
+      }
+      // zera o cronômetro visual; jogo real começa no "inicio_sudoku"
+      clearInterval(intervaloCronometro);
+      elementoCronometro.textContent = "00:00";
+      sudokuTerminou = false;
+      mostrarBotao("#sudoku-pedir-revanche", false);
+      mostrarBotao("#sudoku-responder-sim", false);
+      mostrarBotao("#sudoku-responder-nao", false);
+      mostrarBotao("#sudoku-parar", false);
+      break;
+
+    case "inicio_sudoku":
+      sudokuOnlineAtivo = true;
+      sudokuFase = "jogando";
+      sudokuTerminou = false;
+      jogoId = d.jogo_id;
+      dificuldadeAtual = d.dificuldade;
+      document.querySelector("#dificuldade-atual").textContent = nomesDificuldade[d.dificuldade] || d.dificuldade;
+      desenharGrade(d.grade);
+      mostrarMensagem("Mesmo puzzle para os dois — progresso do oponente fica oculto.", "");
+      sudokuStatus("Jogando!");
+      iniciarCronometro();
+      // carrega recordes do painel lateral
+      carregarRecordes(d.dificuldade);
+      break;
+
+    case "vencedor_rodada":
+      sudokuPlacar = d.placar || sudokuPlacar;
+      sudokuPlacarTexto();
+      if (d.slot === sudokuSlot) {
+        pararCronometro();
+        sudokuTerminou = true;
+        salvarHistorico();
+        salvarRecorde();
+        mostrarMensagem("Você venceu e terminou em " + formatarTempo(d.tempo) + "!", "sucesso");
+        sudokuStatus("Você venceu!");
+        mostrarBotao("#sudoku-pedir-revanche", false);
+        mostrarBotao("#sudoku-parar", true);
+      } else {
+        mostrarMensagem(d.nick + " venceu e terminou em " + formatarTempo(d.tempo) + ".", "sucesso");
+        sudokuStatus(d.nick + " venceu");
+        if (!sudokuTerminou) {
+          mostrarBotao("#sudoku-pedir-revanche", true);
+          mostrarBotao("#sudoku-parar", true);
+        }
+      }
+      break;
+
+    case "ambos_acabaram":
+      sudokuPlacar = d.placar || sudokuPlacar;
+      sudokuPlacarTexto();
+      mostrarMensagem("Os dois terminaram. Placar " +
+        (sudokuPlacar.p1) + " × " + (sudokuPlacar.p2) + ".", "sucesso");
+      break;
+
+    case "revanche_pedida":
+      sudokuPlacar = d.placar || sudokuPlacar;
+      sudokuPlacarTexto();
+      mostrarMensagem(d.por + " pediu revanche (" +
+        (sudokuPlacar.p1) + "×" + (sudokuPlacar.p2) + "). Aceitar?", "");
+      if (d.por_slot && d.por_slot !== sudokuSlot) {
+        mostrarBotao("#sudoku-responder-sim", true);
+        mostrarBotao("#sudoku-responder-nao", true);
+        mostrarBotao("#sudoku-pedir-revanche", false);
+      }
+      break;
+
+    case "revanche_aceita":
+      mostrarMensagem("Revanche aceita! Nova rodada...", "sucesso");
+      mostrarBotao("#sudoku-responder-sim", false);
+      mostrarBotao("#sudoku-responder-nao", false);
+      mostrarBotao("#sudoku-pedir-revanche", false);
+      mostrarBotao("#sudoku-parar", false);
+      sudokuTerminou = false;
+      break;
+
+    case "revanche_recusada":
+      fecharSudokuOnline("Revanche recusada. Sala encerrada.");
+      mostrarTela(telaDificuldade);
+      break;
+
+    case "sala_sudoku_encerrada":
+      fecharSudokuOnline(d.motivo === "lider_saiu" || d.motivo === "lider_desconectou"
+        ? "O líder saiu. A sala foi encerrada."
+        : "A sala foi encerrada.");
+      mostrarTela(telaDificuldade);
+      carregarSalasSudoku();
+      break;
+
+    case "pongs":
+      break;
+  }
+}
+
+async function criarSalaSudoku() {
+  await garantirIdentidade();
+  var codigo = (document.querySelector("#sudoku-codigo-sala").value || "").trim().toLowerCase();
+  var publica = !!document.querySelector("#sudoku-sala-publica").checked;
+  var difSel = document.querySelector("#sudoku-dificuldade-online .botao-preset.selecionado");
+  var dif = (difSel && difSel.dataset.dif) || "facil";
+
+  try {
+    var res = await fetch("./sudoku/sala/novo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        codigo: codigo || null,
+        publica: publica,
+        dificuldade: dif,
+        nome: nomeUsuario(),
+        nick: nomeExibicao(),
+        avatar: avatarAtual(),
+      }),
+    });
+    var dados = await res.json();
+    if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
+
+    sudokuOnlineAtivo = true;
+    sudokuSala = dados.sala;
+    document.querySelector("#sudoku-online-codigo").textContent = dados.sala;
+    document.querySelector("#sudoku-online-placar").textContent = "0 × 0";
+    sudokuPlacar = { p1: 0, p2: 0 };
+    sudokuOnlineBar(true);
+    mostrarMensagem("Sala criada: " + dados.sala + ". Aguardando oponente...", "sucesso");
+    sudokuStatus("Aguardando oponente...");
+    // se não escolheu dificuldade explícita, assume a atual
+    mostrarTela(telaJogo);
+    mostrarMensagem("Sala " + dados.sala + " — aguardando oponente...", "sucesso");
+    conectarWsSudoku(dados.sala);
+
+    if (discordSdkGlobal && publica) {
+      try {
+        await discordSdkGlobal.commands.shareLink({
+          message: "Bora jogar Sudoku online! Sala: " + dados.sala,
+          custom_id: "sudoku-" + dados.sala,
+        });
+      } catch (e) { /* cancelado */ }
+    }
+  } catch (erro) {
+    mostrarMensagem(erro.message, "erro");
+  }
+}
+
+async function entrarSalaSudoku(codigo) {
+  codigo = (codigo || "").trim().toLowerCase();
+  if (!codigo) {
+    mostrarMensagem("Digite o código da sala.", "erro");
+    return;
+  }
+  await garantirIdentidade();
+  try {
+    // valida sala existente via listagem (públicas) ou tenta WS direto (privadas)
+    sudokuOnlineAtivo = true;
+    document.querySelector("#sudoku-online-codigo").textContent = codigo;
+    document.querySelector("#sudoku-online-placar").textContent = "0 × 0";
+    sudokuPlacar = { p1: 0, p2: 0 };
+    sudokuOnlineBar(true);
+    mostrarTela(telaJogo);
+    mostrarMensagem("Entrando na sala " + codigo + "...", "");
+    sudokuStatus("Entrando...");
+    conectarWsSudoku(codigo);
+  } catch (erro) {
+    fecharSudokuOnline(erro.message);
+  }
+}
+
+async function carregarSalasSudoku() {
+  var container = document.querySelector("#salas-sudoku-conteudo");
+  if (!container) return;
+  try {
+    var res = await fetch("./sudoku/salas");
+    var dados = await res.json();
+    var lista = dados.salas || [];
+    container.innerHTML = "";
+    if (!lista.length) {
+      container.innerHTML = '<p class="vazio">Nenhuma sala pública.</p>';
+      return;
+    }
+    lista.forEach(function (s) {
+      var item = document.createElement("div");
+      item.className = "sala-item";
+      item.innerHTML =
+        '<div class="sala-item-info">' +
+        "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
+        "<small>" + escapeHtml(s.sala) + " · " + (nomesDificuldade[s.dificuldade] || s.dificuldade) +
+        " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></div>" +
+        '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
+      item.addEventListener("click", function () {
+        entrarSalaSudoku(s.sala);
+      });
+      container.appendChild(item);
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="vazio">Erro ao carregar salas.</p>';
+  }
+}
+
+// Botões da UI online
+document.querySelector("#criar-sala-sudoku").addEventListener("click", function () {
+  criarSalaSudoku();
+});
+document.querySelector("#entrar-sala-sudoku").addEventListener("click", function () {
+  entrarSalaSudoku(document.querySelector("#sudoku-codigo-sala").value);
+});
+document.querySelectorAll("#sudoku-dificuldade-online .botao-preset").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll("#sudoku-dificuldade-online .botao-preset").forEach(function (x) {
+      x.classList.remove("selecionado");
+    });
+    b.classList.add("selecionado");
+  });
+});
+document.querySelector("#sudoku-codigo-sala").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") entrarSalaSudoku(this.value);
+});
+document.querySelector("#sudoku-pedir-revanche").addEventListener("click", function () {
+  if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+    sudokuWs.send(JSON.stringify({ tipo: "pedir_revanche" }));
+    mostrarMensagem("Revanche pedida ao oponente...", "");
+    mostrarBotao("#sudoku-pedir-revanche", false);
+  }
+});
+document.querySelector("#sudoku-responder-sim").addEventListener("click", function () {
+  if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+    sudokuWs.send(JSON.stringify({ tipo: "responder_revanche", aceitar: true }));
+    mostrarBotao("#sudoku-responder-sim", false);
+    mostrarBotao("#sudoku-responder-nao", false);
+  }
+});
+document.querySelector("#sudoku-responder-nao").addEventListener("click", function () {
+  if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+    sudokuWs.send(JSON.stringify({ tipo: "responder_revanche", aceitar: false }));
+    mostrarBotao("#sudoku-responder-sim", false);
+    mostrarBotao("#sudoku-responder-nao", false);
+  }
+});
+document.querySelector("#sudoku-parar").addEventListener("click", function () {
+  if (sudokuWs && sudokuWs.readyState === WebSocket.OPEN) {
+    sudokuWs.send(JSON.stringify({ tipo: "parar" }));
+  }
+  fecharSudokuOnline("Você parou. Sala encerrada.");
 });
 
 // ---------------------------------------------------------------------------
@@ -960,16 +1492,23 @@ async function conectarAoDiscord() {
     discordSdkGlobal = new DiscordSDK(configuracao.application_id);
     await discordSdkGlobal.ready();
 
+    var autenticou = false;
     try {
       var opcoes = await discordSdkGlobal.commands.authenticate();
       usuarioDiscord = opcoes.user || opcoes;
-      console.log("Discord user identified:", usuarioDiscord.username);
+      autenticou = !!usuarioDiscord;
+      console.log("Discord user identified:", usuarioDiscord && usuarioDiscord.username);
     } catch (e) {
       console.warn("Não foi possível autenticar:", e);
     }
 
-    elementoStatus.textContent = "Conectado ao Discord";
-    elementoStatus.classList.add("conectado");
+    if (autenticou) {
+      elementoStatus.textContent = "Conectado ao Discord";
+      elementoStatus.classList.add("conectado");
+    } else {
+      elementoStatus.textContent = "Discord (sem login)";
+      elementoStatus.classList.remove("conectado");
+    }
     renderAuth();
   } catch (erro) {
     console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
@@ -1009,6 +1548,7 @@ var relayPartes = {};
 var relayCfgOk = false;
 var relaySemOutput = 0;
 var ultimoErroRelay = "";
+var relayCodecAtual = "vp8";
 
 // Áudio do relay (Activity não tem WebRTC): Opus via WebCodecs.
 var relayAudioEncoder = null;
@@ -1286,8 +1826,9 @@ async function trocarJanelaTela() {
 // O Discord não suporta WebRTC dentro da Activity; o host codifica VP8 com
 // WebCodecs e o servidor repassa os quadros binários até o canvas do viewer.
 // ---------------------------------------------------------------------------
-function iniciarDecoderRelay(resolucao) {
+function iniciarDecoderRelay(resolucao, codec) {
   pararDecoderRelay();
+  relayCodecAtual = codec || relayCodecAtual || "vp8";
   var dims = { "480p": [854, 480], "720p": [1280, 720], "1080p": [1920, 1080] }[resolucao] || [1280, 720];
   var canvas = document.querySelector("#canvas-relay");
   canvas.width = dims[0];
@@ -1343,7 +1884,7 @@ function iniciarDecoderRelay(resolucao) {
           texto + "). Recarregue a Activity.", "erro");
         return;
       }
-      iniciarDecoderRelay(resolucao);
+      iniciarDecoderRelay(resolucao, relayCodecAtual);
       ultimoErroRelay = texto;
       // Não sobrescreve com "aguardando" — deixa o erro visível.
       mensagemTransmissao("Vídeo chegou mas falhou ao decodificar (" +
@@ -1351,12 +1892,19 @@ function iniciarDecoderRelay(resolucao) {
     },
   });
   try {
-    relayDecoder.configure({ codec: "vp8", optimizeForLatency: true });
+    var cfgDec = { optimizeForLatency: true };
+    // Codec vinha do host (H.264/VP8) — default VP8.
+    if (relayCodecAtual === "h264") {
+      cfgDec.codec = "avc1.42001f";
+    } else {
+      cfgDec.codec = "vp8";
+    }
+    relayDecoder.configure(cfgDec);
     relayCfgOk = relayDecoder.state === "configured";
-    logRelayDiag("decoder_cfg", { state: relayDecoder.state });
+    logRelayDiag("decoder_cfg", { state: relayDecoder.state, codec: cfgDec.codec });
   } catch (e) {
     ultimoErroRelay = "configure: " + e.message;
-    logRelayDiag("configure_erro", { msg: e.message });
+    logRelayDiag("configure_erro", { msg: e.message, codec: relayCodecAtual });
     mensagemTransmissao("Falha ao configurar o decodificador (" + e.message + ").", "erro");
   }
 }
@@ -1558,6 +2106,12 @@ function definirTamanhoVideo(tam) {
   document.querySelectorAll("#tamanho-video .botao-preset").forEach(function (b) {
     b.classList.toggle("selecionado", b.dataset.tam === tam);
   });
+  // Tela cheia ocupa a Activity inteira (esconde header/footer/controles fixos).
+  if (tam === "full") {
+    document.body.classList.add("modo-cheia-transmissao");
+  } else {
+    document.body.classList.remove("modo-cheia-transmissao");
+  }
   try { localStorage.setItem("jj_tela_tam", tam); } catch (e) { /* ignore */ }
 }
 
@@ -1700,7 +2254,7 @@ async function iniciarEncoderRelay() {
         }
         if (!relayProntoEnviado) {
           relayProntoEnviado = true;
-          enviarTela({ tipo: "relay_pronto" });
+          enviarTela({ tipo: "relay_pronto", codec: relayCodecAtual });
         }
       } catch (e) {
         enviarTela({ tipo: "relay_erro", mensagem: "Falha ao enviar quadro do encoder: " + e.message });
@@ -1714,21 +2268,44 @@ async function iniciarEncoderRelay() {
     },
   });
 
-  try {
-    relayEncoder.configure({
-      codec: "vp8",
-      width: canvas.width,
-      height: canvas.height,
+  // Tenta H.264 (costuma ser mais eficiente); se não suportar, VP8.
+  var codecEscolhido = "vp8";
+  if (typeof VideoEncoder !== "undefined" && VideoEncoder.isConfigSupported) {
+    try {
+      var testH264 = {
+        codec: "avc1.42001f",
+        width: canvas.width,
+        height: canvas.height,
+        framerate: telaFps,
+        bitrate: bitrateRelay(),
+      };
+      var sup = await VideoEncoder.isConfigSupported(testH264);
+      if (sup && sup.supported) codecEscolhido = "h264";
+    } catch (e) { /* fica com vp8 */ }
+  }
+  relayCodecAtual = codecEscolhido;
+  enviarTela({ tipo: "relay_codec", codec: codecEscolhido });
+  logRelayDiag("encoder_codec", { codec: codecEscolhido });
+
+  function cfgEncoder(w, h) {
+    return {
+      codec: codecEscolhido === "h264" ? "avc1.42001f" : "vp8",
+      width: w,
+      height: h,
       framerate: telaFps,
       bitrate: bitrateRelay(),
-      // "detail" mantém texto/traços nítidos (motion borrifa).
+      latencyMode: "realtime",
       contentHint: "detail",
-    });
+    };
+  }
+
+  try {
+    relayEncoder.configure(cfgEncoder(canvas.width, canvas.height));
   } catch (e) {
-    // contentHint pode não existir em browsers antigos — reconfigura sem.
+    // contentHint/latencyMode podem não existir — reconfigura sem.
     try {
       relayEncoder.configure({
-        codec: "vp8",
+        codec: codecEscolhido === "h264" ? "avc1.42001f" : "vp8",
         width: canvas.width,
         height: canvas.height,
         framerate: telaFps,
@@ -1769,8 +2346,8 @@ async function iniciarEncoderRelay() {
       return;
     }
     ticksSemVideo = 0;
-    // Fila maior = menos frames descartados em picos (qualidade/fps).
-    if (relayEncoder.encodeQueueSize > 24) return;
+        // Fila maior = menos frames descartados em picos (qualidade/fps).
+    if (relayEncoder.encodeQueueSize > 8) return;
     var frame;
     try {
       // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
@@ -1785,14 +2362,7 @@ async function iniciarEncoderRelay() {
         canvas.height = Math.round(vh * escala);
         if (relayEncoder.state === "configured") {
           // Reconfigura o encoder com a resolução real.
-          relayEncoder.configure({
-            codec: "vp8",
-            width: canvas.width,
-            height: canvas.height,
-            framerate: telaFps,
-            bitrate: bitrateRelay(),
-            contentHint: "detail",
-          });
+          relayEncoder.configure(cfgEncoder(canvas.width, canvas.height));
         }
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1943,36 +2513,47 @@ async function iniciarTransmissaoTela() {
     return;
   }
 
+  var querAudio = true;
+  var chkAudio = document.querySelector("#capturar-audio-tela");
+  if (chkAudio) querAudio = !!chkAudio.checked;
+
   var preset = TELA_PRESETS[telaResolucao];
+  var opcoesCaptura = {
+    video: {
+      width: { ideal: preset.largura },
+      height: { ideal: preset.altura },
+      frameRate: { ideal: telaFps, max: telaFps },
+    },
+    // Chrome: habilita a opção "Compartilhar áudio do sistema"/tab no picker.
+    systemAudio: "include",
+  };
+  if (querAudio) {
+    opcoesCaptura.audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+  } else {
+    opcoesCaptura.audio = false;
+  }
+
   try {
-    telaStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        width: { ideal: preset.largura },
-        height: { ideal: preset.altura },
-        frameRate: { ideal: telaFps, max: telaFps },
-      },
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      },
-      // Chrome: habilita a opção "Compartilhar áudio do sistema"/tab no picker.
-      systemAudio: "include",
-    });
+    telaStream = await navigator.mediaDevices.getDisplayMedia(opcoesCaptura);
   } catch (e) {
     mensagemTela("Captura cancelada ou negada.", "erro");
     return;
   }
 
   // Avisa se o Chrome não devolveu áudio (usuário não marcou a opção).
-  if (!telaStream.getAudioTracks().length) {
+  if (querAudio && !telaStream.getAudioTracks().length) {
     mensagemTela(
       "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
       "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
       "Você pode recapturar com Trocar janela depois.", "erro");
   }
 
-  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
+  await garantirIdentidade();
+  var nick = nomeExibicao();
   var instancia = compartilharInstanciaAtual() || null;
 
   try {
@@ -2287,8 +2868,9 @@ function processarMensagemTela(dados) {
       clearTimeout(telaRelayTimer);
       relayFrameOk = false;
       relayHostOk = dados.host_conectado === true;
+      if (dados.codec) relayCodecAtual = dados.codec;
       if (telaModoRelay) {
-        iniciarDecoderRelay(dados.resolucao);
+        iniciarDecoderRelay(dados.resolucao, dados.codec || relayCodecAtual);
         telaRelayTimer = setTimeout(diagnosticarRelaySemVideo, 15000);
       } else if (!telaEhHost) {
         telaOfertaTimer = setTimeout(async function () {
@@ -2349,6 +2931,22 @@ function processarMensagemTela(dados) {
       // Áudio Opus do relay em JSON base64.
       if (telaModoRelay && !telaEhHost) {
         receberAudioRelay(dados);
+      }
+      break;
+    case "relay_codec":
+      if (dados.codec) {
+        relayCodecAtual = dados.codec;
+        if (telaModoRelay && !telaEhHost && relayDecoder) {
+          // Reconfigura o decoder com o codec do host (h264/vp8).
+          try {
+            relayDecoder.configure({
+              codec: relayCodecAtual === "h264" ? "avc1.42001f" : "vp8",
+              optimizeForLatency: true,
+            });
+            relayTemKey = false;
+            logRelayDiag("decoder_recfg", { codec: relayCodecAtual });
+          } catch (e) { /* ignora */ }
+        }
       }
       break;
     case "relay_pronto":

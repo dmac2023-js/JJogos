@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260922-15" />
+    <link rel="stylesheet" href="./style.css?v=20260923-01" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -65,6 +65,8 @@
       .recorde-info strong { color: #f4f6ff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .recorde-info small { color: #aeb2c7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .recorde-tempo { color: #85e0ae; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .recorde-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #34275d; border: 1px solid #4b3b78; }
+      .recorde-avatar.placeholder { display: grid; place-items: center; color: #c8baff; font-weight: bold; font-size: 13px; }
 
       /* Jogo da Velha */
       .modo-selecao { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -146,6 +148,36 @@
       .video-transmissao.tam-m { max-width: 900px; max-height: 54vh; margin-left: auto; margin-right: auto; }
       .video-transmissao.tam-g { max-width: 100%; max-height: 72vh; }
       .video-transmissao.tam-full { max-width: 100%; max-height: calc(100vh - 40px); border-radius: 0; }
+      /* Tela cheia na Activity: ocupa a Activity inteira, sem header/footer. */
+      body.modo-cheia-transmissao { overflow: hidden; }
+      body.modo-cheia-transmissao .aplicacao > .cabecalho,
+      body.modo-cheia-transmissao footer { display: none !important; }
+      body.modo-cheia-transmissao #tela-transmissao {
+        position: fixed; inset: 0; z-index: 90;
+        margin: 0; padding: 0; border: 0; border-radius: 0;
+        background: #000; box-shadow: none; display: flex !important;
+        flex-direction: column; max-width: 100%; width: 100%;
+      }
+      body.modo-cheia-transmissao #tela-transmissao .cabecalho-jogo,
+      body.modo-cheia-transmissao #tela-transmissao #mensagem-transmissao,
+      body.modo-cheia-transmissao #tela-transmissao #transmissao-codigo-display,
+      body.modo-cheia-transmissao #tela-transmissao .acoes,
+      body.modo-cheia-transmissao #tela-transmissao #transmissao-viewers-bar,
+      body.modo-cheia-transmissao #tela-transmissao #transmissao-qualidade,
+      body.modo-cheia-transmissao #tela-transmissao #envio-file {
+        display: none !important;
+      }
+      body.modo-cheia-transmissao #tela-transmissao .video-transmissao {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%; max-width: 100%; max-height: 100%;
+        border-radius: 0; margin: 0; object-fit: contain; background: #000;
+      }
+      body.modo-cheia-transmissao #tela-transmissao #controles-transmissao {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 95;
+        margin: 0; border-radius: 0; border: 0;
+        background: rgba(10, 12, 24, .88);
+        justify-content: center;
+      }
       #controles-transmissao { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px 12px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
       #controles-transmissao .grupo-preset { flex: 1; min-width: 140px; margin: 0; }
       #controles-transmissao .grupo-preset .preset-opcoes { display: flex; gap: 6px; }
@@ -252,6 +284,32 @@
           <button class="botao-dificuldade" data-dificuldade="medio"><strong>Médio</strong><small>Um desafio equilibrado</small></button>
           <button class="botao-dificuldade" data-dificuldade="dificil"><strong>Difícil</strong><small>Para quem gosta de desafio</small></button>
         </div>
+
+        <div class="titulo-tela" style="margin-top:28px;">
+          <h2>ou jogue online</h2>
+          <p>Crie uma sala pública ou privada e dispute o mesmo puzzle.</p>
+        </div>
+        <div class="grupo-preset">
+          <span class="preset-label">Dificuldade online</span>
+          <div class="preset-opcoes" id="sudoku-dificuldade-online">
+            <button type="button" class="botao-preset selecionado" data-dif="facil">Fácil</button>
+            <button type="button" class="botao-preset" data-dif="medio">Médio</button>
+            <button type="button" class="botao-preset" data-dif="dificil">Difícil</button>
+          </div>
+        </div>
+        <div class="sala-input">
+          <input type="text" id="sudoku-codigo-sala" placeholder="Código da sala (opcional)" maxlength="16" />
+          <button id="criar-sala-sudoku" class="botao principal">Criar sala</button>
+          <button id="entrar-sala-sudoku" class="botao">Entrar</button>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:#c9ccda;">
+          <input type="checkbox" id="sudoku-sala-publica" checked style="width:16px; height:16px; accent-color:#8664ff;" />
+          Sala pública (aparece na lista)
+        </label>
+        <div class="sala-lista" id="lista-salas-sudoku">
+          <h2 style="font-size:16px; margin-top:18px;">Salas públicas</h2>
+          <div id="salas-sudoku-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
+        </div>
       </section>
 
       <!-- Tela: Jogo Sudoku -->
@@ -265,6 +323,20 @@
         </div>
 
         <div id="mensagem" class="mensagem">Preencha a grade com números de 1 a 9.</div>
+
+        <div id="sudoku-online-bar" class="sala-codigo-display" style="display:none;">
+          <span class="sala-codigo-label">Sala:</span>
+          <span id="sudoku-online-codigo" class="sala-codigo-valor"></span>
+          <span id="sudoku-online-placar" style="color:#c8baff; font-weight:bold;">0 × 0</span>
+          <span id="sudoku-online-status" style="color:#aeb2c7; font-size:13px;"></span>
+        </div>
+
+        <div id="sudoku-online-acoes" class="acoes" style="display:none;">
+          <button id="sudoku-pedir-revanche" class="botao" style="display:none;">Pedir revanche</button>
+          <button id="sudoku-responder-sim" class="botao principal" style="display:none;">Aceitar revanche</button>
+          <button id="sudoku-responder-nao" class="botao" style="display:none;">Recusar</button>
+          <button id="sudoku-parar" class="botao" style="display:none;">Parar</button>
+        </div>
 
         <div class="jogo-conteudo">
           <div class="jogo-grade-area">
@@ -368,25 +440,34 @@
           <button id="copiar-codigo" class="botao-copiar" title="Copiar código">Copiar</button>
         </div>
 
-        <div id="tabuleiro-velha" class="tabuleiro-velha">
-          <div class="casa-velha" data-pos="0"></div>
-          <div class="casa-velha" data-pos="1"></div>
-          <div class="casa-velha" data-pos="2"></div>
-          <div class="casa-velha" data-pos="3"></div>
-          <div class="casa-velha" data-pos="4"></div>
-          <div class="casa-velha" data-pos="5"></div>
-          <div class="casa-velha" data-pos="6"></div>
-          <div class="casa-velha" data-pos="7"></div>
-          <div class="casa-velha" data-pos="8"></div>
-        </div>
+        <div class="jogo-conteudo">
+          <div class="jogo-grade-area">
+            <div id="tabuleiro-velha" class="tabuleiro-velha">
+              <div class="casa-velha" data-pos="0"></div>
+              <div class="casa-velha" data-pos="1"></div>
+              <div class="casa-velha" data-pos="2"></div>
+              <div class="casa-velha" data-pos="3"></div>
+              <div class="casa-velha" data-pos="4"></div>
+              <div class="casa-velha" data-pos="5"></div>
+              <div class="casa-velha" data-pos="6"></div>
+              <div class="casa-velha" data-pos="7"></div>
+              <div class="casa-velha" data-pos="8"></div>
+            </div>
 
-        <div id="espectadores-bar" class="espectadores-bar" style="display:none;">
-          &#128065; <span id="espectadores-contador">0</span> assistindo
-        </div>
+            <div id="espectadores-bar" class="espectadores-bar" style="display:none;">
+              &#128065; <span id="espectadores-contador">0</span> assistindo
+            </div>
 
-        <div class="acoes">
-          <button id="reiniciar-velha" class="botao principal" style="display:none;">Reiniciar</button>
-          <button id="sair-sala-velha" class="botao" style="display:none;">Sair da Sala</button>
+            <div class="acoes">
+              <button id="reiniciar-velha" class="botao principal" style="display:none;">Reiniciar</button>
+              <button id="sair-sala-velha" class="botao" style="display:none;">Sair da Sala</button>
+            </div>
+          </div>
+
+          <aside class="painel-recordes">
+            <h2>Top 3 vitórias</h2>
+            <div id="lista-ranking-velha"><p class="vazio">Carregando...</p></div>
+          </aside>
         </div>
       </section>
 
@@ -434,6 +515,13 @@
             <span class="preset-label">Código da sala</span>
             <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Opcional — ex.: tela-joao" maxlength="16" />
           </div>
+          <label class="grupo-preset" style="cursor:pointer; align-items:center;">
+            <span class="preset-label" style="margin:0;">Áudio</span>
+            <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
+              <input type="checkbox" id="capturar-audio-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
+              Compartilhar áudio (aba/sistema)
+            </span>
+          </label>
           <p class="aviso-upload" id="aviso-upload"></p>
           <p class="aviso-upload" style="color:#c8baff;">
             Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba) ou
@@ -537,6 +625,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-15"></script>
+    <script src="./app.js?v=20260923-01"></script>
   </body>
 </html>

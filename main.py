@@ -73,6 +73,7 @@ class NovoRecord(BaseModel):
     nome: str
     nick: str
     tempo_segundos: int
+    avatar: Optional[str] = None
 
 
 class NovoJogoVelha(BaseModel):
@@ -80,6 +81,7 @@ class NovoJogoVelha(BaseModel):
     dificuldade: str = "facil"
     nome: str = "Anônimo"
     nick: str = "Anônimo"
+    avatar: Optional[str] = None
 
 
 class MoverJogoVelha(BaseModel):
@@ -91,6 +93,16 @@ class NovoRecordVelha(BaseModel):
     dificuldade: str
     nome: str
     nick: str
+    avatar: Optional[str] = None
+
+
+class NovaSalaSudoku(BaseModel):
+    codigo: Optional[str] = None
+    publica: bool = True
+    dificuldade: str = "facil"
+    nome: str = "Anônimo"
+    nick: str = "Anônimo"
+    avatar: Optional[str] = None
 
 
 class NovaTransmissao(BaseModel):
@@ -118,6 +130,10 @@ conexoes_lobby: List[WebSocket] = []
 _reconnect_timers: Dict[str, asyncio.Task] = {}
 RECONNECT_GRACE_SECONDS = 15
 
+# Sudoku online: código -> estado da sala (2 jogadores, mesmo puzzle)
+salas_sudoku: Dict[str, dict] = {}
+SUDOKU_SALA_SEM_WS_SEGUNDOS = 60
+
 
 # ---------------------------------------------------------------------------
 # Recordes — persistência
@@ -138,6 +154,117 @@ def carregar_recordes() -> dict:
 def salvar_recordes(recordes: dict) -> None:
     with open(ARQUIVO_RECORDES, "w", encoding="utf-8") as f:
         json.dump(recordes, f, ensure_ascii=False, indent=2)
+
+
+def eh_anonimo(nick: str) -> bool:
+    """Anônimo não entra em rankings nem conta vitórias."""
+    return (nick or "").strip().lower() in {"anônimo", "anonimo"}
+
+
+def ranking_top(registros: list, chave: str, reverse: bool, limite: int = 3) -> list:
+    filtrados = [r for r in registros if not eh_anonimo(str(r.get("nick", "")))]
+    return sorted(filtrados, key=lambda r: r.get(chave, 0), reverse=reverse)[:limite]
+
+
+def purgar_salas_sudoku_obsoletas() -> None:
+    """Remove salas de sudoku criadas mas sem WS conectado há muito tempo."""
+    agora = time.time()
+    for codigo, s in list(salas_sudoku.items()):
+        conectados = sum(1 for p in s.get("slots", {}).values() if p and p.get("ws"))
+        if conectados == 0 and agora - s.get("criado_em", agora) > SUDOKU_SALA_SEM_WS_SEGUNDOS:
+            salas_sudoku.pop(codigo, None)
+            jid = s.get("jogo_id")
+            if jid:
+                jogos.pop(jid, None)
+            log_tela("sudoku sala obsoleta removida codigo=" + codigo)
+
+
+def info_jogador_sudoku(s: dict, slot: str) -> dict:
+    p = s.get("slots", {}).get(slot) or {}
+    return {
+        "slot": slot,
+        "nick": p.get("nick", "—"),
+        "nome": p.get("nome", ""),
+        "avatar": p.get("avatar"),
+        "conectado": bool(p.get("ws")),
+        "tempo_fim": p.get("tempo_fim"),
+        "completou": p.get("completou", False),
+    }
+
+
+def estado_sudoku_para(s: dict, slot: Optional[str] = None) -> dict:
+    slots = s.get("slots", {})
+    return {
+        "tipo": "estado_sudoku",
+        "sala": s["codigo"],
+        "publica": s.get("publica", False),
+        "dificuldade": s.get("dificuldade", "facil"),
+        "fase": s.get("fase", "esperando"),
+        "meu_slot": slot,
+        "lider": s.get("lider"),
+        "placar": s.get("placar", {"p1": 0, "p2": 0}),
+        "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+        "vencedor_rodada": s.get("vencedor_rodada"),
+        "tempos_rodada": s.get("tempos_rodada", {}),
+        "revanche_de": s.get("revanche_de"),
+        "jogo_id": s.get("jogo_id") if s.get("fase") in ("jogando", "fim", "parcial") else None,
+    }
+
+
+async def broadcast_sudoku(sala: str, msg: dict):
+    s = salas_sudoku.get(sala)
+    if not s:
+        return
+    for p in s.get("slots", {}).values():
+        if p and p.get("ws"):
+            try:
+                await p["ws"].send_json(msg)
+            except Exception:
+                pass
+
+
+async def encerrar_sala_sudoku(sala: str, motivo: str):
+    s = salas_sudoku.pop(sala, None)
+    if not s:
+        return
+    jid = s.get("jogo_id")
+    if jid:
+        jogos.pop(jid, None)
+    for p in list(s.get("slots", {}).values()):
+        if p and p.get("ws"):
+            try:
+                await p["ws"].send_json({"tipo": "sala_sudoku_encerrada", "motivo": motivo})
+                await p["ws"].close()
+            except Exception:
+                pass
+    if s.get("countdown_task"):
+        try:
+            s["countdown_task"].cancel()
+        except Exception:
+            pass
+    log_tela("sudoku sala encerrada codigo=%s motivo=%s" % (sala, motivo))
+    await _notificar_salas_sudoku_lobby()
+
+
+async def _notificar_salas_sudoku_lobby():
+    purgar_salas_sudoku_obsoletas()
+    lista = []
+    for codigo, s in salas_sudoku.items():
+        if not s.get("publica"):
+            continue
+        lista.append({
+            "sala": codigo,
+            "dificuldade": s.get("dificuldade", "facil"),
+            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
+            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
+            "fase": s.get("fase", "esperando"),
+        })
+    msg = {"tipo": "salas_sudoku", "salas": lista}
+    for ws in list(conexoes_lobby):
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -327,14 +454,16 @@ def jogada_ia(tabuleiro: List[str], dificuldade: str) -> int:
 # Jogo da Velha — helpers
 # ---------------------------------------------------------------------------
 
-def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str) -> dict:
+def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str,
+                          avatar_x: Optional[str] = None) -> dict:
     jogo_id = secrets.token_urlsafe(12)
     sala = secrets.token_urlsafe(6) if modo == "multiplayer" else None
     # O criador da sala ocupa a vaga "X" e é o dono (responsável pela sala).
-    # Antes, nome_x/nick_x eram ignorados e o criador só era atribuído quando
-    # o WebSocket conectava — o nome sumia do lobby e outro jogador podia
-    # roubar a vaga X antes da conexão.
-    jogador_x = {"nome": nome_x, "nick": nick_x} if modo == "multiplayer" else None
+    jogador_x = None
+    if modo == "multiplayer":
+        jogador_x = {"nome": nome_x, "nick": nick_x}
+        if avatar_x:
+            jogador_x["avatar"] = avatar_x
     jogo = {
         "jogo_id": jogo_id,
         "modo": modo,
@@ -417,6 +546,7 @@ def limpar_sala(sala: str):
     if jogo_id and jogo_id in jogos:
         del jogos[jogo_id]
     conexoes_ws.pop(sala, None)
+    # Isso é sala da velha — não mexe em salas_sudoku (dict separado).
 
 
 async def _fechar_sala_por_dono(sala: str, jogo: dict, excluido: Optional[WebSocket] = None):
@@ -646,7 +776,7 @@ def obter_recordes(dificuldade: str):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
     recordes = carregar_recordes()
-    top3 = sorted(recordes["sudoku"].get(dificuldade, []), key=lambda r: r["tempo_segundos"])[:3]
+    top3 = ranking_top(recordes["sudoku"].get(dificuldade, []), "tempo_segundos", reverse=False)
     return {"dificuldade": dificuldade, "recordes": top3}
 
 
@@ -658,13 +788,20 @@ def salvar_novo_record(dados: NovoRecord):
         raise HTTPException(status_code=400, detail="Tempo inválido.")
 
     recordes = carregar_recordes()
-    registro = {"nome": dados.nome, "nick": dados.nick, "tempo_segundos": dados.tempo_segundos}
+    if eh_anonimo(dados.nick):
+        return {"dificuldade": dados.dificuldade,
+                "recordes": ranking_top(recordes["sudoku"].get(dados.dificuldade, []),
+                                        "tempo_segundos", reverse=False)}
+    registro = {"nome": dados.nome, "nick": dados.nick,
+                "tempo_segundos": dados.tempo_segundos}
+    if dados.avatar:
+        registro["avatar"] = dados.avatar
     recordes["sudoku"].setdefault(dados.dificuldade, []).append(registro)
     recordes["sudoku"][dados.dificuldade].sort(key=lambda r: r["tempo_segundos"])
     recordes["sudoku"][dados.dificuldade] = recordes["sudoku"][dados.dificuldade][:50]
     salvar_recordes(recordes)
 
-    top3 = recordes["sudoku"][dados.dificuldade][:3]
+    top3 = ranking_top(recordes["sudoku"][dados.dificuldade], "tempo_segundos", reverse=False)
     return {"dificuldade": dados.dificuldade, "recordes": top3}
 
 
@@ -681,7 +818,7 @@ async def novo_jogo_velha(dados: NovoJogoVelha):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
 
-    jogo = criar_novo_jogo_velha(modo, dificuldade, dados.nome, dados.nick)
+    jogo = criar_novo_jogo_velha(modo, dificuldade, dados.nome, dados.nick, dados.avatar)
     # Avisa imediatamente o lobby para os oponentes verem a sala em tempo real.
     if modo == "multiplayer":
         await transmitir_salas_lobby()
@@ -765,16 +902,98 @@ def obter_recordes_velha(dificuldade: str):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
     recordes = carregar_recordes()
-    top3 = recordes["velha"].get(dificuldade, [])[-3:]
+    brutos = recordes["velha"].get(dificuldade, [])[-10:]
+    top3 = [r for r in reversed(brutos) if not eh_anonimo(str(r.get("nick", "")))][:3]
     return {"dificuldade": dificuldade, "recordes": top3}
 
 
 @app.get("/velha/ranking")
 def ranking_vitorias():
     recordes = carregar_recordes()
-    ranking = sorted(recordes.get("velha_vitorias", []), key=lambda r: r["vitorias"], reverse=True)[:10]
+    ranking = ranking_top(recordes.get("velha_vitorias", []), "vitorias", reverse=True, limite=10)
     return {"ranking": ranking}
 
+
+# ---------------------------------------------------------------------------
+# Endpoints — Sudoku online (salas público/privado)
+# ---------------------------------------------------------------------------
+
+def _codigo_sudoku_valido(codigo: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9_-]{3,16}", codigo or ""))
+
+
+@app.get("/sudoku/salas")
+async def listar_salas_sudoku():
+    purgar_salas_sudoku_obsoletas()
+    lista = []
+    for codigo, s in salas_sudoku.items():
+        if not s.get("publica"):
+            continue
+        lista.append({
+            "sala": codigo,
+            "dificuldade": s.get("dificuldade", "facil"),
+            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
+            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
+            "fase": s.get("fase", "esperando"),
+        })
+    return {"salas": lista}
+
+
+@app.post("/sudoku/sala/novo")
+async def criar_sala_sudoku(dados: NovaSalaSudoku):
+    codigo = (dados.codigo or "").strip().lower()
+    if codigo and not _codigo_sudoku_valido(codigo):
+        raise HTTPException(status_code=400,
+                            detail="Código: 3 a 16 caracteres (letras, números, - ou _).")
+    if codigo and codigo in salas_sudoku:
+        raise HTTPException(status_code=409, detail="Já existe uma sala com esse código.")
+    dificuldade = dados.dificuldade.lower()
+    if dificuldade not in {"facil", "medio", "dificil"}:
+        raise HTTPException(status_code=400, detail="Dificuldade inválida.")
+
+    purgar_salas_sudoku_obsoletas()
+    if not codigo:
+        while True:
+            codigo = secrets.token_urlsafe(6).lower().replace("-", "").replace("_", "")[:10]
+            if not _codigo_sudoku_valido(codigo) or codigo not in salas_sudoku:
+                break
+
+    solucao = criar_solucao()
+    puzzle = criar_puzzle(solucao, dificuldade)
+    jogo_id = secrets.token_urlsafe(12)
+    jogos[jogo_id] = {"solucao": solucao, "puzzle": puzzle, "dificuldade": dificuldade}
+
+    salas_sudoku[codigo] = {
+        "codigo": codigo,
+        "publica": bool(dados.publica),
+        "dificuldade": dificuldade,
+        "jogo_id": jogo_id,
+        "grade": puzzle,
+        "lider": "p1",
+        "fase": "esperando",
+        "slots": {
+            "p1": {
+                "ws": None, "nome": dados.nome, "nick": dados.nick,
+                "avatar": dados.avatar, "completou": False, "tempo_fim": None,
+            },
+            "p2": None,
+        },
+        "placar": {"p1": 0, "p2": 0},
+        "vencedor_rodada": None,
+        "tempos_rodada": {},
+        "revanche_de": None,
+        "countdown_task": None,
+        "criado_em": time.time(),
+    }
+    log_tela("sudoku sala criada codigo=%s publica=%s dif=%s" % (
+        codigo, bool(dados.publica), dificuldade))
+    await _notificar_salas_sudoku_lobby()
+    return {"sala": codigo, "publica": bool(dados.publica), "dificuldade": dificuldade}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints — Jogo da Velha
+# ---------------------------------------------------------------------------
 
 @app.post("/velha/recordes")
 def salvar_record_velha(dados: NovoRecordVelha):
@@ -783,24 +1002,33 @@ def salvar_record_velha(dados: NovoRecordVelha):
 
     recordes = carregar_recordes()
     registro = {"nome": dados.nome, "nick": dados.nick}
-    recordes["velha"].setdefault(dados.dificuldade, []).append(registro)
-    recordes["velha"][dados.dificuldade] = recordes["velha"][dados.dificuldade][-50:]
+    if dados.avatar:
+        registro["avatar"] = dados.avatar
 
-    vitorias = recordes.get("velha_vitorias", [])
-    encontrado = False
-    for v in vitorias:
-        if v["nick"] == dados.nick and v["nome"] == dados.nome:
-            v["vitorias"] = v.get("vitorias", 0) + 1
-            encontrado = True
-            break
-    if not encontrado:
-        vitorias.append({"nick": dados.nick, "nome": dados.nome, "vitorias": 1})
-    recordes["velha_vitorias"] = sorted(vitorias, key=lambda r: r["vitorias"], reverse=True)[:50]
+    if not eh_anonimo(dados.nick):
+        recordes["velha"].setdefault(dados.dificuldade, []).append(registro)
+        recordes["velha"][dados.dificuldade] = recordes["velha"][dados.dificuldade][-50:]
 
-    salvar_recordes(recordes)
+        vitorias = recordes.get("velha_vitorias", [])
+        encontrado = False
+        for v in vitorias:
+            if v["nick"] == dados.nick and v["nome"] == dados.nome:
+                v["vitorias"] = v.get("vitorias", 0) + 1
+                if dados.avatar:
+                    v["avatar"] = dados.avatar
+                encontrado = True
+                break
+        if not encontrado:
+            novo = {"nick": dados.nick, "nome": dados.nome, "vitorias": 1}
+            if dados.avatar:
+                novo["avatar"] = dados.avatar
+            vitorias.append(novo)
+        recordes["velha_vitorias"] = sorted(vitorias, key=lambda r: r["vitorias"], reverse=True)[:50]
+        salvar_recordes(recordes)
 
-    top3 = recordes["velha"].get(dados.dificuldade, [])[-3:]
-    ranking = sorted(recordes.get("velha_vitorias", []), key=lambda r: r["vitorias"], reverse=True)[:10]
+    top3 = ranking_top(recordes["velha"].get(dados.dificuldade, [])[-10:],
+                       "vitorias", reverse=True, limite=3)
+    ranking = ranking_top(recordes.get("velha_vitorias", []), "vitorias", reverse=True, limite=10)
     return {"dificuldade": dados.dificuldade, "recordes": top3, "ranking": ranking}
 
 
@@ -1055,7 +1283,7 @@ def log_tela(mensagem: str) -> None:
 
 
 def info_transmissao(sala: str, transmissao: dict) -> dict:
-    return {
+    info = {
         "sala": sala,
         "nick": transmissao["host_nick"],
         "resolucao": transmissao["resolucao"],
@@ -1063,6 +1291,9 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
         "espectadores": len(transmissao["viewers"]),
         "host_conectado": transmissao.get("host_ws") is not None,
     }
+    if transmissao.get("relay_codec"):
+        info["codec"] = transmissao["relay_codec"]
+    return info
 
 
 def purgar_transmissoes_obsoletas() -> None:
@@ -1255,12 +1486,27 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
 
             if tipo == "ping":
                 continue
+            if tipo == "relay_codec":
+                # Host escolheu o codec (H.264/VP8) — viewers precisam saber.
+                codec = str(dados.get("codec") or "vp8")
+                transmissao["relay_codec"] = codec
+                log_tela("relay_codec sala=%s codec=%s" % (sala, codec))
+                for ws in list(transmissao.get("relay_ws", {}).values()):
+                    try:
+                        await ws.send_json({"tipo": "relay_codec", "codec": codec})
+                    except Exception:
+                        pass
+                continue
             if tipo in {"relay_pronto", "relay_erro"}:
                 # Host confirma que o encoder de relay ligou (ou falhou).
                 log_tela("%s sala=%s %s" % (tipo, sala, dados.get("mensagem", "")))
+                payload = {"tipo": tipo, "mensagem": dados.get("mensagem")}
+                if dados.get("codec"):
+                    payload["codec"] = dados["codec"]
+                    transmissao["relay_codec"] = str(dados["codec"])
                 for ws in list(transmissao.get("relay_ws", {}).values()):
                     try:
-                        await ws.send_json({"tipo": tipo, "mensagem": dados.get("mensagem")})
+                        await ws.send_json(payload)
                     except Exception:
                         pass
                 continue
@@ -1353,6 +1599,11 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
     await _notificar_total(transmissao)
     if eh_relay:
         await _notificar_relay_total(transmissao)
+        if transmissao.get("relay_codec"):
+            try:
+                await websocket.send_json({"tipo": "relay_codec", "codec": transmissao["relay_codec"]})
+            except Exception:
+                pass
 
     host_ws = transmissao.get("host_ws")
     if host_ws:
@@ -1449,6 +1700,246 @@ async def ws_tela(websocket: WebSocket, sala: str):
         await _ws_tela_host(websocket, sala, transmissao, nick)
     else:
         await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte)
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Sudoku online
+# ---------------------------------------------------------------------------
+
+async def _iniciar_contagem_sudoku(sala: str):
+    s = salas_sudoku.get(sala)
+    if not s or s.get("fase") not in ("esperando", "contagem"):
+        return
+    s["fase"] = "contagem"
+    for n in (3, 2, 1, 0):
+        s = salas_sudoku.get(sala)
+        if not s or s.get("fase") != "contagem":
+            return
+        await broadcast_sudoku(sala, {"tipo": "contagem", "n": n})
+        if n > 0:
+            await asyncio.sleep(1)
+    s = salas_sudoku.get(sala)
+    if not s or s.get("fase") != "contagem":
+        return
+    s["fase"] = "jogando"
+    s["vencedor_rodada"] = None
+    s["tempos_rodada"] = {}
+    s["revanche_de"] = None
+    for p in s.get("slots", {}).values():
+        if p:
+            p["completou"] = False
+            p["tempo_fim"] = None
+    for slot in ("p1", "p2"):
+        p = s.get("slots", {}).get(slot)
+        if not p:
+            continue
+        try:
+            if p.get("ws"):
+                await p["ws"].send_json({
+                    "tipo": "inicio_sudoku",
+                    "jogo_id": s["jogo_id"],
+                    "grade": s["grade"],
+                    "dificuldade": s["dificuldade"],
+                    "meu_slot": slot,
+                })
+        except Exception:
+            pass
+
+
+@app.websocket("/ws/sudoku/{sala}")
+async def ws_sudoku(websocket: WebSocket, sala: str):
+    await websocket.accept()
+    query = websocket.query_params
+    nome = query.get("nome", "Anônimo")
+    nick = query.get("nick", "Anônimo")
+    avatar = query.get("avatar") or None
+
+    s = salas_sudoku.get(sala)
+    if not s:
+        await websocket.send_json({"tipo": "erro", "mensagem": "Sala não encontrada."})
+        await websocket.close()
+        return
+
+    slot = None
+    # Reconexão: mesmo nick em slot sem WS vivo.
+    for cand in ("p1", "p2"):
+        p = s["slots"].get(cand)
+        if p and not p.get("ws") and p.get("nick") == nick:
+            slot = cand
+            break
+
+    if slot is None:
+        p1 = s["slots"].get("p1")
+        p2 = s["slots"].get("p2")
+        p1_live = bool(p1 and p1.get("ws"))
+        p2_live = bool(p2 and p2.get("ws"))
+        if p1_live and p2_live:
+            await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
+            await websocket.close()
+            return
+        if not p1_live:
+            slot = "p1"
+            if p1 is None:
+                s["slots"]["p1"] = {
+                    "ws": None, "nome": nome, "nick": nick, "avatar": avatar,
+                    "completou": False, "tempo_fim": None,
+                }
+        else:
+            slot = "p2"
+            if p2 is None:
+                s["slots"]["p2"] = {
+                    "ws": None, "nome": nome, "nick": nick, "avatar": avatar,
+                    "completou": False, "tempo_fim": None,
+                }
+
+    if s["slots"][slot]:
+        s["slots"][slot].update({
+            "nome": nome, "nick": nick, "avatar": avatar,
+        })
+
+    s["slots"][slot]["ws"] = websocket
+
+    await websocket.send_json(estado_sudoku_para(s, slot))
+    await _notificar_salas_sudoku_lobby()
+
+    iniciou_contagem = False
+    if (s.get("fase") == "esperando"
+            and s["slots"]["p1"] and s["slots"]["p1"].get("ws")
+            and s["slots"]["p2"] and s["slots"]["p2"].get("ws")):
+        s["countdown_task"] = asyncio.create_task(_iniciar_contagem_sudoku(sala))
+        iniciou_contagem = True
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                dados = json.loads(raw)
+            except Exception:
+                continue
+            tipo = dados.get("tipo")
+            s = salas_sudoku.get(sala)
+            if not s:
+                break
+            if s.get("slots", {}).get(slot, {}) is None:
+                break
+
+            if tipo == "ping":
+                try:
+                    await websocket.send_json({"tipo": "pong"})
+                except Exception:
+                    pass
+                continue
+
+            if tipo == "concluiu":
+                if s.get("fase") not in ("jogando", "parcial"):
+                    continue
+                p = s["slots"].get(slot)
+                if not p or p.get("completou"):
+                    continue
+                p["completou"] = True
+                p["tempo_fim"] = int(dados.get("tempo") or 0)
+                s.setdefault("tempos_rodada", {})[slot] = p["tempo_fim"]
+                if not s.get("vencedor_rodada"):
+                    s["vencedor_rodada"] = slot
+                    s["placar"][slot] = s["placar"].get(slot, 0) + 1
+                    s["fase"] = "parcial"
+                    await broadcast_sudoku(sala, {
+                        "tipo": "vencedor_rodada",
+                        "slot": slot,
+                        "nick": p["nick"],
+                        "tempo": p["tempo_fim"],
+                        "placar": s["placar"],
+                        "todos": bool((s["slots"]["p1"] or {}).get("completou", False)
+                                      and (s["slots"]["p2"] or {}).get("completou", False)),
+                    })
+                ambos = bool((s["slots"]["p1"] or {}).get("completou", False)
+                             and (s["slots"]["p2"] or {}).get("completou", False))
+                if ambos:
+                    await broadcast_sudoku(sala, {
+                        "tipo": "ambos_acabaram",
+                        "tempos": s["tempos_rodada"],
+                        "placar": s["placar"],
+                    })
+                    # Sem revanche pendente → encerra.
+                    if not s.get("revanche_de"):
+                        await encerrar_sala_sudoku(sala, "ambos_acabaram")
+                        break
+                else:
+                    await websocket.send_json(estado_sudoku_para(s, slot))
+                continue
+
+            if tipo == "pedir_revanche":
+                s["revanche_de"] = slot
+                outro = "p2" if slot == "p1" else "p1"
+                p_outro = s["slots"].get(outro) or {}
+                await broadcast_sudoku(sala, {
+                    "tipo": "revanche_pedida",
+                    "por": s["slots"][slot]["nick"],
+                    "por_slot": slot,
+                    "para": p_outro.get("nick"),
+                    "placar": s["placar"],
+                })
+                continue
+
+            if tipo == "responder_revanche":
+                aceitar = bool(dados.get("aceitar"))
+                if aceitar and s.get("revanche_de"):
+                    s["fase"] = "esperando"
+                    s["revanche_de"] = None
+                    for p in s.get("slots", {}).values():
+                        if p:
+                            p["completou"] = False
+                            p["tempo_fim"] = None
+                    # novo puzzle para a próxima rodada
+                    sol = criar_solucao()
+                    puzzle = criar_puzzle(sol, s["dificuldade"])
+                    jid = secrets.token_urlsafe(12)
+                    jogos[jid] = {"solucao": sol, "puzzle": puzzle, "dificuldade": s["dificuldade"]}
+                    s["jogo_id"] = jid
+                    s["grade"] = puzzle
+                    await broadcast_sudoku(sala, {"tipo": "revanche_aceita"})
+                    s["countdown_task"] = asyncio.create_task(_iniciar_contagem_sudoku(sala))
+                else:
+                    await broadcast_sudoku(sala, {"tipo": "revanche_recusada"})
+                    await encerrar_sala_sudoku(sala, "revanche_recusada")
+                    break
+                continue
+
+            if tipo == "parar":
+                await encerrar_sala_sudoku(sala, "parou")
+                break
+
+            if tipo == "sair":
+                # Líder saiu → sala encerra. Se não, só desconecta o slot.
+                if s.get("lider") == slot:
+                    await encerrar_sala_sudoku(sala, "lider_saiu")
+                    break
+                s["slots"][slot] = None
+                await broadcast_sudoku(sala, estado_sudoku_para(s, slot))
+                if s.get("fase") not in ("jogando", "contagem"):
+                    await encerrar_sala_sudoku(sala, "saiu_antes_de_jogar")
+                    break
+                continue
+
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        s = salas_sudoku.get(sala)
+        if s and s.get("slots", {}).get(slot, {}) is not None and \
+                s["slots"][slot] and s["slots"][slot].get("ws") is websocket:
+            s["slots"][slot]["ws"] = None
+            # Líder desconectou → encerra (com pequena tolerância? sem: pede saída)
+            if s.get("lider") == slot:
+                await encerrar_sala_sudoku(sala, "lider_desconectou")
+            else:
+                await broadcast_sudoku(sala, estado_sudoku_para(s, slot))
+                # Oponente caiu antes do fim da rodada → encerra para não travar
+                if s.get("fase") == "jogando":
+                    await encerrar_sala_sudoku(sala, "oponente_desconectou")
+                elif s.get("fase") == "esperando":
+                    # mantém sala aberta para novo join do p2? líder ainda aí.
+                    pass
+                await _notificar_salas_sudoku_lobby()
 
 
 # ---------------------------------------------------------------------------

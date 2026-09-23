@@ -61,6 +61,8 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .recorde-info strong { color: #f4f6ff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recorde-info small { color: #aeb2c7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recorde-tempo { color: #85e0ae; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recorde-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #34275d; border: 1px solid #4b3b78; }
+.recorde-avatar.placeholder { display: grid; place-items: center; color: #c8baff; font-weight: bold; font-size: 13px; }
 
 /* Jogo da Velha */
 .modo-selecao { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
