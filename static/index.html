@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260922-14" />
+    <link rel="stylesheet" href="./style.css?v=20260922-15" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -146,7 +146,7 @@
       .video-transmissao.tam-m { max-width: 900px; max-height: 54vh; margin-left: auto; margin-right: auto; }
       .video-transmissao.tam-g { max-width: 100%; max-height: 72vh; }
       .video-transmissao.tam-full { max-width: 100%; max-height: calc(100vh - 40px); border-radius: 0; }
-      #controles-transmissao { display: none; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px 12px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
+      #controles-transmissao { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px 12px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
       #controles-transmissao .grupo-preset { flex: 1; min-width: 140px; margin: 0; }
       #controles-transmissao .grupo-preset .preset-opcoes { display: flex; gap: 6px; }
       #controles-transmissao .grupo-preset .botao-preset { flex: 1; padding: 6px 0; font-size: 12px; }
@@ -435,6 +435,10 @@
             <input type="text" id="codigo-custom-input" class="codigo-custom" placeholder="Opcional — ex.: tela-joao" maxlength="16" />
           </div>
           <p class="aviso-upload" id="aviso-upload"></p>
+          <p class="aviso-upload" style="color:#c8baff;">
+            Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba) ou
+            <strong>Share system audio</strong> (tela). Sem isso o Chrome não envia som.
+          </p>
           <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
         </div>
 
@@ -533,6 +537,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-14"></script>
+    <script src="./app.js?v=20260922-15"></script>
   </body>
 </html>

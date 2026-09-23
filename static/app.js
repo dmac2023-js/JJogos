@@ -1066,10 +1066,11 @@ async function diagnosticarRelaySemVideo() {
   }
 }
 
+// Bitrates altos = imagem nítida. O relay fragmenta em 12KB, então dá pra ir alto.
 var TELA_PRESETS = {
-  "480p": { largura: 854, altura: 480, bitrate: 800000 },
-  "720p": { largura: 1280, altura: 720, bitrate: 1800000 },
-  "1080p": { largura: 1920, altura: 1080, bitrate: 3600000 },
+  "480p": { largura: 854, altura: 480, bitrate: 2500000 },
+  "720p": { largura: 1280, altura: 720, bitrate: 6000000 },
+  "1080p": { largura: 1920, altura: 1080, bitrate: 12000000 },
 };
 var RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
@@ -1126,17 +1127,17 @@ function mensagemTransmissao(texto, tipo) {
 
 function bitrateEfetivo() {
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  return telaFps === 60 ? Math.round(base * 1.6) : base;
+  return telaFps === 60 ? Math.round(base * 1.5) : base;
 }
 
-// Relay da Activity vai em JSON: bitrate maior = melhor qualidade.
-// Fragmentação em 12KB protege contra limite de mensagem do proxy.
+// Relay: usa o preset cheio (não limita) — fragmentação em 12KB cabe no proxy.
 function bitrateRelay() {
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  var teto = telaResolucao === "1080p" ? 6000000
-    : telaResolucao === "720p" ? 3500000 : 1800000;
+  // Teto generoso só pra não estourar CPU em 1080p60.
+  var teto = telaResolucao === "1080p" ? 15000000
+    : telaResolucao === "720p" ? 8000000 : 4000000;
   var b = Math.min(base, teto);
-  return telaFps === 60 ? Math.round(b * 1.5) : b;
+  return telaFps === 60 ? Math.round(b * 1.4) : b;
 }
 
 function atualizarAvisoUpload() {
@@ -1227,6 +1228,7 @@ async function trocarJanelaTela() {
         noiseSuppression: false,
         autoGainControl: false,
       },
+      systemAudio: "include",
     });
   } catch (e) {
     mensagemTransmissao("Troca de programa/janela cancelada.");
@@ -1719,9 +1721,8 @@ async function iniciarEncoderRelay() {
       height: canvas.height,
       framerate: telaFps,
       bitrate: bitrateRelay(),
-      latencyMode: "realtime",
-      // Prioriza latência sobre qualidade de referência (menos buffer).
-      contentHint: "motion",
+      // "detail" mantém texto/traços nítidos (motion borrifa).
+      contentHint: "detail",
     });
   } catch (e) {
     // contentHint pode não existir em browsers antigos — reconfigura sem.
@@ -1732,7 +1733,6 @@ async function iniciarEncoderRelay() {
         height: canvas.height,
         framerate: telaFps,
         bitrate: bitrateRelay(),
-        latencyMode: "realtime",
       });
     } catch (e2) {
       enviarTela({ tipo: "relay_erro", mensagem: "Falha ao configurar encoder: " + e2.message });
@@ -1770,9 +1770,31 @@ async function iniciarEncoderRelay() {
     }
     ticksSemVideo = 0;
     // Fila maior = menos frames descartados em picos (qualidade/fps).
-    if (relayEncoder.encodeQueueSize > 16) return;
+    if (relayEncoder.encodeQueueSize > 24) return;
     var frame;
     try {
+      // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        var vw = video.videoWidth || canvas.width;
+        var vh = video.videoHeight || canvas.height;
+        // Limita ao preset (não manda acima do combinado).
+        var maxW = preset.largura;
+        var maxH = preset.altura;
+        var escala = Math.min(1, maxW / vw, maxH / vh);
+        canvas.width = Math.round(vw * escala);
+        canvas.height = Math.round(vh * escala);
+        if (relayEncoder.state === "configured") {
+          // Reconfigura o encoder com a resolução real.
+          relayEncoder.configure({
+            codec: "vp8",
+            width: canvas.width,
+            height: canvas.height,
+            framerate: telaFps,
+            bitrate: bitrateRelay(),
+            contentHint: "detail",
+          });
+        }
+      }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       frame = new VideoFrame(canvas, { timestamp: tsUs });
     } catch (e) {
@@ -1782,8 +1804,8 @@ async function iniciarEncoderRelay() {
     }
     tsUs += Math.round(1000000 / telaFps);
     var agora = performance.now();
-    // Keyframe a cada 500ms: recovery mais rápido + viewer entra mais rápido.
-    var forcar = relayForcarKey || (agora - ultimoKey) >= 500;
+    // Keyframe a cada 1s (500ms desperdiça bitrate que seria de detalhe).
+    var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
     if (forcar) { ultimoKey = agora; relayForcarKey = false; }
     try {
       relayEncoder.encode(frame, { keyFrame: forcar });
@@ -1934,10 +1956,20 @@ async function iniciarTransmissaoTela() {
         noiseSuppression: false,
         autoGainControl: false,
       },
+      // Chrome: habilita a opção "Compartilhar áudio do sistema"/tab no picker.
+      systemAudio: "include",
     });
   } catch (e) {
     mensagemTela("Captura cancelada ou negada.", "erro");
     return;
+  }
+
+  // Avisa se o Chrome não devolveu áudio (usuário não marcou a opção).
+  if (!telaStream.getAudioTracks().length) {
+    mensagemTela(
+      "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
+      "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
+      "Você pode recapturar com Trocar janela depois.", "erro");
   }
 
   var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : "Anônimo";
