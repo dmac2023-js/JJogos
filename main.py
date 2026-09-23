@@ -1161,10 +1161,33 @@ async def _notificar_total(transmissao: dict):
 
 async def _notificar_relay_total(transmissao: dict):
     host = transmissao.get("host_ws")
+    total = len(transmissao.get("relay_ws", {}))
     if host:
         try:
-            await host.send_json({"tipo": "relay_total",
-                                  "total": len(transmissao.get("relay_ws", {}))})
+            await host.send_json({"tipo": "relay_total", "total": total})
+        except Exception:
+            pass
+    # Se em 12s não chegar nenhum quadro com viewer na Activity, o host está
+    # rodando JS antigo (aba cacheada) — avisa o viewer com a ação concreta.
+    if (total > 0 and host and not transmissao.get("_relay_bytes_log")
+            and not transmissao.get("_relay_aviso_agendado")):
+        transmissao["_relay_aviso_agendado"] = True
+        asyncio.ensure_future(_avisar_relay_sem_quadros(transmissao))
+
+
+async def _avisar_relay_sem_quadros(transmissao: dict):
+    await asyncio.sleep(12)
+    if transmissao.get("_relay_bytes_log") or not transmissao.get("relay_ws"):
+        return
+    log_tela("relay sem quadros apos 12s (host possivelmente com JS antigo) sala=%s" %
+             next((s for s, t in salas_tela.items() if t is transmissao), "?"))
+    for ws in list(transmissao.get("relay_ws", {}).values()):
+        try:
+            await ws.send_json({
+                "tipo": "relay_erro",
+                "mensagem": "Quem transmite está com o site desatualizado. Peça para ele "
+                            "atualizar a aba com Ctrl+F5 e transmitir de novo.",
+            })
         except Exception:
             pass
 
@@ -1385,4 +1408,7 @@ async def servir_estatico(caminho: str = ""):
     arquivo = PASTA_STATIC / caminho
     if caminho and arquivo.is_file():
         return FileResponse(arquivo)
-    return FileResponse(PASTA_STATIC / "index.html")
+    # HTML nunca fica no cache: aba antiga do transmissor sem o encoder novo
+    # era a causa de "host conectou mas não chega vídeo" na Activity.
+    return FileResponse(PASTA_STATIC / "index.html",
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
