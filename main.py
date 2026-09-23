@@ -1266,15 +1266,26 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                 continue
             if tipo == "quadro":
                 # Vídeo VP8 em JSON base64 — o proxy do Discord não repassa
-                # frame binário no WS da Activity.
+                # frame binário no WS da Activity. Mensagens grandes podem cair:
+                # fan-out é feito por parte (host já fragmenta em n/i).
                 if not transmissao.get("_relay_bytes_log"):
                     transmissao["_relay_bytes_log"] = True
-                    log_tela("primeiro quadro json do relay sala=%s" % sala)
+                    log_tela("primeiro quadro json do relay sala=%s tam=%d" % (sala, len(text)))
+                enviados = 0
                 for ws in list(transmissao.get("relay_ws", {}).values()):
                     try:
                         await ws.send_text(text)
-                    except Exception:
-                        pass
+                        enviados += 1
+                    except Exception as e:
+                        log_tela("falha ao enviar quadro sala=%s tam=%d err=%s" % (
+                            sala, len(text), str(e)[:120]))
+                if enviados and not transmissao.get("_relay_send_log"):
+                    transmissao["_relay_send_log"] = True
+                    log_tela("quadro encaminhado ao viewer sala=%s n=%d" % (sala, enviados))
+                continue
+            if tipo == "quadro_rx":
+                # Viewer da Activity confirmou que o quadro chegou no JS.
+                log_tela("viewer recebeu quadro sala=%s" % sala)
                 continue
             if tipo == "sair":
                 break
@@ -1352,6 +1363,9 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
             tipo = dados.get("tipo")
 
             if tipo == "ping":
+                continue
+            if tipo == "quadro_rx":
+                log_tela("viewer recebeu quadro sala=%s" % sala)
                 continue
             if tipo == "sair":
                 break

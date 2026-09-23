@@ -1004,6 +1004,8 @@ var relayHostOk = false;
 var relayEncoderVisibilityListener = null;
 var relayTemKey = false;
 var relayQuadros = 0;
+var relayRxEnviado = false;
+var relayPartes = {};
 
 // Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
 // real da sala em vez de adivinhar.
@@ -1081,6 +1083,14 @@ function mensagemTransmissao(texto, tipo) {
 function bitrateEfetivo() {
   var base = TELA_PRESETS[telaResolucao].bitrate;
   return telaFps === 60 ? Math.round(base * 1.6) : base;
+}
+
+// Relay da Activity vai em JSON: bitrate menor => quadros menores =>
+// menos chance do proxy do Discord derrubar a mensagem.
+function bitrateRelay() {
+  var base = TELA_PRESETS[telaResolucao].bitrate;
+  return Math.min(base, telaResolucao === "1080p" ? 1400000
+    : telaResolucao === "720p" ? 850000 : 450000);
 }
 
 function atualizarAvisoUpload() {
@@ -1223,6 +1233,8 @@ function iniciarDecoderRelay(resolucao) {
   canvas.width = dims[0];
   canvas.height = dims[1];
   relayQuadros = 0;
+  relayRxEnviado = false;
+  relayPartes = {};
   if (typeof VideoDecoder === "undefined") {
     mensagemTransmissao("Seu cliente não suporta o modo de vídeo compatível.", "erro");
     return;
@@ -1289,6 +1301,10 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
   if (ehKey) relayTemKey = true;
   if (relayDecoder.decodeQueueSize > 30 && !ehKey) return;
   relayQuadros++;
+  if (!relayRxEnviado) {
+    relayRxEnviado = true;
+    enviarTela({ tipo: "quadro_rx" });
+  }
   try {
     relayDecoder.decode({
       type: ehKey ? "key" : "delta",
@@ -1306,6 +1322,38 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
         mensagemTransmissao("Quadros chegam (" + relayQuadros + "), mas o vídeo não foi exibido. Recarregue a Activity.", "erro");
       }
     }, 8000);
+  }
+}
+
+// Monta quadro fragmentado (proxy do Discord cai com mensagem única grande).
+function montarQuadroRelay(dados) {
+  if (!dados || !dados.d) return;
+  if (!dados.n || dados.n <= 1) {
+    processarParteRelay(dados.t, dados);
+    return;
+  }
+  var t = dados.t;
+  var buf = relayPartes[t];
+  if (!buf) {
+    buf = relayPartes[t] = { k: dados.k, n: dados.n, recebidas: 0, partes: [] };
+  }
+  if (buf.partes[dados.i]) return;
+  buf.partes[dados.i] = dados.d;
+  buf.recebidas++;
+  if (buf.recebidas >= buf.n) {
+    delete relayPartes[t];
+    processarParteRelay(t, { k: buf.k, d: buf.partes.join("") });
+  }
+}
+
+function processarParteRelay(t, dados) {
+  try {
+    var bin = atob(dados.d);
+    var payload = new Uint8Array(bin.length);
+    for (var qi = 0; qi < bin.length; qi++) payload[qi] = bin.charCodeAt(qi);
+    decodificarRelayFrame(dados.k === 1, t >>> 0, payload);
+  } catch (e) {
+    console.warn("quadro relay:", e);
   }
 }
 
@@ -1342,17 +1390,26 @@ async function iniciarEncoderRelay() {
         var dados = new Uint8Array(chunk.byteLength);
         chunk.copyTo(dados);
         // O proxy do Discord NÃO repassa frame binário no WS da Activity —
-        // manda como JSON base64 (texto), que sempre atravessa.
+        // manda como JSON base64 em partes de ~12KB (mensagem única grande cai).
         var s = "";
         for (var i = 0; i < dados.length; i += 0x8000) {
           s += String.fromCharCode.apply(null, dados.subarray(i, i + 0x8000));
         }
-        enviarTela({
-          tipo: "quadro",
-          k: chunk.type === "key" ? 1 : 0,
-          t: chunk.timestamp,
-          d: btoa(s),
-        });
+        var b64 = btoa(s);
+        var k = chunk.type === "key" ? 1 : 0;
+        var t = chunk.timestamp;
+        var TAM = 12000;
+        if (b64.length <= TAM) {
+          enviarTela({ tipo: "quadro", k: k, t: t, d: b64 });
+        } else {
+          var n = Math.ceil(b64.length / TAM);
+          for (var pi = 0; pi < n; pi++) {
+            enviarTela({
+              tipo: "quadro", k: k, t: t, n: n, i: pi,
+              d: b64.slice(pi * TAM, (pi + 1) * TAM),
+            });
+          }
+        }
         if (!relayProntoEnviado) {
           relayProntoEnviado = true;
           enviarTela({ tipo: "relay_pronto" });
@@ -1375,7 +1432,7 @@ async function iniciarEncoderRelay() {
       width: canvas.width,
       height: canvas.height,
       framerate: telaFps,
-      bitrate: bitrateEfetivo(),
+      bitrate: bitrateRelay(),
       latencyMode: "realtime",
     });
   } catch (e) {
@@ -1930,14 +1987,7 @@ function processarMensagemTela(dados) {
     case "quadro":
       // Vídeo do relay em JSON base64 (proxy do Discord não repassa binário).
       if (telaModoRelay && !telaEhHost && dados.d) {
-        try {
-          var bin = atob(dados.d);
-          var payload = new Uint8Array(bin.length);
-          for (var qi = 0; qi < bin.length; qi++) payload[qi] = bin.charCodeAt(qi);
-          decodificarRelayFrame(dados.k === 1, dados.t >>> 0, payload);
-        } catch (e) {
-          console.warn("quadro relay:", e);
-        }
+        montarQuadroRelay(dados);
       }
       break;
     case "relay_pronto":
