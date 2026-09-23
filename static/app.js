@@ -1740,6 +1740,9 @@ var telaPeers = {}; // host: viewer_id -> RTCPeerConnection
 var telaPeerViewer = null; // viewer: 1 conexão com o host
 var telaResolucao = "720p";
 var telaFps = 30;
+// "tela" = getDisplayMedia; "tela_legado" = getUserMedia(screen); "camera" = celular sem tela.
+var telaFonte = "tela";
+var cameraFacing = "environment";
 var telaOfertaTimer = null;
 // Relay de vídeo (Activity não suporta WebRTC — docs do Discord).
 var telaModoRelay = false;
@@ -1774,6 +1777,10 @@ var relayAudioGain = null;
 var relayAudioProxima = 0;
 var relayAudioCfgOk = false;
 var relayAudioMudoHost = false;
+var relayAudioSr = 48000;
+var relayAudioCh = 2;
+var relayAudioChavePendente = true;
+var relayAudioCfgDecoder = { sr: 0, ch: 0 };
 
 function logRelayDiag(etapa, extra) {
   var msg = { tipo: "relay_diag", etapa: etapa };
@@ -1943,6 +1950,7 @@ function definirResolucao(valor) {
     });
   });
   atualizarAvisoUpload();
+  mostrarBadgeQualidade(telaResolucao, telaFps, null);
   if (telaEhHost && telaStream) {
     aplicarQualidadeNosViewers();
     mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
@@ -1958,6 +1966,7 @@ function definirFps(valor) {
     });
   });
   atualizarAvisoUpload();
+  mostrarBadgeQualidade(telaResolucao, telaFps, null);
   if (telaEhHost && telaStream) {
     // Não applyConstraints no meio da captura (congela a track no Chrome).
     // O timer do encoder lê telaFps ao vivo; só reconfigura/reinicia o encoder.
@@ -1967,28 +1976,21 @@ function definirFps(valor) {
   }
 }
 
-// Pede nova captura (o seletor do navegador permite trocar o programa/janela)
-// e troca a track ao vivo sem derrubar as conexões WebRTC.
+// Pede nova captura (o seletor do navegador permite trocar o programa/janela;
+// no celular troca a câmera frente/verso) e troca a track ao vivo.
 async function trocarJanelaTela() {
   if (!telaEhHost || !telaStream) return;
-  var preset = TELA_PRESETS[telaResolucao];
+  if (telaFonte === "camera") {
+    cameraFacing = cameraFacing === "environment" ? "user" : "environment";
+  }
+  var querAudio = true;
+  var chkAudio = document.querySelector("#capturar-audio-tela");
+  if (chkAudio) querAudio = !!chkAudio.checked;
   var novo;
   try {
-    novo = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        width: { ideal: preset.largura },
-        height: { ideal: preset.altura },
-        frameRate: { ideal: telaFps, max: telaFps },
-      },
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      },
-      systemAudio: "include",
-    });
+    novo = await capturarMidiaTransmissao(querAudio);
   } catch (e) {
-    mensagemTransmissao("Troca de programa/janela cancelada.");
+    mensagemTransmissao("Troca cancelada.");
     return;
   }
 
@@ -2022,7 +2024,15 @@ async function trocarJanelaTela() {
       mensagemTela("Transmissão encerrada: você parou a captura de tela.", "erro");
     });
     aplicarQualidadeNosViewers();
-    mensagemTransmissao("Programa/janela trocado. Qualidade " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+    var btnTrocar = document.querySelector("#trocar-janela");
+    if (btnTrocar) {
+      btnTrocar.textContent = telaFonte === "camera"
+        ? "Trocar câmera (frente/verso)"
+        : "Trocar programa/janela da transmissão";
+    }
+    mensagemTransmissao(
+      "Fonte trocada (" + rotuloFonteCaptura() + "). Qualidade " + telaResolucao + " " + telaFps + "fps.",
+      "sucesso");
   }
 
   if (trocas.length === 0) {
@@ -2058,7 +2068,9 @@ function iniciarDecoderRelay(resolucao, codec) {
   relayCfgOk = false;
   relaySemOutput = 0;
   ultimoErroRelay = "";
-  iniciarDecoderAudioRelay();
+  iniciarDecoderAudioRelay(relayAudioSr, relayAudioCh);
+  relayAudioChavePendente = true;
+  mostrarBadgeQualidade(resolucao, null, relayCodecAtual);
   if (typeof VideoDecoder === "undefined") {
     ultimoErroRelay = "sem VideoDecoder";
     logRelayDiag("sem_videodecoder");
@@ -2191,7 +2203,10 @@ function iniciarEncoderAudioRelay() {
   pararEncoderAudioRelay();
   if (!telaEhHost || !telaStream) return;
   var track = telaStream.getAudioTracks()[0];
-  if (!track) return;
+  if (!track) {
+    logRelayDiag("audio_sem_track");
+    return;
+  }
   if (typeof MediaStreamTrackProcessor === "undefined" || typeof AudioEncoder === "undefined") {
     logRelayDiag("sem_audio_encoder");
     return;
@@ -2216,7 +2231,14 @@ function iniciarEncoderAudioRelay() {
         for (var i = 0; i < bytes.length; i += 0x8000) {
           s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
         }
-        enviarTela({ tipo: "audio", t: chunk.timestamp, d: btoa(s) });
+        enviarTela({
+          tipo: "audio",
+          t: chunk.timestamp,
+          k: chunk.type === "key" ? 1 : 0,
+          sr: relayAudioSr,
+          ch: relayAudioCh,
+          d: btoa(s),
+        });
       } catch (e) { /* ignore */ }
     },
     error: function (e) {
@@ -2230,15 +2252,23 @@ function iniciarEncoderAudioRelay() {
         if (r.done) break;
         var frame = r.value;
         if (!cfgFeita && relayAudioEncoder) {
+          // Trava em 48k/estéreo quando o track permite — decoder fixo neles.
+          relayAudioSr = frame.sampleRate || 48000;
+          relayAudioCh = Math.min(2, Math.max(1, frame.numberOfChannels || 1));
           relayAudioEncoder.configure({
             codec: "opus",
-            sampleRate: frame.sampleRate || 48000,
-            numberOfChannels: Math.min(2, frame.numberOfChannels || 1),
+            sampleRate: relayAudioSr,
+            numberOfChannels: relayAudioCh,
             bitrate: 64000,
           });
           cfgFeita = true;
           relayAudioCfgOk = true;
-          logRelayDiag("audio_enc_cfg", { state: relayAudioEncoder.state });
+          relayAudioChavePendente = true;
+          logRelayDiag("audio_enc_cfg", {
+            state: relayAudioEncoder.state,
+            sr: relayAudioSr,
+            ch: relayAudioCh,
+          });
         }
         if (relayAudioEncoder && relayAudioEncoder.state === "configured"
             && relayAudioEncoder.encodeQueueSize < 20
@@ -2265,14 +2295,20 @@ function pararEncoderAudioRelay() {
   }
 }
 
-function iniciarDecoderAudioRelay() {
+function iniciarDecoderAudioRelay(sr, ch) {
   pararDecoderAudioRelay();
   if (typeof AudioDecoder === "undefined" || typeof AudioContext === "undefined") {
     logRelayDiag("sem_audio_decoder");
     return;
   }
+  var taxa = sr || 48000;
+  var canais = ch || 2;
   try {
-    relayAudioCtx = new AudioContext({ sampleRate: 48000 });
+    try {
+      relayAudioCtx = new AudioContext({ sampleRate: 48000 });
+    } catch (eCtx) {
+      relayAudioCtx = new AudioContext();
+    }
     relayAudioGain = relayAudioCtx.createGain();
     relayAudioGain.gain.value = audioMudo ? 0 : volumeLocal;
     relayAudioGain.connect(relayAudioCtx.destination);
@@ -2281,11 +2317,13 @@ function iniciarDecoderAudioRelay() {
       output: function (frame) {
         try {
           if (!relayAudioCtx || !relayAudioGain) { frame.close(); return; }
-          if (relayAudioCtx.state === "suspended") relayAudioCtx.resume();
-          var canais = frame.numberOfChannels;
+          if (relayAudioCtx.state === "suspended") {
+            relayAudioCtx.resume().catch(function () {});
+          }
+          var canaisF = frame.numberOfChannels;
           var n = frame.numberOfFrames;
-          var ab = relayAudioCtx.createBuffer(canais, n, frame.sampleRate);
-          for (var c = 0; c < canais; c++) {
+          var ab = relayAudioCtx.createBuffer(canaisF, n, frame.sampleRate);
+          for (var c = 0; c < canaisF; c++) {
             var plane = new Float32Array(n);
             frame.copyTo(plane, { planeIndex: c, format: "f32-planar" });
             ab.copyToChannel(plane, c);
@@ -2306,15 +2344,18 @@ function iniciarDecoderAudioRelay() {
         logRelayDiag("audio_dec_erro", { msg: e && e.message ? e.message : e });
       },
     });
-    relayAudioDecoder.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 });
+    relayAudioDecoder.configure({ codec: "opus", sampleRate: taxa, numberOfChannels: canais });
     relayAudioCfgOk = true;
-    logRelayDiag("audio_dec_cfg", { state: relayAudioDecoder.state });
+    relayAudioCfgDecoder = { sr: taxa, ch: canais };
+    logRelayDiag("audio_dec_cfg", { state: relayAudioDecoder.state, sr: taxa, ch: canais });
   } catch (e) {
     logRelayDiag("audio_dec_init_erro", { msg: e.message });
   }
 }
 
 function pararDecoderAudioRelay() {
+  relayAudioCfgOk = false;
+  relayAudioCfgDecoder = { sr: 0, ch: 0 };
   if (relayAudioDecoder) {
     try { if (relayAudioDecoder.state !== "closed") relayAudioDecoder.close(); } catch (e) { /* ignore */ }
     relayAudioDecoder = null;
@@ -2328,17 +2369,34 @@ function pararDecoderAudioRelay() {
 
 function receberAudioRelay(dados) {
   if (!telaModoRelay || telaEhHost || !dados || !dados.d) return;
+  var sr = parseInt(dados.sr, 10) || 48000;
+  var ch = parseInt(dados.ch, 10) || 2;
+  if (relayAudioDecoder
+      && relayAudioDecoder.state !== "closed"
+      && (relayAudioCfgDecoder.sr !== sr || relayAudioCfgDecoder.ch !== ch)) {
+    iniciarDecoderAudioRelay(sr, ch);
+  }
   if (!relayAudioDecoder || relayAudioDecoder.state === "closed") {
-    if (!relayAudioCfgOk) iniciarDecoderAudioRelay();
+    iniciarDecoderAudioRelay(sr, ch);
     if (!relayAudioDecoder || relayAudioDecoder.state === "closed") return;
+  }
+  if (relayAudioCtx && relayAudioCtx.state === "suspended") {
+    relayAudioCtx.resume().catch(function () {});
   }
   try {
     var bin = atob(dados.d);
     var payload = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) payload[i] = bin.charCodeAt(i);
     if (relayAudioDecoder.decodeQueueSize > 40) return;
+    var tipo = "delta";
+    if (dados.k) {
+      tipo = "key";
+    } else if (relayAudioChavePendente) {
+      tipo = "key";
+      relayAudioChavePendente = false;
+    }
     relayAudioDecoder.decode(new EncodedAudioChunk({
-      type: "delta",
+      type: tipo,
       timestamp: dados.t || 0,
       data: payload,
     }));
@@ -2347,9 +2405,20 @@ function receberAudioRelay(dados) {
   }
 }
 
+function desbloquearAudioRelay() {
+  if (relayAudioCtx && relayAudioCtx.state === "suspended") {
+    relayAudioCtx.resume().then(function () {
+      logRelayDiag("audio_ctx_resumed");
+    }).catch(function () {});
+  }
+}
+document.addEventListener("pointerdown", desbloquearAudioRelay, { passive: true });
+document.addEventListener("keydown", desbloquearAudioRelay);
+
 function aplicarVolumeLocal() {
   videoTransmissaoEl.volume = volumeLocal;
   if (relayAudioGain) relayAudioGain.gain.value = audioMudo ? 0 : volumeLocal;
+  desbloquearAudioRelay();
   // Host: mudo no envio (track) — preview local continua mudo por padrão.
   if (telaEhHost && telaStream) {
     var tr = telaStream.getAudioTracks()[0];
@@ -2724,9 +2793,14 @@ function abrirTelaCompartilhar() {
   mostrarTela(telaCompartilhar);
   mensagemTela("");
   var naActivity = dentroDaActivity();
+  var semTela = !suportaCapturaTela() && ehMobile();
   document.querySelector("#tela-aviso-navegador").style.display = naActivity ? "" : "none";
   document.querySelector("#tela-config-host").style.display = naActivity ? "none" : "";
   document.querySelector("#abrir-navegador-tela").style.display = "";
+  var avisoMobile = document.querySelector("#tela-aviso-mobile");
+  if (avisoMobile) {
+    avisoMobile.style.display = (!naActivity && semTela) ? "" : "none";
+  }
 
   // Lista sempre visível: salas públicas + da call (se houver instância).
   document.querySelector("#lista-transmissoes").style.display = "";
@@ -2799,9 +2873,94 @@ async function carregarTransmissoes() {
 // ---------------------------------------------------------------------------
 // Compartilhar Tela - host
 // ---------------------------------------------------------------------------
+function ehMobile() {
+  var ua = navigator.userAgent || "";
+  if (/Android|iPhone|iPad|iPod|Mobile|Silk/i.test(ua)) return true;
+  return navigator.maxTouchPoints > 1 && Math.min(window.innerWidth, window.innerHeight) < 900;
+}
+
+function suportaCapturaTela() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+}
+
+async function opcoesCapturaVideo() {
+  var preset = TELA_PRESETS[telaResolucao];
+  // max 60 desde o início: trocar 30→60 ao vivo não pede nova captura.
+  return {
+    width: { ideal: preset.largura },
+    height: { ideal: preset.altura },
+    frameRate: { ideal: telaFps, max: 60 },
+  };
+}
+
+async function capturarMidiaTransmissao(querAudio) {
+  var video = await opcoesCapturaVideo();
+
+  // 1) Chrome desktop / browsers com Screen Capture API.
+  if (suportaCapturaTela()) {
+    try {
+      var opcoes = {
+        video: video,
+        systemAudio: "include",
+      };
+      opcoes.audio = querAudio ? {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      } : false;
+      telaFonte = "tela";
+      return await navigator.mediaDevices.getDisplayMedia(opcoes);
+    } catch (e) {
+      if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) throw e;
+      logRelayDiag("displaymedia_falhou", { msg: e && e.message });
+    }
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error("SEU_NAVEGADOR_SEM_CAPTURE");
+  }
+
+  // 2) Firefox — screen via getUserMedia legado (Chrome Android não tem).
+  var ua = navigator.userAgent || "";
+  var chromeAndroid = /Chrome/i.test(ua) && /Android/i.test(ua);
+  if (!chromeAndroid && telaFonte !== "camera") {
+    try {
+      telaFonte = "tela_legado";
+      return await navigator.mediaDevices.getUserMedia({
+        video: Object.assign({ mediaSource: "screen" }, video),
+        audio: querAudio ? {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        } : false,
+      });
+    } catch (e) {
+      if (e && e.name === "NotAllowedError") throw e;
+      logRelayDiag("screen_legado_falhou", { msg: e && e.message });
+    }
+  }
+
+  // 3) Celular (Chrome Android não tem getDisplayMedia) → câmera.
+  telaFonte = "camera";
+  return await navigator.mediaDevices.getUserMedia({
+    video: Object.assign({ facingMode: { ideal: cameraFacing } }, video),
+    audio: querAudio ? {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    } : false,
+  });
+}
+
+function rotuloFonteCaptura() {
+  if (telaFonte === "camera") return "câmera do celular";
+  if (telaFonte === "tela_legado") return "tela";
+  return "tela";
+}
+
 async function iniciarTransmissaoTela() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    mensagemTela("Seu navegador não suporta captura de tela.", "erro");
+  if (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !navigator.mediaDevices.getUserMedia)) {
+    mensagemTela("Seu navegador não suporta captura de tela nem câmera.", "erro");
     return;
   }
 
@@ -2815,39 +2974,30 @@ async function iniciarTransmissaoTela() {
   var chkAudio = document.querySelector("#capturar-audio-tela");
   if (chkAudio) querAudio = !!chkAudio.checked;
 
-  var preset = TELA_PRESETS[telaResolucao];
-  var opcoesCaptura = {
-    video: {
-      width: { ideal: preset.largura },
-      height: { ideal: preset.altura },
-      frameRate: { ideal: telaFps, max: telaFps },
-    },
-    // Chrome: habilita a opção "Compartilhar áudio do sistema"/tab no picker.
-    systemAudio: "include",
-  };
-  if (querAudio) {
-    opcoesCaptura.audio = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    };
-  } else {
-    opcoesCaptura.audio = false;
-  }
-
   try {
-    telaStream = await navigator.mediaDevices.getDisplayMedia(opcoesCaptura);
+    telaStream = await capturarMidiaTransmissao(querAudio);
   } catch (e) {
-    mensagemTela("Captura cancelada ou negada.", "erro");
+    if (e && e.message === "SEU_NAVEGADOR_SEM_CAPTURE") {
+      mensagemTela("Seu navegador não suporta captura de tela nem câmera.", "erro");
+    } else if (e && e.name === "NotAllowedError") {
+      mensagemTela("Permissão negada. Autorize a câmera/tela no navegador para transmitir.", "erro");
+    } else {
+      mensagemTela("Captura cancelada ou negada.", "erro");
+    }
     return;
   }
 
   // Avisa se o Chrome não devolveu áudio (usuário não marcou a opção).
   if (querAudio && !telaStream.getAudioTracks().length) {
-    mensagemTela(
-      "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
-      "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
-      "Você pode recapturar com Trocar janela depois.", "erro");
+    if (telaFonte === "camera") {
+      mensagemTela(
+        "Microfone não capturado: permita o microfone no celular/navegador.", "erro");
+    } else {
+      mensagemTela(
+        "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
+        "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
+        "Você pode recapturar com Trocar janela depois.", "erro");
+    }
   }
 
   await garantirIdentidade();
@@ -2894,7 +3044,11 @@ async function iniciarTransmissaoTela() {
 
 function configurarTelaTransmissaoHost() {
   mostrarTela(telaTransmissaoEl);
-  mensagemTransmissao("Você está transmitindo em " + telaResolucao + " " + telaFps + "fps.", "sucesso");
+  var fonte = rotuloFonteCaptura();
+  mensagemTransmissao(
+    "Você está transmitindo (" + fonte + ") em " + telaResolucao + " " + telaFps + "fps.",
+    "sucesso");
+  mostrarBadgeQualidade(telaResolucao, telaFps, relayCodecAtual);
   document.querySelector("#transmissao-papel").textContent = "Transmitindo";
   document.querySelector("#transmissao-codigo-valor").textContent = telaSala;
   document.querySelector("#transmissao-codigo-display").style.display = "";
@@ -2903,6 +3057,12 @@ function configurarTelaTransmissaoHost() {
   document.querySelector("#encerrar-transmissao").style.display = "";
   document.querySelector("#parar-assistir").style.display = "none";
   document.querySelector("#transmissao-qualidade").style.display = "";
+  var btnTrocar = document.querySelector("#trocar-janela");
+  if (btnTrocar) {
+    btnTrocar.textContent = telaFonte === "camera"
+      ? "Trocar câmera (frente/verso)"
+      : "Trocar programa/janela da transmissão";
+  }
   controlesTransmissaoEl.style.display = "flex";
   btnMudoEl.title = "Mudo do que você está enviando";
   document.querySelectorAll("#live-resolucao .botao-preset").forEach(function (b) {
@@ -2976,6 +3136,8 @@ function encerrarTransmissao(silencioso) {
   document.querySelector("#transmissao-viewers-bar").style.display = "none";
   document.querySelector("#transmissao-qualidade").style.display = "none";
   controlesTransmissaoEl.style.display = "none";
+  var badgeOff = document.querySelector("#qualidade-badge");
+  if (badgeOff) badgeOff.style.display = "none";
   if (!silencioso) {
     mostrarTela(telaCompartilhar);
     carregarTransmissoes();
@@ -3015,6 +3177,8 @@ async function assistirTransmissao(codigo) {
   videoTransmissaoEl.srcObject = null;
   videoTransmissaoEl.muted = audioMudo;
   videoTransmissaoEl.volume = volumeLocal;
+  var badge = document.querySelector("#qualidade-badge");
+  if (badge) badge.style.display = "none";
   conectarWsTela(false);
 }
 
@@ -3173,9 +3337,26 @@ function encerrarViewerTela(mensagem) {
   if (mensagem) mensagemTransmissao(mensagem, "erro");
 }
 
+function mostrarBadgeQualidade(res, fps, codec) {
+  var el = document.querySelector("#qualidade-badge");
+  if (!el) return;
+  if (res) telaResolucao = res;
+  if (typeof fps === "number" && fps > 0) telaFps = fps;
+  if (codec) relayCodecAtual = codec;
+  el.textContent = telaResolucao + " · " + telaFps + " fps · " + String(relayCodecAtual || "vp8").toUpperCase();
+  el.style.display = "";
+  document.querySelectorAll("#live-resolucao .botao-preset").forEach(function (b) {
+    b.classList.toggle("selecionado", b.dataset.resolucao === telaResolucao);
+  });
+  document.querySelectorAll("#live-fps .botao-preset").forEach(function (b) {
+    b.classList.toggle("selecionado", parseInt(b.dataset.fps, 10) === telaFps);
+  });
+}
+
 function processarMensagemTela(dados) {
   switch (dados.tipo) {
     case "entrada_ok":
+      mostrarBadgeQualidade(dados.resolucao, dados.fps, dados.codec || relayCodecAtual);
       mensagemTransmissao("Conectado a " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps). Aguardando vídeo...", "sucesso");
       clearTimeout(telaOfertaTimer);
       clearTimeout(telaRelayTimer);
@@ -3249,13 +3430,23 @@ function processarMensagemTela(dados) {
     case "relay_codec":
       if (dados.codec) {
         relayCodecAtual = dados.codec;
+        mostrarBadgeQualidade(null, null, dados.codec);
         if (telaModoRelay && !telaEhHost) {
-          // Recria decoder com o codec anunciado (usa isConfigSupported internamente).
-          iniciarDecoderRelay(
-            (telaResolucao || "720p"),
-            dados.codec
-          );
+          // Recria decoder com o codec/resolução da sala (não o default local).
+          iniciarDecoderRelay(telaResolucao || "720p", dados.codec);
         }
+      }
+      break;
+    case "config":
+      // Líder mudou qualidade ao vivo — espectador atualiza badge/canvas.
+      mostrarBadgeQualidade(dados.resolucao, dados.fps, null);
+      if (telaModoRelay && !telaEhHost && dados.resolucao) {
+        iniciarDecoderRelay(dados.resolucao, relayCodecAtual);
+      }
+      if (!telaEhHost) {
+        mensagemTransmissao(
+          "Qualidade da transmissão: " + telaResolucao + " " + telaFps + "fps.",
+          "sucesso");
       }
       break;
     case "relay_pronto":

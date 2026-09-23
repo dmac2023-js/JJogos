@@ -104,6 +104,21 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 
 .espectadores-bar { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: #1b1e30; font-size: 13px; color: #aeb2c7; text-align: center; }
 
+/* Badge de qualidade (host + espectador). */
+.qualidade-badge {
+  display: inline-block;
+  margin: 0 auto 10px;
+  padding: 5px 12px;
+  border: 1px solid #4b3b78;
+  border-radius: 999px;
+  background: #14162a;
+  color: #c8baff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-align: center;
+}
+
 /* Lista de quem está assistindo a transmissão (host). */
 .viewers-lista { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
 .viewer-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 999px; background: #24213d; border: 1px solid #34384f; font-size: 12px; color: #c8baff; max-width: 160px; }
@@ -174,4 +189,13 @@ footer a:hover { color: #c8baff; }
   #tela-jogo .historico { margin-top: 18px; padding-top: 14px; }
   .jogo-conteudo { gap: 16px; }
   .painel-recordes { padding: 12px; width: 180px; }
+}
+
+/* Celular: botões maiores e transmissão em largura cheia. */
+@media (max-width: 640px) {
+  .botao, .botao-preset { min-height: 44px; }
+  .qualidade-badge { font-size: 11px; }
+  .video-transmissao.tam-m, .video-transmissao.tam-g { width: 100%; max-width: 100%; }
+  #controles-transmissao { flex-direction: column; align-items: stretch; }
+  .controle-volume { min-width: 0; width: 100%; }
 }

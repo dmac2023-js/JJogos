@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-03" />
+    <link rel="stylesheet" href="./style.css?v=20260924-04" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -185,6 +185,10 @@
       body.modo-cheia-transmissao #tela-transmissao #transmissao-qualidade,
       body.modo-cheia-transmissao #tela-transmissao #envio-file {
         display: none !important;
+      }
+      body.modo-cheia-transmissao #tela-transmissao #qualidade-badge {
+        position: absolute; top: 8px; right: 8px; z-index: 96;
+        margin: 0; background: rgba(14, 16, 30, .85); pointer-events: none;
       }
       body.modo-cheia-transmissao #tela-transmissao .video-transmissao {
         position: absolute; inset: 0;
@@ -549,6 +553,10 @@
           <button id="abrir-navegador-tela" class="botao principal">Abrir no navegador para transmitir</button>
         </div>
 
+        <div id="tela-aviso-mobile" class="aviso-navegador" style="display:none;">
+          <p>Seu celular (Chrome) não permite capturar a tela do aparelho. Ao iniciar, vamos transmitir pela <strong>câmera</strong> (frente/verso) + microfone — mesma qualidade e lista de espectadores.</p>
+        </div>
+
         <div id="tela-config-host" style="display:none;">
           <h3 class="subtitulo-secao">Qualidade da transmissão</h3>
           <div class="grupo-preset">
@@ -615,6 +623,8 @@
         </div>
 
         <div id="mensagem-transmissao" class="mensagem">Conectando...</div>
+
+        <div id="qualidade-badge" class="qualidade-badge" style="display:none;" title="Qualidade atual da transmissão"></div>
 
         <div id="transmissao-codigo-display" class="sala-codigo-display" style="display:none;">
           <span class="sala-codigo-label">Código:</span>
@@ -688,6 +698,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-03"></script>
+    <script src="./app.js?v=20260924-04"></script>
   </body>
 </html>

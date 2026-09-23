@@ -1628,6 +1628,18 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                     transmissao["resolucao"] = nova_res
                     transmissao["fps"] = novo_fps
                     log_tela("config atualizada sala=%s res=%s fps=%s" % (sala, nova_res, novo_fps))
+                    # Avisa espectadores (site + Activity) para atualizar o badge.
+                    payload_cfg = {"tipo": "config", "resolucao": nova_res, "fps": novo_fps}
+                    for ws in list(transmissao.get("viewers", {}).values()):
+                        try:
+                            await ws.send_json(payload_cfg)
+                        except Exception:
+                            pass
+                    for ws in list(transmissao.get("relay_ws", {}).values()):
+                        try:
+                            await ws.send_json(payload_cfg)
+                        except Exception:
+                            pass
                 continue
             # Host gerencia a sala: expulsa um espectador (máx. 9 na tela).
             if tipo == "expulsar_viewer" and viewer_id and viewer_ws:
