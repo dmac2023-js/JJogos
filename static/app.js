@@ -1002,6 +1002,7 @@ var relayDecoder = null;
 var relayProntoEnviado = false;
 var relayHostOk = false;
 var relayEncoderVisibilityListener = null;
+var relayTemKey = false;
 
 // Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
 // real da sala em vez de adivinhar.
@@ -1224,18 +1225,48 @@ function iniciarDecoderRelay(resolucao) {
     mensagemTransmissao("Seu cliente não suporta o modo de vídeo compatível.", "erro");
     return;
   }
-  var ctx = canvas.getContext("2d");
+  var ctx = canvas.getContext("2d", { alpha: false });
+  var desenhados = 0;
+  var errosDecoder = 0;
+  relayTemKey = false;
   relayDecoder = new VideoDecoder({
     output: function (frame) {
-      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+      try {
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        desenhados++;
+        if (desenhados === 1) {
+          relayFrameOk = true;
+          clearTimeout(telaRelayTimer);
+          mensagemTransmissao("Recebendo vídeo de quem transmite.", "sucesso");
+        }
+      } catch (e) {
+        console.warn("drawImage relay:", e);
+      }
       frame.close();
     },
-    error: function (e) { console.warn("Decoder relay:", e); },
+    error: function (e) {
+      console.warn("Decoder relay:", e);
+      if (relayDecoder && relayDecoder.state !== "closed") {
+        try { relayDecoder.close(); } catch (err) { /* ignore */ }
+      }
+      relayDecoder = null;
+      relayTemKey = false;
+      errosDecoder++;
+      if (errosDecoder > 3) {
+        mensagemTransmissao("Falha ao decodificar o vídeo (" +
+          (e && e.message ? e.message : e) + "). Recarregue a Activity.", "erro");
+        return;
+      }
+      iniciarDecoderRelay(resolucao);
+      mensagemTransmissao("Vídeo chegou mas falhou ao decodificar (" +
+        (e && e.message ? e.message : e) + "). Tentando de novo...", "erro");
+    },
   });
-  relayDecoder.configure({ codec: "vp8" });
+  relayDecoder.configure({ codec: "vp8", optimizeForLatency: true });
 }
 
 function pararDecoderRelay() {
+  relayTemKey = false;
   if (relayDecoder) {
     try { if (relayDecoder.state !== "closed") relayDecoder.close(); } catch (e) { /* ignore */ }
     relayDecoder = null;
@@ -1243,17 +1274,35 @@ function pararDecoderRelay() {
 }
 
 function receberRelay(buffer) {
-  relayFrameOk = true;
-  clearTimeout(telaRelayTimer);
   if (!relayDecoder || relayDecoder.state === "closed") return;
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 5) return;
   var dv = new DataView(buffer);
-  var tipo = dv.getUint8(0) === 1 ? "key" : "delta";
+  var ehKey = dv.getUint8(0) === 1;
   var timestamp = dv.getUint32(1);
-  if (relayDecoder.decodeQueueSize > 30 && tipo === "delta") return;
+  // VP8 exige keyframe para começar (viewer pode entrar no meio do GOP).
+  if (!ehKey && !relayTemKey) return;
+  if (ehKey) relayTemKey = true;
+  if (relayDecoder.decodeQueueSize > 30 && !ehKey) return;
   try {
-    relayDecoder.decode({ type: tipo, timestamp: timestamp, data: new Uint8Array(buffer, 5) });
-  } catch (e) { console.warn("decode relay:", e); }
+    relayDecoder.decode({
+      type: ehKey ? "key" : "delta",
+      timestamp: timestamp,
+      data: new Uint8Array(buffer, 5),
+    });
+  } catch (e) {
+    console.warn("decode relay:", e);
+    relayTemKey = false;
+  }
+  // Chegou binário: cancela o "sem vídeo" mesmo antes do 1º quadro desenhado
+  // (o diagnóstico de decodificação fica por conta do output/error do decoder).
+  if (!relayFrameOk) {
+    clearTimeout(telaRelayTimer);
+    telaRelayTimer = setTimeout(function () {
+      if (!relayFrameOk && telaModoRelay) {
+        mensagemTransmissao("Quadros chegam, mas o vídeo não foi exibido. Peça para quem transmite forçar um novo quadro (mude a qualidade) ou recarregue a Activity.", "erro");
+      }
+    }, 8000);
+  }
 }
 
 async function iniciarEncoderRelay() {
