@@ -66,6 +66,9 @@ class RespostaSudoku(BaseModel):
 class CodigoAutorizacao(BaseModel):
     code: str
     redirect_uri: Optional[str] = None
+    # true = fluxo da Activity (SDK authorize): NÃO enviar redirect_uri
+    # (o authorize do Embedded SDK não usa um — fallback quebraria a troca).
+    activity: bool = False
 
 
 class NovoRecord(BaseModel):
@@ -619,20 +622,23 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
         raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
 
     # O Discord exige que o redirect_uri do token bata exatamente com o usado
-    # no authorize. O cliente envia o mesmo valor; fallback para env/padrão.
-    redirect_uri = ((dados.redirect_uri or "").strip()
-                    or os.getenv("OAUTH_REDIRECT_URI", "").strip()
-                    or OAUTH_REDIRECT_PADRAO)
+    # no authorize. Login do site: envia o mesmo valor (fallback env/padrão).
+    # Activity (SDK authorize): não usa redirect_uri — não incluir na troca.
+    payload = {
+        "client_id": DISCORD_APPLICATION_ID,
+        "client_secret": DISCORD_CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": dados.code,
+    }
+    if not dados.activity:
+        redirect_uri = ((dados.redirect_uri or "").strip()
+                        or os.getenv("OAUTH_REDIRECT_URI", "").strip()
+                        or OAUTH_REDIRECT_PADRAO)
+        payload["redirect_uri"] = redirect_uri
 
     resposta = requests.post(
         "https://discord.com/api/oauth2/token",
-        data={
-            "client_id": DISCORD_APPLICATION_ID,
-            "client_secret": DISCORD_CLIENT_SECRET,
-            "grant_type": "authorization_code",
-            "code": dados.code,
-            "redirect_uri": redirect_uri,
-        },
+        data=payload,
         timeout=15,
     )
 

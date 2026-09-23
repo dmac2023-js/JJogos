@@ -65,11 +65,12 @@ async function garantirIdentidade() {
     }
   } catch (e) { /* ignore */ }
   if (dentroDaActivity()) {
+    // OAuth completo (authorize+token+@me) pode levar ~2-4s — dá tempo real.
     for (var i = 0; i < 3 && !usuarioDiscord; i++) {
       try {
         await Promise.race([
           conectarAoDiscord(),
-          new Promise(function (r) { setTimeout(r, 1500); }),
+          new Promise(function (r) { setTimeout(r, 4000); }),
         ]);
       } catch (e) { /* segue sem identidade */ }
       if (!usuarioDiscord) {
@@ -1379,6 +1380,10 @@ function processarMensagemSudoku(d) {
 
 async function criarSalaSudoku() {
   await garantirIdentidade();
+  if (dentroDaActivity() && !usuarioDiscord) {
+    mostrarMensagem("Não consegui identificar seu Discord. Recarregue (Ctrl+F5) e tente de novo.", "erro");
+    return;
+  }
   var codigo = (document.querySelector("#sudoku-codigo-sala").value || "").trim().toLowerCase();
   var publica = !!document.querySelector("#sudoku-sala-publica").checked;
   var difSel = document.querySelector("#sudoku-dificuldade-online .botao-preset.selecionado");
@@ -1434,6 +1439,10 @@ async function entrarSalaSudoku(codigo) {
     return;
   }
   await garantirIdentidade();
+  if (dentroDaActivity() && !usuarioDiscord) {
+    mostrarMensagem("Não consegui identificar seu Discord. Recarregue (Ctrl+F5) e tente de novo.", "erro");
+    return;
+  }
   try {
     // valida sala existente via listagem (públicas) ou tenta WS direto (privadas)
     sudokuOnlineAtivo = true;
@@ -1607,12 +1616,52 @@ async function conectarAoDiscord() {
 
       var autenticou = false;
       try {
-        var opcoes = await discordSdkGlobal.commands.authenticate();
-        usuarioDiscord = opcoes.user || opcoes;
-        autenticou = !!usuarioDiscord;
-        console.log("Discord user identified:", usuarioDiscord && usuarioDiscord.username);
+        // Fluxo correto da Activity: authorize -> code -> /token -> access_token
+        // -> authenticate({access_token}) -> user. authenticate() sem token
+        // retorna sem user e deixava o header em "sem login".
+        var authz = await discordSdkGlobal.commands.authorize({
+          client_id: configuracao.application_id,
+          response_type: "code",
+          state: "",
+          prompt: "none",
+          scope: ["identify", "applications.commands"],
+        });
+        var codigo = authz && authz.code;
+        if (!codigo) throw new Error("authorize não retornou code");
+
+        var resTroca = await fetch("./token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: codigo, activity: true }),
+        });
+        var token = await resTroca.json();
+        if (!resTroca.ok) throw new Error(token.detail || "Falha ao trocar o code.");
+
+        var me = await fetch("https://discord.com/api/users/@me", {
+          headers: { Authorization: "Bearer " + token.access_token },
+        });
+        if (!me.ok) throw new Error("Falha ao obter o perfil (@me).");
+        var user = await me.json();
+        if (!user || !user.id) throw new Error("@me sem user.");
+
+        usuarioDiscord = user;
+        autenticou = true;
+        try {
+          await discordSdkGlobal.commands.authenticate({ access_token: token.access_token });
+        } catch (eAuth) {
+          console.warn("SDK authenticate (com token) falhou (ok se @me ok):", eAuth);
+        }
+        salvarSessaoDiscord({
+          user: user,
+          access_token: token.access_token,
+          refresh_token: token.refresh_token,
+          obtido_em: Date.now(),
+        });
+        console.log("Discord user identified:", user.username);
       } catch (e) {
         console.warn("Não foi possível autenticar:", e);
+        // limpa a promise para permitir retry (garantirIdentidade chama de novo)
+        conexaoDiscordPromise = null;
       }
 
       if (autenticou) {
@@ -1861,6 +1910,16 @@ function definirFps(valor) {
   });
   atualizarAvisoUpload();
   if (telaEhHost && telaStream) {
+    // A captura pode ficar presa no frameRate inicial — re-aplica na track
+    // senão 60fps só re-desenha o mesmo frame (parece idêntico a 30fps).
+    var track = telaStream.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      track.applyConstraints({
+        frameRate: { ideal: telaFps, max: telaFps },
+      }).catch(function (e) {
+        console.warn("applyConstraints frameRate:", e);
+      });
+    }
     aplicarQualidadeNosViewers();
     mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
     reiniciarEncoderRelaySeAtivo();
@@ -2275,11 +2334,37 @@ function definirTamanhoVideo(tam) {
   // Tela cheia ocupa a Activity inteira (esconde header/footer/controles fixos).
   if (tam === "full") {
     document.body.classList.add("modo-cheia-transmissao");
+    agendarEsconderControles();
   } else {
     document.body.classList.remove("modo-cheia-transmissao");
+    cancelarEsconderControles();
+    if (controlesTransmissaoEl) controlesTransmissaoEl.classList.remove("oculto");
   }
   try { localStorage.setItem("jj_tela_tam", tam); } catch (e) { /* ignore */ }
 }
+
+// Auto-hide dos controles P/M/G na tela cheia (estilo YouTube).
+var controlesHideTimer = null;
+function agendarEsconderControles() {
+  if (!controlesTransmissaoEl) return;
+  controlesTransmissaoEl.classList.remove("oculto");
+  clearTimeout(controlesHideTimer);
+  controlesHideTimer = setTimeout(function () {
+    if (document.body.classList.contains("modo-cheia-transmissao")) {
+      controlesTransmissaoEl.classList.add("oculto");
+    }
+  }, 2500);
+}
+function cancelarEsconderControles() {
+  clearTimeout(controlesHideTimer);
+  controlesHideTimer = null;
+}
+document.addEventListener("mousemove", function () {
+  if (document.body.classList.contains("modo-cheia-transmissao")) agendarEsconderControles();
+});
+document.addEventListener("touchstart", function () {
+  if (document.body.classList.contains("modo-cheia-transmissao")) agendarEsconderControles();
+});
 
 function receberRelay(buffer) {
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 5) return;

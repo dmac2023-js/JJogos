@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260923-02" />
+    <link rel="stylesheet" href="./style.css?v=20260924-01" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -185,6 +185,15 @@
         margin: 0; border-radius: 0; border: 0;
         background: rgba(10, 12, 24, .88);
         justify-content: center;
+        opacity: 1;
+        transform: translateY(0);
+        transition: opacity .25s ease, transform .25s ease;
+        pointer-events: auto;
+      }
+      body.modo-cheia-transmissao #tela-transmissao #controles-transmissao.oculto {
+        opacity: 0;
+        transform: translateY(100%);
+        pointer-events: none;
       }
       #controles-transmissao { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px 12px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
       #controles-transmissao .grupo-preset { flex: 1; min-width: 140px; margin: 0; }
@@ -660,6 +669,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260923-02"></script>
+    <script src="./app.js?v=20260924-01"></script>
   </body>
 </html>
