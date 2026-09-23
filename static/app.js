@@ -1130,6 +1130,10 @@ var ludoPingTimer = null;
 var ludoAtivo = false;
 var ludoTabuleiroMontado = false;
 var ludoCelulas = {};
+var ludoPecaEls = {};
+var ludoPecaPos = {};
+var ludoAnimando = false;
+var ludoAnimToken = 0;
 
 function ludoMsg(texto, tipo) {
   var el = document.querySelector("#mensagem-ludo");
@@ -1151,6 +1155,10 @@ function ludoFechar(motivo) {
   ludoAtivo = false;
   clearInterval(ludoPingTimer);
   ludoPingTimer = null;
+  ludoAnimToken++;
+  ludoAnimando = false;
+  ludoPecaEls = {};
+  ludoPecaPos = {};
   if (ludoWs) {
     try { ludoWs.close(); } catch (e) {}
     ludoWs = null;
@@ -1158,6 +1166,9 @@ function ludoFechar(motivo) {
   ludoSala = null;
   ludoSlot = null;
   ludoEstado = null;
+  ludoTabuleiroMontado = false;
+  var tab = document.querySelector("#ludo-tabuleiro");
+  if (tab) tab.innerHTML = "";
   var bar = document.querySelector("#ludo-sala-bar");
   if (bar) bar.style.display = "none";
   var lab = document.querySelector("#ludo-codigo-label");
@@ -1170,6 +1181,8 @@ function ludoMontarTabuleiro() {
   if (!tab || ludoTabuleiroMontado) return;
   tab.innerHTML = "";
   ludoCelulas = {};
+  ludoPecaEls = {};
+  ludoPecaPos = {};
   var trackSet = new Set(LUDO_TRACK.map(function (c) { return c[0] + "," + c[1]; }));
   var safeSet = new Set();
   LUDO_TRACK.forEach(function (c, i) {
@@ -1219,13 +1232,14 @@ function ludoMontarTabuleiro() {
       } else if (baseMap[key]) {
         d.classList.add("base-" + baseMap[key]);
       }
-      var pecas = document.createElement("div");
-      pecas.className = "ludo-pecas";
-      d.appendChild(pecas);
       tab.appendChild(d);
       ludoCelulas[key] = d;
     }
   }
+  var overlay = document.createElement("div");
+  overlay.className = "ludo-pecas-overlay";
+  overlay.id = "ludo-pecas-overlay";
+  tab.appendChild(overlay);
   ludoTabuleiroMontado = true;
 }
 
@@ -1246,13 +1260,78 @@ function ludoPecaXY(cor, pos, idx) {
   return null;
 }
 
+function ludoCellPct(xy) {
+  var size = 100 / 15;
+  return {
+    left: (xy[1] + 0.14) * size,
+    top: (xy[0] + 0.14) * size,
+  };
+}
+
+function ludoCaminhoAnim(cor, de, ate) {
+  var passos = [];
+  if (ate == null || de == null || ate === de) return passos;
+  if (ate < de || ate === -1 || de === -1) {
+    var xy = ludoPecaXY(cor, ate, 0);
+    if (xy) passos.push(xy);
+    return passos;
+  }
+  for (var p = de + 1; p <= ate; p++) {
+    var xy2 = ludoPecaXY(cor, p, 0);
+    if (xy2) passos.push(xy2);
+  }
+  return passos;
+}
+
+function ludoSleep(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+function ludoMontarPeao(j, idx, pos, xy, n) {
+  var peao = document.createElement("button");
+  peao.type = "button";
+  peao.className = "ludo-peao " + j.cor;
+  if (pos === -1) {
+    peao.style.transform = "none";
+  } else if (n === 1) peao.classList.add("pilha-offset1");
+  if (n === 2 && pos !== -1) peao.classList.add("pilha-offset2");
+  if (n >= 3 && pos !== -1) peao.classList.add("pilha-offset3");
+  peao.title = (j.nick || "") + " · peça " + (idx + 1);
+  peao.dataset.slot = j.slot;
+  peao.dataset.idx = String(idx);
+  var pct = ludoCellPct(xy);
+  peao.style.left = pct.left + "%";
+  peao.style.top = pct.top + "%";
+  return peao;
+}
+
+function ludoAplicarClique(peao, j, idx, opcoes, minhaVez) {
+  peao.onclick = null;
+  if (minhaVez && j.slot === ludoSlot && opcoes.indexOf(idx) !== -1) {
+    peao.classList.add("opcao");
+    peao.disabled = false;
+    peao.onclick = function () {
+      if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
+        ludoWs.send(JSON.stringify({ tipo: "mover", peao: idx }));
+      }
+    };
+  } else {
+    peao.disabled = true;
+  }
+}
+
 function ludoDesenharPecas() {
-  document.querySelectorAll("#ludo-tabuleiro .ludo-peao").forEach(function (el) { el.remove(); });
   if (!ludoEstado || !ludoEstado.jogadores) return;
+  var overlay = document.querySelector("#ludo-pecas-overlay");
+  if (!overlay) return;
   var opcoes = ludoEstado.opcoes || [];
   var minhaVez = ludoEstado.fase === "jogando" && ludoEstado.vez === ludoSlot &&
     ludoEstado.dado_ja_rolado;
   var pilha = {};
+  var desejado = {};
+  // Cancela animação em voo antes de redesenhar.
+  ludoAnimToken++;
+  ludoAnimando = false;
 
   ludoEstado.jogadores.forEach(function (j) {
     if (!j.cor || !j.pecas) return;
@@ -1262,32 +1341,87 @@ function ludoDesenharPecas() {
       var key = xy[0] + "," + xy[1];
       var n = pilha[key] || 0;
       pilha[key] = n + 1;
-      var cel = ludoCelulas[key];
-      if (!cel) return;
-      var peao = document.createElement("button");
-      peao.type = "button";
-      peao.className = "ludo-peao " + j.cor;
-      if (pos === -1) {
-        peao.style.transform = "translate(14%, 14%)";
-      } else if (n === 1) peao.classList.add("pilha-offset1");
-      if (n === 2 && pos !== -1) peao.classList.add("pilha-offset2");
-      if (n >= 3 && pos !== -1) peao.classList.add("pilha-offset3");
-      peao.title = (j.nick || "") + " · peça " + (idx + 1);
-      peao.dataset.slot = j.slot;
-      peao.dataset.idx = String(idx);
-      if (minhaVez && j.slot === ludoSlot && opcoes.indexOf(idx) !== -1) {
-        peao.classList.add("opcao");
-        peao.addEventListener("click", function () {
-          if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
-            ludoWs.send(JSON.stringify({ tipo: "mover", peao: idx }));
-          }
-        });
-      } else {
-        peao.disabled = true;
-      }
-      cel.querySelector(".ludo-pecas").appendChild(peao);
+      var pkey = j.slot + ":" + idx;
+      desejado[pkey] = { j: j, idx: idx, pos: pos, xy: xy, n: n };
     });
   });
+
+  Object.keys(ludoPecaEls).forEach(function (pkey) {
+    if (!desejado[pkey]) {
+      var el = ludoPecaEls[pkey];
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      delete ludoPecaEls[pkey];
+      delete ludoPecaPos[pkey];
+    }
+  });
+
+  var anims = [];
+  Object.keys(desejado).forEach(function (pkey) {
+    var info = desejado[pkey];
+    var el = ludoPecaEls[pkey];
+    var posAnt = ludoPecaPos[pkey];
+    if (!el || !el.parentNode) {
+      el = ludoMontarPeao(info.j, info.idx, info.pos, info.xy, info.n);
+      ludoAplicarClique(el, info.j, info.idx, opcoes, minhaVez);
+      overlay.appendChild(el);
+      ludoPecaEls[pkey] = el;
+      ludoPecaPos[pkey] = info.pos;
+      return;
+    }
+    el.className = "ludo-peao " + info.j.cor;
+    el.classList.remove("animando");
+    if (info.pos === -1) {
+      el.style.transform = "none";
+    } else if (info.n === 1) {
+      el.classList.add("pilha-offset1");
+    } else if (info.n === 2) {
+      el.classList.add("pilha-offset2");
+    } else if (info.n >= 3) {
+      el.classList.add("pilha-offset3");
+    }
+    el.title = (info.j.nick || "") + " · peça " + (info.idx + 1);
+    ludoAplicarClique(el, info.j, info.idx, opcoes, minhaVez);
+
+    var mudou = posAnt !== undefined && posAnt !== info.pos;
+    if (!mudou) {
+      var pct0 = ludoCellPct(info.xy);
+      el.style.left = pct0.left + "%";
+      el.style.top = pct0.top + "%";
+      ludoPecaPos[pkey] = info.pos;
+      return;
+    }
+    var caminho = ludoCaminhoAnim(info.j.cor, posAnt, info.pos);
+    ludoPecaPos[pkey] = info.pos;
+    if (caminho.length >= 1 && caminho.length <= 6 && info.pos !== -1) {
+      anims.push({ el: el, caminho: caminho, pkey: pkey, pos: info.pos });
+    } else {
+      var pct1 = ludoCellPct(info.xy);
+      el.style.left = pct1.left + "%";
+      el.style.top = pct1.top + "%";
+    }
+  });
+
+  if (anims.length) {
+    var token = ludoAnimToken;
+    ludoAnimando = true;
+    Promise.all(anims.map(function (a) {
+      return (async function () {
+        a.el.classList.add("animando");
+        for (var i = 0; i < a.caminho.length; i++) {
+          if (token !== ludoAnimToken) return;
+          var pct = ludoCellPct(a.caminho[i]);
+          a.el.style.left = pct.left + "%";
+          a.el.style.top = pct.top + "%";
+          await ludoSleep(110);
+        }
+        if (token === ludoAnimToken) {
+          a.el.classList.remove("animando");
+        }
+      })();
+    })).then(function () {
+      if (token === ludoAnimToken) ludoAnimando = false;
+    });
+  }
 }
 
 function ludoRenderJogadores() {
@@ -1314,6 +1448,73 @@ function ludoRenderJogadores() {
   });
 }
 
+function preencherAvatarPlacarLudo(el, nick, avatar) {
+  if (!el) return;
+  if (avatar) {
+    el.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="" />';
+  } else {
+    el.textContent = (nick || "?").charAt(0).toUpperCase();
+  }
+}
+
+function ludoRenderPlacar() {
+  var box = document.querySelector("#placar-times-ludo");
+  if (!box || !ludoEstado) return;
+  box.style.display = "";
+  var placar = ludoEstado.placar || {};
+  var js = ludoEstado.jogadores || [];
+  ["p1", "p2", "p3", "p4"].forEach(function (slot, i) {
+    var j = null;
+    js.forEach(function (x) { if (x.slot === slot) j = x; });
+    preencherAvatarPlacarLudo(
+      document.querySelector("#placar-ludo-avatar-" + slot),
+      j ? j.nick : "?", j ? j.avatar : null);
+    var nick = document.querySelector("#placar-ludo-nick-" + slot);
+    var gol = document.querySelector("#placar-ludo-gol-" + slot);
+    if (nick) nick.textContent = j ? j.nick : "—";
+    if (gol) gol.textContent = String(placar[slot] || 0);
+    var lado = box.querySelector('.placar-lado[data-slot="' + slot + '"]');
+    if (lado) lado.style.display = j ? "" : "none";
+    var x = lado ? lado.nextElementSibling : null;
+    if (x && x.classList && x.classList.contains("placar-x")) {
+      var prox = lado ? lado.nextElementSibling.nextElementSibling : null;
+      x.style.display = (j && prox && prox.style.display !== "none") ? "" : "none";
+    }
+  });
+}
+
+async function carregarRankingLudo() {
+  var container = document.querySelector("#lista-ranking-ludo");
+  if (!container) return;
+  try {
+    var res = await fetch("./ludo/ranking");
+    var dados = await res.json();
+    var lista = dados.ranking || [];
+    var medallas = ["\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49"];
+    if (!lista.length) {
+      container.innerHTML = '<p class="vazio">Nenhuma vitória ainda.</p>';
+      return;
+    }
+    container.innerHTML = "";
+    lista.slice(0, 3).forEach(function (r, i) {
+      var img = r.avatar
+        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
+        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + '</span>';
+      var el = document.createElement("div");
+      el.className = "registro-recorde";
+      el.innerHTML =
+        '<span class="recorde-posicao">' + (medallas[i] || (i + 1)) + "</span>" +
+        img +
+        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + "</strong>" +
+        "<small>" + escapeHtml(r.nome || "") + "</small></span>" +
+        '<span class="recorde-tempo">' + (r.vitorias || 0) + "v</span>";
+      container.appendChild(el);
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="vazio">Erro ao carregar ranking.</p>';
+  }
+}
+
 function ludoAtualizarUI() {
   if (!ludoEstado) return;
   ludoMontarTabuleiro();
@@ -1324,10 +1525,12 @@ function ludoAtualizarUI() {
     if (cod) cod.textContent = ludoSala;
   }
   ludoRenderJogadores();
+  ludoRenderPlacar();
   ludoDesenharPecas();
 
   var dadoEl = document.querySelector("#ludo-dado");
   var btn = document.querySelector("#ludo-rolar");
+  var btnIni = document.querySelector("#ludo-iniciar");
   var dica = document.querySelector("#ludo-dica");
   var vezL = document.querySelector("#ludo-vez-label");
 
@@ -1352,17 +1555,34 @@ function ludoAtualizarUI() {
       btn.style.display = "";
       btn.disabled = false;
       btn.textContent = "Rolar dado";
-    } else {
-      btn.style.display = minhaVez ? "" : "none";
+    } else if (minhaVez) {
+      btn.style.display = "";
       btn.disabled = true;
       btn.textContent = ludoEstado.dado_ja_rolado ? "Mova a peça" : "Aguardar";
+    } else {
+      btn.style.display = "none";
+      btn.disabled = true;
+    }
+  }
+  if (btnIni) {
+    if (ludoEstado.pode_iniciar) {
+      btnIni.style.display = "";
+      btnIni.disabled = false;
+      btnIni.textContent = ludoEstado.fase === "fim" ? "Jogar de novo" : "Iniciar";
+    } else {
+      btnIni.style.display = "none";
+      btnIni.disabled = true;
     }
   }
   if (dica) {
-    if (ludoEstado.fase === "esperando") dica.textContent = "Aguardando jogadores (mín. 2)…";
-    else if (ludoEstado.fase === "contagem") dica.textContent = "Começando…";
-    else if (ludoEstado.fase === "fim") dica.textContent = "Fim de jogo.";
-    else if (minhaVez && ludoEstado.dado_ja_rolado) dica.textContent = "Clique em uma peça destacada.";
+    if (ludoEstado.fase === "esperando") {
+      dica.textContent = ludoEstado.pode_iniciar
+        ? "Toque em Iniciar para começar."
+        : "Aguardando jogadores (mín. 2)…";
+    } else if (ludoEstado.fase === "contagem") dica.textContent = "Começando…";
+    else if (ludoEstado.fase === "fim") {
+      dica.textContent = ludoEstado.pode_iniciar ? "Toque em Jogar de novo." : "Fim de jogo.";
+    } else if (minhaVez && ludoEstado.dado_ja_rolado) dica.textContent = "Clique em uma peça destacada.";
     else if (minhaVez) dica.textContent = "Toque em rolar dado.";
     else dica.textContent = "Vez de " + ((vezJog && vezJog.nick) || "—") + ".";
   }
@@ -1385,7 +1605,8 @@ function ludoAtualizarUI() {
       ludoMsg(ludoEstado.ultimo_evento.texto, ludoEstado.fase === "fim" ? "sucesso" : "");
     } else if (ludoEstado.fase === "esperando") {
       var n = (ludoEstado.jogadores || []).length;
-      ludoMsg("Sala " + ludoSala + " — " + n + "/4 jogadores. Compartilhe o código!", "");
+      var cn = ludoEstado.conectados || n;
+      ludoMsg("Sala " + ludoSala + " — " + cn + "/4 conectados. Compartilhe o código!", "");
     }
   }
 }
@@ -1406,6 +1627,7 @@ function processarMensagemLudo(d) {
       if (d.fase === "esperando" || d.fase === "contagem" || d.fase === "jogando" || d.fase === "fim") {
         if (telaLudo && !telaLudo.classList.contains("ativa")) mostrarTela(telaLudo);
       }
+      if (d.fase === "fim") carregarRankingLudo();
       // Só 1 movimento possível e já rolou o dado → move sozinho.
       if (d.fase === "jogando" && d.vez === ludoSlot && d.dado_ja_rolado &&
           (d.opcoes || []).length === 1 && ludoWs && ludoWs.readyState === WebSocket.OPEN) {
@@ -1503,6 +1725,7 @@ async function criarSalaLudo() {
     ludoMsgLobby("", "");
     mostrarTela(telaLudo);
     ludoMsg("Entrando na sala " + dados.sala + "...", "");
+    carregarRankingLudo();
     conectarLudoWs(dados.sala);
   } catch (erro) {
     ludoMsgLobby(erro.message, "erro");
@@ -1523,6 +1746,7 @@ async function entrarSalaLudo(codigo) {
   ludoMsgLobby("", "");
   mostrarTela(telaLudo);
   ludoMsg("Entrando na sala " + codigo + "...", "");
+  carregarRankingLudo();
   conectarLudoWs(codigo);
 }
 
@@ -1573,6 +1797,11 @@ document.querySelector("#ludo-codigo-sala").addEventListener("keydown", function
 document.querySelector("#ludo-rolar").addEventListener("click", function () {
   if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
     ludoWs.send(JSON.stringify({ tipo: "rolar" }));
+  }
+});
+document.querySelector("#ludo-iniciar").addEventListener("click", function () {
+  if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
+    ludoWs.send(JSON.stringify({ tipo: "iniciar" }));
   }
 });
 document.querySelector("#copiar-codigo-ludo").addEventListener("click", function () {

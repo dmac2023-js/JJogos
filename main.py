@@ -223,6 +223,7 @@ def carregar_recordes() -> dict:
     dados.setdefault("sudoku", {"facil": [], "medio": [], "dificil": []})
     dados.setdefault("velha", {"facil": [], "medio": [], "dificil": []})
     dados.setdefault("velha_vitorias", [])
+    dados.setdefault("ludo_vitorias", [])
     return dados
 
 
@@ -239,6 +240,30 @@ def eh_anonimo(nick: str) -> bool:
 def ranking_top(registros: list, chave: str, reverse: bool, limite: int = 3) -> list:
     filtrados = [r for r in registros if not eh_anonimo(str(r.get("nick", "")))]
     return sorted(filtrados, key=lambda r: r.get(chave, 0), reverse=reverse)[:limite]
+
+
+def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
+    """Vitória global no Ludo (permanente; anônimo não conta)."""
+    if eh_anonimo(nick):
+        return
+    recordes = carregar_recordes()
+    vitorias = recordes.setdefault("ludo_vitorias", [])
+    for v in vitorias:
+        if v.get("nick") == nick and v.get("nome") == nome:
+            v["vitorias"] = v.get("vitorias", 0) + 1
+            if avatar:
+                v["avatar"] = avatar
+            recordes["ludo_vitorias"] = sorted(
+                vitorias, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
+            salvar_recordes(recordes)
+            return
+    novo = {"nick": nick, "nome": nome, "vitorias": 1}
+    if avatar:
+        novo["avatar"] = avatar
+    vitorias.append(novo)
+    recordes["ludo_vitorias"] = sorted(
+        vitorias, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
+    salvar_recordes(recordes)
 
 
 def purgar_salas_sudoku_obsoletas() -> None:
@@ -1113,11 +1138,20 @@ def info_jogador_ludo(s: dict, slot: str) -> dict:
 def estado_ludo_para(s: dict, slot: Optional[str] = None) -> dict:
     jogadores = [info_jogador_ludo(s, sl) for sl in ("p1", "p2", "p3", "p4")
                  if s.get("slots", {}).get(sl)]
+    conectados = sum(1 for p in s.get("slots", {}).values() if p and p.get("ws"))
+    fase = s.get("fase", "esperando")
+    pode_iniciar = (
+        slot is not None
+        and slot == s.get("lider")
+        and fase in ("esperando", "fim")
+        and conectados >= 2
+        and not s.get("countdown_task")
+    )
     return {
         "tipo": "estado_ludo",
         "sala": s["codigo"],
         "publica": s.get("publica", False),
-        "fase": s.get("fase", "esperando"),
+        "fase": fase,
         "meu_slot": slot,
         "lider": s.get("lider"),
         "vez": s.get("vez"),
@@ -1128,6 +1162,9 @@ def estado_ludo_para(s: dict, slot: Optional[str] = None) -> dict:
         "jogadores": jogadores,
         "vencedor": s.get("vencedor"),
         "ultimo_evento": s.get("ultimo_evento"),
+        "conectados": conectados,
+        "pode_iniciar": pode_iniciar,
+        "placar": s.get("placar", {"p1": 0, "p2": 0, "p3": 0, "p4": 0}),
     }
 
 
@@ -1274,8 +1311,20 @@ def _ludo_check_vitoria(s: dict) -> Optional[str]:
             p["venceu"] = True
             s["fase"] = "fim"
             s["vencedor"] = sl
+            s.setdefault("placar", {"p1": 0, "p2": 0, "p3": 0, "p4": 0})
+            s["placar"][sl] = s["placar"].get(sl, 0) + 1
+            registrar_vitoria_ludo(p.get("nick", "Anônimo"),
+                                   p.get("nome", ""), p.get("avatar"))
             return sl
     return None
+
+
+@app.get("/ludo/ranking")
+def ranking_ludo_vitorias():
+    recordes = carregar_recordes()
+    ranking = ranking_top(recordes.get("ludo_vitorias", []),
+                          "vitorias", reverse=True, limite=10)
+    return {"ranking": ranking}
 
 
 @app.get("/ludo/salas")
@@ -1336,6 +1385,7 @@ async def criar_sala_ludo(dados: NovaSalaLudo):
         },
         "pecas": {"p1": [-1, -1, -1, -1], "p2": [-1, -1, -1, -1],
                   "p3": [-1, -1, -1, -1], "p4": [-1, -1, -1, -1]},
+        "placar": {"p1": 0, "p2": 0, "p3": 0, "p4": 0},
         "espectadores": [],
         "countdown_task": None,
         "criado_em": time.time(),
@@ -1427,35 +1477,41 @@ async def ws_lobby(websocket: WebSocket):
 
 async def _iniciar_contagem_ludo(sala: str):
     s = salas_ludo.get(sala)
-    if not s or s.get("fase") not in ("esperando", "contagem"):
+    if not s or s.get("fase") not in ("esperando", "contagem", "fim"):
         return
     s["fase"] = "contagem"
-    for n in (3, 2, 1, 0):
+    s["countdown_task"] = asyncio.current_task()
+    try:
+        for n in (3, 2, 1, 0):
+            s = salas_ludo.get(sala)
+            if not s or s.get("fase") != "contagem":
+                return
+            await broadcast_ludo(sala, {"tipo": "contagem", "n": n})
+            if n > 0:
+                await asyncio.sleep(1)
         s = salas_ludo.get(sala)
         if not s or s.get("fase") != "contagem":
             return
-        await broadcast_ludo(sala, {"tipo": "contagem", "n": n})
-        if n > 0:
-            await asyncio.sleep(1)
-    s = salas_ludo.get(sala)
-    if not s or s.get("fase") != "contagem":
-        return
-    s["fase"] = "jogando"
-    s["dado"] = None
-    s["dado_ja_rolado"] = False
-    s["opcoes"] = []
-    s["seis_seguidos"] = 0
-    s["vencedor"] = None
-    for sl in ("p1", "p2", "p3", "p4"):
-        if s["slots"].get(sl):
-            s["pecas"][sl] = [-1, -1, -1, -1]
-            s["slots"][sl]["venceu"] = False
-    primeiro = next((sl for sl in ("p1", "p2", "p3", "p4")
-                     if s["slots"].get(sl) and s["slots"][sl].get("ws")), "p1")
-    s["vez"] = primeiro
-    s["ultimo_evento"] = {"texto": "Jogo iniciado! Vez de " +
-                          ((s["slots"].get(primeiro) or {}).get("nick") or "—")}
-    await broadcast_ludo(sala, estado_ludo_para(s))
+        s["fase"] = "jogando"
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["opcoes"] = []
+        s["seis_seguidos"] = 0
+        s["vencedor"] = None
+        for sl in ("p1", "p2", "p3", "p4"):
+            if s["slots"].get(sl):
+                s["pecas"][sl] = [-1, -1, -1, -1]
+                s["slots"][sl]["venceu"] = False
+        primeiro = next((sl for sl in ("p1", "p2", "p3", "p4")
+                         if s["slots"].get(sl) and s["slots"][sl].get("ws")), "p1")
+        s["vez"] = primeiro
+        s["ultimo_evento"] = {"texto": "Jogo iniciado! Vez de " +
+                              ((s["slots"].get(primeiro) or {}).get("nick") or "—")}
+        await broadcast_ludo(sala, estado_ludo_para(s))
+    finally:
+        s2 = salas_ludo.get(sala)
+        if s2:
+            s2["countdown_task"] = None
 
 
 # Activity do Discord às vezes corta o prefixo /ws — alias igual à velha/sudoku.
@@ -1509,8 +1565,9 @@ async def ws_ludo(websocket: WebSocket, sala: str):
     await websocket.send_json(estado_ludo_para(s, slot))
     await _notificar_salas_ludo_lobby()
 
+    # Auto-inicia só com 4 jogadores; 2–3 esperam botão do líder.
     if (slot is not None and s.get("fase") == "esperando"
-            and sum(1 for p in s["slots"].values() if p and p.get("ws")) >= 2
+            and sum(1 for p in s["slots"].values() if p and p.get("ws")) >= 4
             and not s.get("countdown_task")):
         s["countdown_task"] = asyncio.create_task(_iniciar_contagem_ludo(sala))
 
@@ -1537,7 +1594,30 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                 continue
             if not s["slots"].get(slot):
                 break
-            if s.get("fase") not in ("jogando", "contagem", "esperando"):
+            if s.get("fase") not in ("jogando", "contagem", "esperando", "fim"):
+                continue
+
+            if tipo == "iniciar":
+                if s.get("fase") not in ("esperando", "fim"):
+                    continue
+                if slot != s.get("lider"):
+                    await websocket.send_json({
+                        "tipo": "erro_jogada",
+                        "mensagem": "Só o líder da sala pode iniciar.",
+                    })
+                    continue
+                conectados = sum(
+                    1 for p in s["slots"].values() if p and p.get("ws"))
+                if conectados < 2:
+                    await websocket.send_json({
+                        "tipo": "erro_jogada",
+                        "mensagem": "Mínimo de 2 jogadores para começar.",
+                    })
+                    continue
+                if s.get("countdown_task"):
+                    continue
+                s["countdown_task"] = asyncio.create_task(
+                    _iniciar_contagem_ludo(sala))
                 continue
 
             if tipo == "rolar":
@@ -1700,6 +1780,14 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                             s["fase"] = "fim"
                             s["vencedor"] = ficou
                             s["slots"][ficou]["venceu"] = True
+                            s.setdefault("placar",
+                                         {"p1": 0, "p2": 0, "p3": 0, "p4": 0})
+                            s["placar"][ficou] = s["placar"].get(ficou, 0) + 1
+                            p_ficou = s["slots"][ficou] or {}
+                            registrar_vitoria_ludo(
+                                p_ficou.get("nick", "Anônimo"),
+                                p_ficou.get("nome", ""),
+                                p_ficou.get("avatar"))
                             s["ultimo_evento"] = {
                                 "texto": "Desistências. " +
                                 ((s["slots"][ficou] or {}).get("nick") or "—") + " venceu!",

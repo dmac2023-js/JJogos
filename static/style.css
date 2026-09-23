@@ -168,6 +168,11 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .placar-nick { font-size: 12px; color: #aeb2c7; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 .placar-gol { font-size: 28px; font-weight: bold; color: #c8baff; font-variant-numeric: tabular-nums; line-height: 1; }
 .placar-x { color: #aeb2c7; font-size: 20px; font-weight: bold; }
+.placar-ludo { max-width: min(520px, 94vw); gap: 10px; padding: 8px 10px; margin-bottom: 10px; }
+.placar-ludo .placar-lado { min-width: 56px; }
+.placar-ludo .placar-avatar { width: 34px; height: 34px; font-size: 14px; }
+.placar-ludo .placar-gol { font-size: 20px; }
+.placar-ludo .placar-nick { font-size: 11px; max-width: 72px; }
 
 footer { margin-top: 24px; color: #777d98; font-size: 13px; text-align: center; }
 footer a { color: #aaa0ff; text-decoration: none; }
@@ -189,12 +194,12 @@ footer a:hover { color: #c8baff; }
 .ludo-jogador .cor-bolinha.amarelo { background: #e8b021; }
 .ludo-jogador .cor-bolinha.azul { background: #2f7fd0; }
 
-.ludo-layout { display: flex; gap: 18px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+.ludo-layout { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
 .ludo-tabuleiro {
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   grid-template-rows: repeat(15, 1fr);
-  width: min(560px, 94vw);
+  width: min(460px, 92vw);
   aspect-ratio: 1;
   gap: 1px;
   background: #0d0f18;
@@ -202,6 +207,7 @@ footer a:hover { color: #c8baff; }
   border-radius: 8px;
   padding: 2px;
   flex-shrink: 0;
+  position: relative;
 }
 .ludo-celula { position: relative; background: #1b1e30; border-radius: 2px; min-width: 0; min-height: 0; }
 .ludo-celula.base-vermelho { background: #5a1f1f; }
@@ -219,28 +225,44 @@ footer a:hover { color: #c8baff; }
 .ludo-celula .inicio-marcador { position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; opacity: .5; }
 
 .ludo-pecas { position: absolute; inset: 0; pointer-events: none; }
+.ludo-pecas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
 .ludo-peao {
-  position: absolute; width: 72%; height: 72%; border-radius: 50%;
+  position: absolute;
+  width: calc(100% / 15 * 0.72);
+  height: calc(100% / 15 * 0.72);
+  border-radius: 50%;
   border: 2px solid rgba(0,0,0,.45); box-shadow: 0 1px 3px rgba(0,0,0,.4);
-  transform: translate(14%, 14%); pointer-events: auto; cursor: default;
+  transform: none; pointer-events: auto; cursor: default;
   z-index: 2;
+  transition: left 0.1s linear, top 0.1s linear;
+  box-sizing: border-box;
 }
 .ludo-peao.vermelho { background: radial-gradient(circle at 35% 30%, #ff8a8a, #e03b3b); }
 .ludo-peao.verde { background: radial-gradient(circle at 35% 30%, #7ddea3, #3b9e57); }
 .ludo-peao.amarelo { background: radial-gradient(circle at 35% 30%, #ffe08a, #e8b021); }
 .ludo-peao.azul { background: radial-gradient(circle at 35% 30%, #9ec9ff, #2f7fd0); }
 .ludo-peao.opcao { cursor: pointer; animation: ludoPisca 0.8s ease-in-out infinite; z-index: 5; outline: 3px solid #fff; }
-.ludo-peao.opcao:hover { transform: translate(14%, 14%) scale(1.12); }
+.ludo-peao.opcao:hover { transform: scale(1.12); }
 @keyframes ludoPisca { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
-.ludo-peao.pilha-offset1 { transform: translate(28%, 4%); }
-.ludo-peao.pilha-offset2 { transform: translate(4%, 28%); }
-.ludo-peao.pilha-offset3 { transform: translate(28%, 28%); }
-.ludo-peao.opcao.pilha-offset1, .ludo-peao.opcao.pilha-offset2, .ludo-peao.opcao.pilha-offset3 { /* keep */ }
+.ludo-peao.pilha-offset1 { transform: translate(14%, -10%); }
+.ludo-peao.pilha-offset2 { transform: translate(-10%, 14%); }
+.ludo-peao.pilha-offset3 { transform: translate(14%, 14%); }
+.ludo-peao.opcao.pilha-offset1 { transform: translate(14%, -10%) scale(1.12); }
+.ludo-peao.opcao.pilha-offset2 { transform: translate(-10%, 14%) scale(1.12); }
+.ludo-peao.opcao.pilha-offset3 { transform: translate(14%, 14%) scale(1.12); }
+.ludo-peao.animando { transition: left 0.1s linear, top 0.1s linear; z-index: 6; }
 
-.ludo-painel { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 160px; }
+.ludo-lado { display: flex; flex-direction: column; gap: 12px; width: 170px; flex-shrink: 0; }
+.ludo-lado .painel-recordes { width: 100%; box-sizing: border-box; }
+.ludo-painel { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
 .ludo-dado {
-  width: 84px; height: 84px; border-radius: 16px; background: #f4f6ff; color: #11131d;
-  display: grid; place-items: center; font-size: 42px; font-weight: bold;
+  width: 72px; height: 72px; border-radius: 16px; background: #f4f6ff; color: #11131d;
+  display: grid; place-items: center; font-size: 36px; font-weight: bold;
   border: 3px solid #8d76e8; box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
 .ludo-dado.vazio { background: #22263a; color: #555e7a; }
@@ -248,7 +270,9 @@ footer a:hover { color: #c8baff; }
 
 @media (max-width: 700px) {
   .ludo-layout { flex-direction: column; align-items: center; }
-  .ludo-painel { flex-direction: row; width: auto; }
+  .ludo-lado { flex-direction: row; flex-wrap: wrap; width: auto; justify-content: center; align-items: flex-start; }
+  .ludo-painel { flex-direction: row; width: auto; flex-wrap: wrap; justify-content: center; }
+  .ludo-lado .painel-recordes { width: min(280px, 92vw); }
 }
 
 @media (max-width: 560px) { .cabecalho, .cabecalho-jogo { align-items: flex-start; flex-direction: column; } .informacoes-jogo { width: 100%; justify-content: space-between; } .dificuldades, .modo-selecao { grid-template-columns: 1fr; } .tela { padding: 18px; } .jogo-conteudo { flex-direction: column; } .painel-recordes { width: 100%; } }
@@ -267,6 +291,22 @@ footer a:hover { color: #c8baff; }
   #tela-jogo .historico { margin-top: 18px; padding-top: 14px; }
   .jogo-conteudo { gap: 16px; }
   .painel-recordes { padding: 12px; width: 180px; }
+  #tela-ludo .cabecalho-jogo { margin-bottom: 4px; }
+  #tela-ludo .voltar { margin-bottom: 8px; }
+  #tela-ludo .mensagem { margin: 6px 0; }
+  #tela-ludo .ludo-jogadores { margin-bottom: 8px; }
+  #tela-ludo .ludo-tabuleiro { width: min(380px, 50vh, 86vw); }
+  #tela-ludo .ludo-dado { width: 52px; height: 52px; font-size: 26px; border-radius: 12px; }
+  #tela-ludo .ludo-painel { gap: 8px; }
+  #tela-ludo .ludo-lado { width: 150px; gap: 8px; }
+  #tela-ludo .painel-recordes { padding: 10px; }
+  #tela-ludo .painel-recordes h2 { font-size: 13px; margin-bottom: 6px; }
+  #tela-ludo .registro-recorde { padding: 5px 7px; font-size: 11px; margin-bottom: 4px; }
+  #tela-ludo .recorde-avatar { width: 22px; height: 22px; }
+  #tela-ludo .placar-ludo .placar-avatar { width: 28px; height: 28px; font-size: 12px; }
+  #tela-ludo .placar-ludo .placar-gol { font-size: 16px; }
+  #tela-ludo .placar-ludo { margin-bottom: 8px; padding: 6px 8px; }
+  #tela-ludo .ludo-dica { font-size: 12px; }
 }
 
 /* Celular: botões maiores e transmissão em largura cheia. */

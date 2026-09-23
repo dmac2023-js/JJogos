@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-08" />
+    <link rel="stylesheet" href="./style.css?v=20260924-09" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -150,6 +150,13 @@
       .placar-nick { font-size: 12px; color: #aeb2c7; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
       .placar-gol { font-size: 28px; font-weight: bold; color: #c8baff; font-variant-numeric: tabular-nums; line-height: 1; }
       .placar-x { color: #aeb2c7; font-size: 20px; font-weight: bold; }
+      .placar-ludo { max-width: min(520px, 94vw); gap: 10px; padding: 8px 10px; margin-bottom: 10px; }
+      .placar-ludo .placar-lado { min-width: 56px; }
+      .placar-ludo .placar-avatar { width: 34px; height: 34px; font-size: 14px; }
+      .placar-ludo .placar-gol { font-size: 20px; }
+      .placar-ludo .placar-nick { font-size: 11px; max-width: 72px; }
+      .ludo-lado { display: flex; flex-direction: column; gap: 12px; width: 180px; flex-shrink: 0; }
+      .ludo-lado .painel-recordes { width: 100%; }
 
       /* Compartilhar Tela */
       .aviso-navegador { padding: 14px 16px; border: 1px solid #6b5b95; border-radius: 12px; background: #24213d; margin-bottom: 18px; }
@@ -331,6 +338,21 @@
         #tela-jogo .historico { margin-top: 18px; padding-top: 14px; }
         .jogo-conteudo { gap: 16px; }
         .painel-recordes { padding: 12px; width: 180px; }
+        #tela-ludo .cabecalho-jogo { margin-bottom: 4px; }
+        #tela-ludo .voltar { margin-bottom: 8px; }
+        #tela-ludo .mensagem { margin: 6px 0; }
+        #tela-ludo .ludo-jogadores { margin-bottom: 8px; }
+        #tela-ludo .ludo-tabuleiro { width: min(400px, 52vh, 88vw); }
+        #tela-ludo .ludo-dado { width: 56px; height: 56px; font-size: 28px; border-radius: 12px; }
+        #tela-ludo .ludo-painel { gap: 8px; width: 150px; }
+        #tela-ludo .ludo-lado { width: 150px; gap: 8px; }
+        #tela-ludo .painel-recordes { padding: 10px; }
+        #tela-ludo .painel-recordes h2 { font-size: 13px; margin-bottom: 6px; }
+        #tela-ludo .registro-recorde { padding: 5px 7px; font-size: 11px; }
+        #tela-ludo .recorde-avatar { width: 22px; height: 22px; }
+        #tela-ludo .placar-ludo .placar-avatar { width: 28px; height: 28px; font-size: 12px; }
+        #tela-ludo .placar-ludo .placar-gol { font-size: 16px; }
+        #tela-ludo .placar-ludo { margin-bottom: 8px; padding: 6px 8px; }
       }
     </style>
   </head>
@@ -478,12 +500,45 @@
 
         <div id="ludo-jogadores" class="ludo-jogadores"></div>
 
+        <div id="placar-times-ludo" class="placar-times placar-ludo" style="display:none;">
+          <div class="placar-lado" data-slot="p1">
+            <span class="placar-avatar" id="placar-ludo-avatar-p1">?</span>
+            <span class="placar-nick" id="placar-ludo-nick-p1">—</span>
+            <span class="placar-gol" id="placar-ludo-gol-p1">0</span>
+          </div>
+          <span class="placar-x">×</span>
+          <div class="placar-lado" data-slot="p2">
+            <span class="placar-avatar" id="placar-ludo-avatar-p2">?</span>
+            <span class="placar-nick" id="placar-ludo-nick-p2">—</span>
+            <span class="placar-gol" id="placar-ludo-gol-p2">0</span>
+          </div>
+          <span class="placar-x">×</span>
+          <div class="placar-lado" data-slot="p3">
+            <span class="placar-avatar" id="placar-ludo-avatar-p3">?</span>
+            <span class="placar-nick" id="placar-ludo-nick-p3">—</span>
+            <span class="placar-gol" id="placar-ludo-gol-p3">0</span>
+          </div>
+          <span class="placar-x">×</span>
+          <div class="placar-lado" data-slot="p4">
+            <span class="placar-avatar" id="placar-ludo-avatar-p4">?</span>
+            <span class="placar-nick" id="placar-ludo-nick-p4">—</span>
+            <span class="placar-gol" id="placar-ludo-gol-p4">0</span>
+          </div>
+        </div>
+
         <div class="ludo-layout">
           <div id="ludo-tabuleiro" class="ludo-tabuleiro" aria-label="Tabuleiro Ludo"></div>
-          <div class="ludo-painel">
-            <div id="ludo-dado" class="ludo-dado" aria-hidden="true">?</div>
-            <button id="ludo-rolar" class="botao principal" style="display:none; width:100%;">Rolar dado</button>
-            <p id="ludo-dica" class="ludo-dica">Escolha uma peça destacada.</p>
+          <div class="ludo-lado">
+            <div class="ludo-painel">
+              <div id="ludo-dado" class="ludo-dado" aria-hidden="true">?</div>
+              <button id="ludo-rolar" class="botao principal" style="display:none; width:100%;">Rolar dado</button>
+              <button id="ludo-iniciar" class="botao principal" style="display:none; width:100%;">Iniciar</button>
+              <p id="ludo-dica" class="ludo-dica">Escolha uma peça destacada.</p>
+            </div>
+            <aside class="painel-recordes">
+              <h2>Top 3 vitórias</h2>
+              <div id="lista-ranking-ludo"><p class="vazio">Carregando...</p></div>
+            </aside>
           </div>
         </div>
       </section>
@@ -904,6 +959,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-08"></script>
+    <script src="./app.js?v=20260924-09"></script>
   </body>
 </html>
