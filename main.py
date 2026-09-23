@@ -1210,6 +1210,9 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                 break
             if msg.get("bytes") is not None:
                 # Quadro de vídeo VP8 do relay → fã-out para quem assiste na Activity.
+                if not transmissao.get("_relay_bytes_log"):
+                    transmissao["_relay_bytes_log"] = True
+                    log_tela("primeiro quadro binario do relay sala=%s" % sala)
                 for ws in list(transmissao.get("relay_ws", {}).values()):
                     try:
                         await ws.send_bytes(msg["bytes"])
@@ -1228,6 +1231,15 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
             viewer_ws = transmissao["viewers"].get(viewer_id)
 
             if tipo == "ping":
+                continue
+            if tipo in {"relay_pronto", "relay_erro"}:
+                # Host confirma que o encoder de relay ligou (ou falhou).
+                log_tela("%s sala=%s %s" % (tipo, sala, dados.get("mensagem", "")))
+                for ws in list(transmissao.get("relay_ws", {}).values()):
+                    try:
+                        await ws.send_json({"tipo": tipo, "mensagem": dados.get("mensagem")})
+                    except Exception:
+                        pass
                 continue
             if tipo == "sair":
                 break

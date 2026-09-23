@@ -997,9 +997,9 @@ var relayFrameOk = false;
 var relayEncoder = null;
 var relayAtivo = false;
 var relayDrawTimer = null;
-var relayReader = null;
 var relayForcarKey = false;
 var relayDecoder = null;
+var relayProntoEnviado = false;
 
 var TELA_PRESETS = {
   "480p": { largura: 854, altura: 480, bitrate: 800000 },
@@ -1231,9 +1231,13 @@ function receberRelay(buffer) {
 }
 
 async function iniciarEncoderRelay() {
-  if (relayAtivo || !telaEhHost || !telaStream) return;
-  if (typeof VideoEncoder === "undefined" || typeof MediaStreamTrackProcessor === "undefined") {
-    console.warn("WebCodecs ausente: quem assiste na Activity não receberá vídeo.");
+  if (relayAtivo || !telaEhHost) return;
+  if (!telaStream) {
+    enviarTela({ tipo: "relay_erro", mensagem: "Captura de tela indisponível no transmissor." });
+    return;
+  }
+  if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") {
+    enviarTela({ tipo: "relay_erro", mensagem: "Navegador de quem transmite não tem WebCodecs." });
     return;
   }
   relayAtivo = true;
@@ -1242,17 +1246,7 @@ async function iniciarEncoderRelay() {
   var canvas = document.createElement("canvas");
   canvas.width = preset.largura;
   canvas.height = preset.altura;
-  var ctx = canvas.getContext("2d");
-
-  relayDrawTimer = setInterval(function () {
-    var v = videoTransmissaoEl;
-    if (v && v.readyState >= 2 && v.videoWidth > 0) {
-      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-    }
-  }, Math.max(16, Math.floor(1000 / telaFps)));
-
-  var stream = canvas.captureStream(telaFps);
-  var track = stream.getVideoTracks()[0];
+  var ctx = canvas.getContext("2d", { alpha: false });
 
   relayEncoder = new VideoEncoder({
     output: function (chunk) {
@@ -1263,41 +1257,63 @@ async function iniciarEncoderRelay() {
       new DataView(pacote.buffer).setUint32(1, chunk.timestamp);
       pacote.set(new Uint8Array(dados), 5);
       try { telaWs.send(pacote); } catch (e) { /* ignore */ }
+      if (!relayProntoEnviado) {
+        relayProntoEnviado = true;
+        enviarTela({ tipo: "relay_pronto" });
+      }
     },
-    error: function (e) { console.warn("Encoder relay:", e); },
-  });
-  relayEncoder.configure({
-    codec: "vp8",
-    width: canvas.width,
-    height: canvas.height,
-    framerate: telaFps,
-    bitrate: bitrateEfetivo(),
-    latencyMode: "realtime",
+    error: function (e) {
+      console.warn("Encoder relay:", e);
+      enviarTela({ tipo: "relay_erro", mensagem: String(e && e.message ? e.message : e) });
+      pararEncoderRelay();
+    },
   });
 
-  var reader = new MediaStreamTrackProcessor({ track: track }).readable.getReader();
-  relayReader = reader;
+  try {
+    relayEncoder.configure({
+      codec: "vp8",
+      width: canvas.width,
+      height: canvas.height,
+      framerate: telaFps,
+      bitrate: bitrateEfetivo(),
+      latencyMode: "realtime",
+    });
+  } catch (e) {
+    enviarTela({ tipo: "relay_erro", mensagem: "Falha ao configurar encoder: " + e.message });
+    pararEncoderRelay();
+    return;
+  }
+
+  // drawImage -> VideoFrame(canvas) -> encode: não depende de
+  // MediaStreamTrackProcessor (pode não existir no navegador do host).
+  var video = videoTransmissaoEl;
+  var tsUs = 0;
   var ultimoKey = 0;
-
-  (async function laco() {
-    while (relayAtivo && relayReader === reader) {
-      var resultado = await reader.read();
-      if (resultado.done) break;
-      var frame = resultado.value;
-      if (!relayEncoder || relayEncoder.state === "closed") { frame.close(); break; }
-      if (relayEncoder.encodeQueueSize > 8) { frame.close(); continue; }
-      var agora = performance.now();
-      var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
-      if (forcar) { ultimoKey = agora; relayForcarKey = false; }
-      try { relayEncoder.encode(frame, { keyFrame: forcar }); } catch (e) { /* ignore */ }
-      frame.close();
+  relayDrawTimer = setInterval(function () {
+    if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
+    if (!video || video.readyState < 2 || !video.videoWidth) return;
+    if (relayEncoder.encodeQueueSize > 8) return;
+    var frame;
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frame = new VideoFrame(canvas, { timestamp: tsUs });
+    } catch (e) {
+      enviarTela({ tipo: "relay_erro", mensagem: "Falha ao capturar quadro: " + e.message });
+      pararEncoderRelay();
+      return;
     }
-  })();
+    tsUs += Math.round(1000000 / telaFps);
+    var agora = performance.now();
+    var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
+    if (forcar) { ultimoKey = agora; relayForcarKey = false; }
+    try { relayEncoder.encode(frame, { keyFrame: forcar }); } catch (e) { /* ignore */ }
+    frame.close();
+  }, Math.max(16, Math.floor(1000 / telaFps)));
 }
 
 function pararEncoderRelay() {
   relayAtivo = false;
-  relayReader = null;
+  relayProntoEnviado = false;
   clearInterval(relayDrawTimer);
   relayDrawTimer = null;
   if (relayEncoder) {
@@ -1309,7 +1325,12 @@ function pararEncoderRelay() {
 function reiniciarEncoderRelaySeAtivo() {
   if (relayAtivo) {
     pararEncoderRelay();
-    if (telaRelayTotal > 0) iniciarEncoderRelay();
+    if (telaRelayTotal > 0) {
+      iniciarEncoderRelay().catch(function (e) {
+        console.warn("Encoder relay:", e);
+        enviarTela({ tipo: "relay_erro", mensagem: String(e) });
+      });
+    }
   }
 }
 
@@ -1469,6 +1490,8 @@ function configurarTelaTransmissaoHost() {
   document.querySelector("#canvas-relay").style.display = "none";
   videoTransmissaoEl.muted = true;
   videoTransmissaoEl.srcObject = telaStream;
+  var p = videoTransmissaoEl.play();
+  if (p && p.catch) p.catch(function () { /* autoplay pode exigir gesto — silencioso */ });
 }
 
 function criarPeerParaViewer(viewerId) {
@@ -1720,7 +1743,8 @@ function processarMensagemTela(dados) {
         iniciarDecoderRelay(dados.resolucao);
         telaRelayTimer = setTimeout(function () {
           if (telaModoRelay && !relayFrameOk && telaSala) {
-            mensagemTransmissao("Conectado, mas quem transmite ainda não está enviando vídeo (sala " + telaSala + "). Verifique se a transmissão está aberta.", "erro");
+            mensagemTransmissao("Quem transmite não está enviando vídeo (sala " + telaSala +
+              "). Se a transmissão estiver aberta, peça para ele fechar e reabrir a aba de transmissão (pode estar desatualizada).", "erro");
           }
         }, 15000);
       } else if (!telaEhHost) {
@@ -1755,10 +1779,26 @@ function processarMensagemTela(dados) {
       if (telaEhHost) {
         if (telaRelayTotal > 0) {
           relayForcarKey = true;
-          if (!relayAtivo) iniciarEncoderRelay();
+          if (!relayAtivo) {
+            iniciarEncoderRelay().catch(function (e) {
+              console.warn("Encoder relay:", e);
+              enviarTela({ tipo: "relay_erro", mensagem: String(e) });
+            });
+          }
         } else if (relayAtivo) {
           pararEncoderRelay();
         }
+      }
+      break;
+    case "relay_pronto":
+      if (telaModoRelay && !relayFrameOk) {
+        mensagemTransmissao("Transmitindo via relay — aguardando os primeiros quadros...", "sucesso");
+      }
+      break;
+    case "relay_erro":
+      if (telaModoRelay) {
+        mensagemTransmissao("Quem transmite teve um erro no encoder: " +
+          (dados.mensagem || "erro desconhecido"), "erro");
       }
       break;
     case "viewers_total":
