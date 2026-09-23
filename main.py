@@ -1283,6 +1283,17 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                     transmissao["_relay_send_log"] = True
                     log_tela("quadro encaminhado ao viewer sala=%s n=%d" % (sala, enviados))
                 continue
+            if tipo == "audio":
+                # Áudio Opus do relay em JSON base64 — mesmo caminho do vídeo.
+                if not transmissao.get("_relay_audio_log"):
+                    transmissao["_relay_audio_log"] = True
+                    log_tela("primeiro audio json do relay sala=%s" % sala)
+                for ws in list(transmissao.get("relay_ws", {}).values()):
+                    try:
+                        await ws.send_text(text)
+                    except Exception:
+                        pass
+                continue
             if tipo == "quadro_rx":
                 # Viewer da Activity confirmou que o quadro chegou no JS.
                 log_tela("viewer recebeu quadro sala=%s" % sala)

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260922-13" />
+    <link rel="stylesheet" href="./style.css?v=20260922-14" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -141,7 +141,18 @@
       .botao-preset:hover { border-color: #9c7cff; }
       .botao-preset.selecionado { border-color: #8664ff; background: #7655e8; font-weight: bold; }
       .aviso-upload { margin: 6px 0 14px; color: #aeb2c7; font-size: 12px; line-height: 1.5; }
-      .video-transmissao { display: block; width: 100%; max-height: 60vh; border-radius: 12px; background: #000; margin-top: 6px; }
+      .video-transmissao { display: block; width: 100%; max-height: 72vh; object-fit: contain; border-radius: 12px; background: #000; margin-top: 6px; }
+      .video-transmissao.tam-p { max-width: 560px; max-height: 36vh; margin-left: auto; margin-right: auto; }
+      .video-transmissao.tam-m { max-width: 900px; max-height: 54vh; margin-left: auto; margin-right: auto; }
+      .video-transmissao.tam-g { max-width: 100%; max-height: 72vh; }
+      .video-transmissao.tam-full { max-width: 100%; max-height: calc(100vh - 40px); border-radius: 0; }
+      #controles-transmissao { display: none; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px 12px; border: 1px solid #33365a; border-radius: 12px; background: #14162a; }
+      #controles-transmissao .grupo-preset { flex: 1; min-width: 140px; margin: 0; }
+      #controles-transmissao .grupo-preset .preset-opcoes { display: flex; gap: 6px; }
+      #controles-transmissao .grupo-preset .botao-preset { flex: 1; padding: 6px 0; font-size: 12px; }
+      .controle-volume { display: flex; align-items: center; gap: 6px; min-width: 160px; }
+      .controle-volume input[type="range"] { flex: 1; accent-color: #8664ff; }
+      .controle-volume .botao-preset { flex: 0 0 auto; padding: 6px 10px; min-width: 42px; }
 
       /* Login Discord */
       .cabecalho-acoes { position: fixed; top: 10px; right: 14px; z-index: 70; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; max-width: calc(100vw - 20px); padding: 6px 10px; background: rgba(14, 16, 30, 0.93); border: 1px solid #33365a; border-radius: 999px; backdrop-filter: blur(6px); }
@@ -458,8 +469,23 @@
           <button id="copiar-link-tela" class="botao-copiar" title="Copiar link da transmissão">Copiar link</button>
         </div>
 
-        <video id="video-transmissao" class="video-transmissao" autoplay playsinline controls></video>
-        <canvas id="canvas-relay" class="video-transmissao" style="display:none;"></canvas>
+        <video id="video-transmissao" class="video-transmissao tam-m" autoplay playsinline controls></video>
+        <canvas id="canvas-relay" class="video-transmissao tam-m" style="display:none;"></canvas>
+
+        <div id="controles-transmissao">
+          <div class="controle-volume">
+            <button type="button" id="btn-mudo-transmissao" class="botao-preset" title="Mudo">🔊</button>
+            <input type="range" id="volume-transmissao" min="0" max="100" value="100" title="Volume" />
+          </div>
+          <div class="grupo-preset">
+            <div class="preset-opcoes" id="tamanho-video">
+              <button type="button" class="botao-preset" data-tam="p" title="Pequeno">P</button>
+              <button type="button" class="botao-preset selecionado" data-tam="m" title="Médio">M</button>
+              <button type="button" class="botao-preset" data-tam="g" title="Grande">G</button>
+              <button type="button" class="botao-preset" data-tam="full" title="Tela cheia">⛶</button>
+            </div>
+          </div>
+        </div>
 
         <div id="transmissao-qualidade" style="display:none;">
           <div class="grupo-preset">
@@ -507,6 +533,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260922-13"></script>
+    <script src="./app.js?v=20260922-14"></script>
   </body>
 </html>

@@ -1010,6 +1010,17 @@ var relayCfgOk = false;
 var relaySemOutput = 0;
 var ultimoErroRelay = "";
 
+// Áudio do relay (Activity não tem WebRTC): Opus via WebCodecs.
+var relayAudioEncoder = null;
+var relayAudioReader = null;
+var relayAudioLoopAtivo = false;
+var relayAudioDecoder = null;
+var relayAudioCtx = null;
+var relayAudioGain = null;
+var relayAudioProxima = 0;
+var relayAudioCfgOk = false;
+var relayAudioMudoHost = false;
+
 function logRelayDiag(etapa, extra) {
   var msg = { tipo: "relay_diag", etapa: etapa };
   if (extra) {
@@ -1067,6 +1078,15 @@ var telaTransmissaoEl = document.querySelector("#tela-transmissao");
 var mensagemTelaEl = document.querySelector("#mensagem-tela");
 var mensagemTransmissaoEl = document.querySelector("#mensagem-transmissao");
 var videoTransmissaoEl = document.querySelector("#video-transmissao");
+var canvasRelayEl = document.querySelector("#canvas-relay");
+var controlesTransmissaoEl = document.querySelector("#controles-transmissao");
+var btnMudoEl = document.querySelector("#btn-mudo-transmissao");
+var volumeEl = document.querySelector("#volume-transmissao");
+
+// Estado de áudio/volume compartilhado host+viewer.
+var audioMudo = false;
+var volumeLocal = 1;
+var telaAudioMuted = false;
 
 function obterInstanciaParam() {
   var params = new URLSearchParams(location.search);
@@ -1109,12 +1129,14 @@ function bitrateEfetivo() {
   return telaFps === 60 ? Math.round(base * 1.6) : base;
 }
 
-// Relay da Activity vai em JSON: bitrate menor => quadros menores =>
-// menos chance do proxy do Discord derrubar a mensagem.
+// Relay da Activity vai em JSON: bitrate maior = melhor qualidade.
+// Fragmentação em 12KB protege contra limite de mensagem do proxy.
 function bitrateRelay() {
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  return Math.min(base, telaResolucao === "1080p" ? 1400000
-    : telaResolucao === "720p" ? 850000 : 450000);
+  var teto = telaResolucao === "1080p" ? 6000000
+    : telaResolucao === "720p" ? 3500000 : 1800000;
+  var b = Math.min(base, teto);
+  return telaFps === 60 ? Math.round(b * 1.5) : b;
 }
 
 function atualizarAvisoUpload() {
@@ -1200,7 +1222,11 @@ async function trocarJanelaTela() {
         height: { ideal: preset.altura },
         frameRate: { ideal: telaFps, max: telaFps },
       },
-      audio: false,
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
     });
   } catch (e) {
     mensagemTransmissao("Troca de programa/janela cancelada.");
@@ -1208,6 +1234,7 @@ async function trocarJanelaTela() {
   }
 
   var novaTrack = novo.getVideoTracks()[0];
+  var novaAudio = novo.getAudioTracks()[0];
   var antiga = telaStream;
   var trocas = [];
 
@@ -1216,6 +1243,9 @@ async function trocarJanelaTela() {
       if (sender.track && sender.track.kind === "video") {
         var p = sender.replaceTrack(novaTrack);
         if (p && p.then) trocas.push(p);
+      } else if (sender.track && sender.track.kind === "audio" && novaAudio) {
+        var pa = sender.replaceTrack(novaAudio);
+        if (pa && pa.then) trocas.push(pa);
       }
     });
   });
@@ -1224,6 +1254,10 @@ async function trocarJanelaTela() {
     antiga.getTracks().forEach(function (t) { t.stop(); });
     telaStream = novo;
     videoTransmissaoEl.srcObject = novo;
+    if (novaAudio) {
+      novaAudio.enabled = !audioMudo;
+      iniciarEncoderAudioRelay();
+    }
     novaTrack.addEventListener("ended", function () {
       encerrarTransmissao(false);
       mensagemTela("Transmissão encerrada: você parou a captura de tela.", "erro");
@@ -1263,6 +1297,7 @@ function iniciarDecoderRelay(resolucao) {
   relayCfgOk = false;
   relaySemOutput = 0;
   ultimoErroRelay = "";
+  iniciarDecoderAudioRelay();
   if (typeof VideoDecoder === "undefined") {
     ultimoErroRelay = "sem VideoDecoder";
     logRelayDiag("sem_videodecoder");
@@ -1330,6 +1365,198 @@ function pararDecoderRelay() {
     try { if (relayDecoder.state !== "closed") relayDecoder.close(); } catch (e) { /* ignore */ }
     relayDecoder = null;
   }
+  pararDecoderAudioRelay();
+}
+
+// ---------------------------------------------------------------------------
+// Áudio no relay: host codifica Opus → JSON base64 → servidor → viewer
+// ---------------------------------------------------------------------------
+function iniciarEncoderAudioRelay() {
+  pararEncoderAudioRelay();
+  if (!telaEhHost || !telaStream) return;
+  var track = telaStream.getAudioTracks()[0];
+  if (!track) return;
+  if (typeof MediaStreamTrackProcessor === "undefined" || typeof AudioEncoder === "undefined") {
+    logRelayDiag("sem_audio_encoder");
+    return;
+  }
+  try {
+    var proc = new MediaStreamTrackProcessor({ track: track });
+    relayAudioReader = proc.readable.getReader();
+  } catch (e) {
+    logRelayDiag("audio_processor_erro", { msg: e.message });
+    return;
+  }
+  var cfgFeita = false;
+  relayAudioLoopAtivo = true;
+  relayAudioEncoder = new AudioEncoder({
+    output: function (chunk) {
+      try {
+        if (!telaWs || telaWs.readyState !== WebSocket.OPEN) return;
+        if (relayAudioMudoHost) return;
+        var bytes = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(bytes);
+        var s = "";
+        for (var i = 0; i < bytes.length; i += 0x8000) {
+          s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        enviarTela({ tipo: "audio", t: chunk.timestamp, d: btoa(s) });
+      } catch (e) { /* ignore */ }
+    },
+    error: function (e) {
+      logRelayDiag("audio_enc_erro", { msg: e && e.message ? e.message : e });
+    },
+  });
+  (async function pump() {
+    while (relayAudioLoopAtivo && relayAudioReader) {
+      try {
+        var r = await relayAudioReader.read();
+        if (r.done) break;
+        var frame = r.value;
+        if (!cfgFeita && relayAudioEncoder) {
+          relayAudioEncoder.configure({
+            codec: "opus",
+            sampleRate: frame.sampleRate || 48000,
+            numberOfChannels: Math.min(2, frame.numberOfChannels || 1),
+            bitrate: 64000,
+          });
+          cfgFeita = true;
+          relayAudioCfgOk = true;
+          logRelayDiag("audio_enc_cfg", { state: relayAudioEncoder.state });
+        }
+        if (relayAudioEncoder && relayAudioEncoder.state === "configured"
+            && relayAudioEncoder.encodeQueueSize < 20
+            && !relayAudioMudoHost) {
+          relayAudioEncoder.encode(frame);
+        }
+        if (frame.close) frame.close();
+      } catch (e) {
+        break;
+      }
+    }
+  })();
+}
+
+function pararEncoderAudioRelay() {
+  relayAudioLoopAtivo = false;
+  if (relayAudioReader) {
+    try { relayAudioReader.cancel(); } catch (e) { /* ignore */ }
+    relayAudioReader = null;
+  }
+  if (relayAudioEncoder) {
+    try { if (relayAudioEncoder.state !== "closed") relayAudioEncoder.close(); } catch (e) { /* ignore */ }
+    relayAudioEncoder = null;
+  }
+}
+
+function iniciarDecoderAudioRelay() {
+  pararDecoderAudioRelay();
+  if (typeof AudioDecoder === "undefined" || typeof AudioContext === "undefined") {
+    logRelayDiag("sem_audio_decoder");
+    return;
+  }
+  try {
+    relayAudioCtx = new AudioContext({ sampleRate: 48000 });
+    relayAudioGain = relayAudioCtx.createGain();
+    relayAudioGain.gain.value = audioMudo ? 0 : volumeLocal;
+    relayAudioGain.connect(relayAudioCtx.destination);
+    relayAudioProxima = 0;
+    relayAudioDecoder = new AudioDecoder({
+      output: function (frame) {
+        try {
+          if (!relayAudioCtx || !relayAudioGain) { frame.close(); return; }
+          if (relayAudioCtx.state === "suspended") relayAudioCtx.resume();
+          var canais = frame.numberOfChannels;
+          var n = frame.numberOfFrames;
+          var ab = relayAudioCtx.createBuffer(canais, n, frame.sampleRate);
+          for (var c = 0; c < canais; c++) {
+            var plane = new Float32Array(n);
+            frame.copyTo(plane, { planeIndex: c, format: "f32-planar" });
+            ab.copyToChannel(plane, c);
+          }
+          var src = relayAudioCtx.createBufferSource();
+          src.buffer = ab;
+          src.connect(relayAudioGain);
+          var agora = relayAudioCtx.currentTime;
+          if (relayAudioProxima < agora || relayAudioProxima > agora + 0.5) {
+            relayAudioProxima = agora + 0.02;
+          }
+          src.start(relayAudioProxima);
+          relayAudioProxima += n / frame.sampleRate;
+        } catch (e) { /* ignore */ }
+        try { frame.close(); } catch (e2) { /* ignore */ }
+      },
+      error: function (e) {
+        logRelayDiag("audio_dec_erro", { msg: e && e.message ? e.message : e });
+      },
+    });
+    relayAudioDecoder.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 });
+    relayAudioCfgOk = true;
+    logRelayDiag("audio_dec_cfg", { state: relayAudioDecoder.state });
+  } catch (e) {
+    logRelayDiag("audio_dec_init_erro", { msg: e.message });
+  }
+}
+
+function pararDecoderAudioRelay() {
+  if (relayAudioDecoder) {
+    try { if (relayAudioDecoder.state !== "closed") relayAudioDecoder.close(); } catch (e) { /* ignore */ }
+    relayAudioDecoder = null;
+  }
+  if (relayAudioCtx) {
+    try { relayAudioCtx.close(); } catch (e) { /* ignore */ }
+    relayAudioCtx = null;
+    relayAudioGain = null;
+  }
+}
+
+function receberAudioRelay(dados) {
+  if (!telaModoRelay || telaEhHost || !dados || !dados.d) return;
+  if (!relayAudioDecoder || relayAudioDecoder.state === "closed") {
+    if (!relayAudioCfgOk) iniciarDecoderAudioRelay();
+    if (!relayAudioDecoder || relayAudioDecoder.state === "closed") return;
+  }
+  try {
+    var bin = atob(dados.d);
+    var payload = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) payload[i] = bin.charCodeAt(i);
+    if (relayAudioDecoder.decodeQueueSize > 40) return;
+    relayAudioDecoder.decode(new EncodedAudioChunk({
+      type: "delta",
+      timestamp: dados.t || 0,
+      data: payload,
+    }));
+  } catch (e) {
+    logRelayDiag("audio_rx_erro", { msg: e.message });
+  }
+}
+
+function aplicarVolumeLocal() {
+  videoTransmissaoEl.volume = volumeLocal;
+  if (relayAudioGain) relayAudioGain.gain.value = audioMudo ? 0 : volumeLocal;
+  // Host: mudo no envio (track) — preview local continua mudo por padrão.
+  if (telaEhHost && telaStream) {
+    var tr = telaStream.getAudioTracks()[0];
+    if (tr) tr.enabled = !audioMudo;
+    relayAudioMudoHost = audioMudo;
+  }
+  // Viewer WebRTC: mudo no elemento.
+  if (!telaEhHost && !telaModoRelay) {
+    videoTransmissaoEl.muted = audioMudo;
+  }
+}
+
+function definirTamanhoVideo(tam) {
+  var classes = ["tam-p", "tam-m", "tam-g", "tam-full"];
+  [videoTransmissaoEl, canvasRelayEl].forEach(function (el) {
+    if (!el) return;
+    classes.forEach(function (c) { el.classList.remove(c); });
+    el.classList.add("tam-" + tam);
+  });
+  document.querySelectorAll("#tamanho-video .botao-preset").forEach(function (b) {
+    b.classList.toggle("selecionado", b.dataset.tam === tam);
+  });
+  try { localStorage.setItem("jj_tela_tam", tam); } catch (e) { /* ignore */ }
 }
 
 function receberRelay(buffer) {
@@ -1493,11 +1720,25 @@ async function iniciarEncoderRelay() {
       framerate: telaFps,
       bitrate: bitrateRelay(),
       latencyMode: "realtime",
+      // Prioriza latência sobre qualidade de referência (menos buffer).
+      contentHint: "motion",
     });
   } catch (e) {
-    enviarTela({ tipo: "relay_erro", mensagem: "Falha ao configurar encoder: " + e.message });
-    pararEncoderRelay();
-    return;
+    // contentHint pode não existir em browsers antigos — reconfigura sem.
+    try {
+      relayEncoder.configure({
+        codec: "vp8",
+        width: canvas.width,
+        height: canvas.height,
+        framerate: telaFps,
+        bitrate: bitrateRelay(),
+        latencyMode: "realtime",
+      });
+    } catch (e2) {
+      enviarTela({ tipo: "relay_erro", mensagem: "Falha ao configurar encoder: " + e2.message });
+      pararEncoderRelay();
+      return;
+    }
   }
 
   // Aba em segundo plano: Chrome pausa/throttla timers — reforça o play e
@@ -1528,7 +1769,8 @@ async function iniciarEncoderRelay() {
       return;
     }
     ticksSemVideo = 0;
-    if (relayEncoder.encodeQueueSize > 8) return;
+    // Fila maior = menos frames descartados em picos (qualidade/fps).
+    if (relayEncoder.encodeQueueSize > 16) return;
     var frame;
     try {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1540,7 +1782,8 @@ async function iniciarEncoderRelay() {
     }
     tsUs += Math.round(1000000 / telaFps);
     var agora = performance.now();
-    var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
+    // Keyframe a cada 500ms: recovery mais rápido + viewer entra mais rápido.
+    var forcar = relayForcarKey || (agora - ultimoKey) >= 500;
     if (forcar) { ultimoKey = agora; relayForcarKey = false; }
     try {
       relayEncoder.encode(frame, { keyFrame: forcar });
@@ -1572,6 +1815,7 @@ function pararEncoderRelay() {
     try { if (relayEncoder.state !== "closed") relayEncoder.close(); } catch (e) { /* ignore */ }
     relayEncoder = null;
   }
+  pararEncoderAudioRelay();
 }
 
 function reiniciarEncoderRelaySeAtivo() {
@@ -1582,6 +1826,7 @@ function reiniciarEncoderRelaySeAtivo() {
         console.warn("Encoder relay:", e);
         enviarTela({ tipo: "relay_erro", mensagem: String(e) });
       });
+      iniciarEncoderAudioRelay();
     }
   }
 }
@@ -1684,7 +1929,11 @@ async function iniciarTransmissaoTela() {
         height: { ideal: preset.altura },
         frameRate: { ideal: telaFps, max: telaFps },
       },
-      audio: false,
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
     });
   } catch (e) {
     mensagemTela("Captura cancelada ou negada.", "erro");
@@ -1732,6 +1981,8 @@ function configurarTelaTransmissaoHost() {
   document.querySelector("#encerrar-transmissao").style.display = "";
   document.querySelector("#parar-assistir").style.display = "none";
   document.querySelector("#transmissao-qualidade").style.display = "";
+  controlesTransmissaoEl.style.display = "flex";
+  btnMudoEl.title = "Mudo do que você está enviando";
   document.querySelectorAll("#live-resolucao .botao-preset").forEach(function (b) {
     b.classList.toggle("selecionado", b.dataset.resolucao === telaResolucao);
   });
@@ -1739,9 +1990,15 @@ function configurarTelaTransmissaoHost() {
     b.classList.toggle("selecionado", parseInt(b.dataset.fps, 10) === telaFps);
   });
   videoTransmissaoEl.style.display = "";
-  document.querySelector("#canvas-relay").style.display = "none";
+  canvasRelayEl.style.display = "none";
+  // Preview do host mudo por padrão (evita eco); botão controla o envio.
   videoTransmissaoEl.muted = true;
+  videoTransmissaoEl.volume = volumeLocal;
   videoTransmissaoEl.srcObject = telaStream;
+  var trAudioHost = telaStream.getAudioTracks()[0];
+  if (trAudioHost) trAudioHost.enabled = !audioMudo;
+  iniciarEncoderAudioRelay();
+  aplicarVolumeLocal();
   var p = videoTransmissaoEl.play();
   if (p && p.catch) p.catch(function () { /* autoplay pode exigir gesto — silencioso */ });
 }
@@ -1796,6 +2053,7 @@ function encerrarTransmissao(silencioso) {
   document.querySelector("#transmissao-codigo-display").style.display = "none";
   document.querySelector("#transmissao-viewers-bar").style.display = "none";
   document.querySelector("#transmissao-qualidade").style.display = "none";
+  controlesTransmissaoEl.style.display = "none";
   if (!silencioso) {
     mostrarTela(telaCompartilhar);
     carregarTransmissoes();
@@ -1829,9 +2087,12 @@ async function assistirTransmissao(codigo) {
   document.querySelector("#encerrar-transmissao").style.display = "none";
   document.querySelector("#parar-assistir").style.display = "";
   document.querySelector("#transmissao-qualidade").style.display = "none";
+  controlesTransmissaoEl.style.display = "flex";
   videoTransmissaoEl.style.display = telaModoRelay ? "none" : "";
-  document.querySelector("#canvas-relay").style.display = telaModoRelay ? "" : "none";
+  canvasRelayEl.style.display = telaModoRelay ? "" : "none";
   videoTransmissaoEl.srcObject = null;
+  videoTransmissaoEl.muted = audioMudo;
+  videoTransmissaoEl.volume = volumeLocal;
   conectarWsTela(false);
 }
 
@@ -1846,6 +2107,8 @@ function processarOfertaHost(sdp) {
 
   pc.ontrack = function (evento) {
     videoTransmissaoEl.srcObject = evento.streams[0];
+    videoTransmissaoEl.muted = audioMudo;
+    videoTransmissaoEl.volume = volumeLocal;
     var promessa = videoTransmissaoEl.play();
     if (promessa && promessa.then) {
       promessa.then(function () {
@@ -2038,6 +2301,7 @@ function processarMensagemTela(dados) {
               enviarTela({ tipo: "relay_erro", mensagem: String(e) });
             });
           }
+          iniciarEncoderAudioRelay();
         } else if (relayAtivo) {
           pararEncoderRelay();
         }
@@ -2047,6 +2311,12 @@ function processarMensagemTela(dados) {
       // Vídeo do relay em JSON base64 (proxy do Discord não repassa binário).
       if (telaModoRelay && !telaEhHost && dados.d) {
         montarQuadroRelay(dados);
+      }
+      break;
+    case "audio":
+      // Áudio Opus do relay em JSON base64.
+      if (telaModoRelay && !telaEhHost) {
+        receberAudioRelay(dados);
       }
       break;
     case "relay_pronto":
@@ -2141,6 +2411,8 @@ function limparConexaoTela() {
   relayHostOk = false;
   pararDecoderRelay();
   pararEncoderRelay();
+  pararEncoderAudioRelay();
+  pararDecoderAudioRelay();
   if (telaWs) {
     var ws = telaWs;
     telaWs = null;
@@ -2186,6 +2458,32 @@ document.querySelectorAll("#preset-fps .botao-preset, #live-fps .botao-preset").
 document.querySelector("#iniciar-transmissao").addEventListener("click", iniciarTransmissaoTela);
 
 document.querySelector("#trocar-janela").addEventListener("click", trocarJanelaTela);
+
+// Controles de volume/mudo (host e viewer).
+if (btnMudoEl) {
+  btnMudoEl.addEventListener("click", function () {
+    audioMudo = !audioMudo;
+    btnMudoEl.textContent = audioMudo ? "🔇" : "🔊";
+    btnMudoEl.classList.toggle("selecionado", audioMudo);
+    aplicarVolumeLocal();
+  });
+}
+if (volumeEl) {
+  volumeEl.addEventListener("input", function () {
+    volumeLocal = Math.max(0, Math.min(1, parseInt(volumeEl.value, 10) / 100));
+    aplicarVolumeLocal();
+  });
+}
+document.querySelectorAll("#tamanho-video .botao-preset").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    definirTamanhoVideo(botao.dataset.tam);
+  });
+});
+// Restaura tamanho salvo.
+try {
+  var tamSalvo = localStorage.getItem("jj_tela_tam");
+  if (tamSalvo) definirTamanhoVideo(tamSalvo);
+} catch (e) { /* ignore */ }
 
 // Atualiza a lista da call automaticamente enquanto a hub está aberta.
 setInterval(function () {
