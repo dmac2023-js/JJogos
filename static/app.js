@@ -1000,6 +1000,31 @@ var relayDrawTimer = null;
 var relayForcarKey = false;
 var relayDecoder = null;
 var relayProntoEnviado = false;
+var relayHostOk = false;
+
+// Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
+// real da sala em vez de adivinhar.
+async function diagnosticarRelaySemVideo() {
+  if (!telaModoRelay || relayFrameOk || !telaSala) return;
+  var codigo = telaSala;
+  try {
+    var res = await fetch("./tela/sala/" + encodeURIComponent(codigo));
+    if (res.status === 404) {
+      mensagemTransmissao("A transmissão foi encerrada (sala " + codigo + ").", "erro");
+      return;
+    }
+    var info = await res.json();
+    if (info.host_conectado === false) {
+      mensagemTransmissao("Quem transmite NÃO está conectado (sala " + codigo +
+        "). Feche e reabra a transmissão no navegador (Ctrl+F5).", "erro");
+    } else {
+      mensagemTransmissao("Quem transmite está online mas não enviou vídeo (sala " + codigo +
+        "). Peça para ele Ctrl+F5 na aba de transmissão e transmitir de novo.", "erro");
+    }
+  } catch (e) {
+    mensagemTransmissao("Sem resposta do servidor para a sala " + codigo + ".", "erro");
+  }
+}
 
 var TELA_PRESETS = {
   "480p": { largura: 854, altura: 480, bitrate: 800000 },
@@ -1289,9 +1314,20 @@ async function iniciarEncoderRelay() {
   var video = videoTransmissaoEl;
   var tsUs = 0;
   var ultimoKey = 0;
+  var ticksSemVideo = 0;
+  var ticksSemChunk = 0;
   relayDrawTimer = setInterval(function () {
     if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
-    if (!video || video.readyState < 2 || !video.videoWidth) return;
+    if (!video || video.readyState < 2 || !video.videoWidth) {
+      ticksSemVideo++;
+      if (ticksSemVideo === 150) { // ~5s a 30fps
+        enviarTela({ tipo: "relay_erro", mensagem: "O vídeo da captura não carregou no transmissor (readyState=" +
+          (video ? video.readyState : "nulo") + "). Ctrl+F5 na aba e transmita de novo." });
+        pararEncoderRelay();
+      }
+      return;
+    }
+    ticksSemVideo = 0;
     if (relayEncoder.encodeQueueSize > 8) return;
     var frame;
     try {
@@ -1308,6 +1344,13 @@ async function iniciarEncoderRelay() {
     if (forcar) { ultimoKey = agora; relayForcarKey = false; }
     try { relayEncoder.encode(frame, { keyFrame: forcar }); } catch (e) { /* ignore */ }
     frame.close();
+    if (!relayProntoEnviado) {
+      ticksSemChunk++;
+      if (ticksSemChunk === 150) {
+        enviarTela({ tipo: "relay_erro", mensagem: "O encoder não produziu quadros em 5s." });
+        pararEncoderRelay();
+      }
+    }
   }, Math.max(16, Math.floor(1000 / telaFps)));
 }
 
@@ -1739,14 +1782,10 @@ function processarMensagemTela(dados) {
       clearTimeout(telaOfertaTimer);
       clearTimeout(telaRelayTimer);
       relayFrameOk = false;
+      relayHostOk = dados.host_conectado === true;
       if (telaModoRelay) {
         iniciarDecoderRelay(dados.resolucao);
-        telaRelayTimer = setTimeout(function () {
-          if (telaModoRelay && !relayFrameOk && telaSala) {
-            mensagemTransmissao("Quem transmite não está enviando vídeo (sala " + telaSala +
-              "). Se a transmissão estiver aberta, peça para ele fechar e reabrir a aba de transmissão (pode estar desatualizada).", "erro");
-          }
-        }, 15000);
+        telaRelayTimer = setTimeout(diagnosticarRelaySemVideo, 15000);
       } else if (!telaEhHost) {
         telaOfertaTimer = setTimeout(async function () {
           if (telaEhHost || !telaSala || telaPeerViewer || telaModoRelay) return;
@@ -1771,7 +1810,12 @@ function processarMensagemTela(dados) {
       break;
     case "host_conectado":
       if (!telaEhHost && telaModoRelay) {
+        relayHostOk = true;
         mensagemTransmissao("Quem transmite conectou — recebendo vídeo...", "sucesso");
+        if (!relayFrameOk) {
+          clearTimeout(telaRelayTimer);
+          telaRelayTimer = setTimeout(diagnosticarRelaySemVideo, 15000);
+        }
       }
       break;
     case "relay_total":
@@ -1797,8 +1841,10 @@ function processarMensagemTela(dados) {
       break;
     case "relay_erro":
       if (telaModoRelay) {
-        mensagemTransmissao("Quem transmite teve um erro no encoder: " +
-          (dados.mensagem || "erro desconhecido"), "erro");
+        clearTimeout(telaRelayTimer);
+        mensagemTransmissao((dados.mensagem && dados.mensagem.indexOf("desatualizado") >= 0
+          ? dados.mensagem
+          : "Quem transmite teve um erro no encoder: " + (dados.mensagem || "erro desconhecido")), "erro");
       }
       break;
     case "viewers_total":
