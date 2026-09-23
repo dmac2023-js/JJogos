@@ -89,6 +89,8 @@ class NovoJogoVelha(BaseModel):
     nome: str = "Anônimo"
     nick: str = "Anônimo"
     avatar: Optional[str] = None
+    codigo: Optional[str] = None
+    publica: bool = True
 
 
 class MoverJogoVelha(BaseModel):
@@ -884,9 +886,19 @@ def jogada_ia(tabuleiro: List[str], dificuldade: str) -> int:
 # ---------------------------------------------------------------------------
 
 def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str,
-                          avatar_x: Optional[str] = None) -> dict:
+                          avatar_x: Optional[str] = None,
+                          codigo: Optional[str] = None,
+                          publica: bool = True) -> dict:
     jogo_id = secrets.token_urlsafe(12)
-    sala = secrets.token_urlsafe(6) if modo == "multiplayer" else None
+    sala = None
+    if modo == "multiplayer":
+        if codigo:
+            sala = codigo
+        else:
+            while True:
+                sala = secrets.token_urlsafe(6).lower().replace("-", "").replace("_", "")[:10]
+                if sala not in salas_velha:
+                    break
     # O criador da sala ocupa a vaga "X" e é o dono (responsável pela sala).
     jogador_x = None
     if modo == "multiplayer":
@@ -903,6 +915,7 @@ def criar_novo_jogo_velha(modo: str, dificuldade: str, nome_x: str, nick_x: str,
         "jogo_ativo": True,
         "resultado": None,
         "sala": sala,
+        "publica": bool(publica) if modo == "multiplayer" else False,
         "dificuldade": dificuldade if modo == "maquina" else None,
         "dono": "X" if modo == "multiplayer" else None,
         "placar": {"X": 0, "O": 0},
@@ -955,6 +968,8 @@ async def transmitir_salas_lobby():
     for sala, jogo_id in list(salas_velha.items()):
         jogo = jogos.get(jogo_id)
         if not jogo or jogo["modo"] != "multiplayer":
+            continue
+        if not jogo.get("publica", True):
             continue
         jogadores = (1 if jogo["jogador_x"] else 0) + (1 if jogo["jogador_o"] else 0)
         conns = len(conexoes_ws.get(sala, []))
@@ -1259,7 +1274,15 @@ async def novo_jogo_velha(dados: NovoJogoVelha):
     if dificuldade not in {"facil", "medio", "dificil"}:
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
 
-    jogo = criar_novo_jogo_velha(modo, dificuldade, dados.nome, dados.nick, dados.avatar)
+    codigo = (dados.codigo or "").strip().lower() if modo == "multiplayer" else None
+    if codigo and not _codigo_velha_valido(codigo):
+        raise HTTPException(status_code=400,
+                            detail="Código: 3 a 16 caracteres (letras, números, - ou _).")
+    if codigo and codigo in salas_velha:
+        raise HTTPException(status_code=409, detail="Já existe uma sala com esse código.")
+
+    jogo = criar_novo_jogo_velha(modo, dificuldade, dados.nome, dados.nick, dados.avatar,
+                                 codigo=codigo, publica=dados.publica)
     # Avisa imediatamente o lobby para os oponentes verem a sala em tempo real.
     if modo == "multiplayer":
         await transmitir_salas_lobby()
@@ -1328,6 +1351,8 @@ def listar_salas():
     for sala, jogo_id in list(salas_velha.items()):
         jogo = jogos.get(jogo_id)
         if not jogo or jogo["modo"] != "multiplayer":
+            continue
+        if not jogo.get("publica", True):
             continue
         jogadores = (1 if jogo["jogador_x"] else 0) + (1 if jogo["jogador_o"] else 0)
         conns = len(conexoes_ws.get(sala, []))
@@ -1751,6 +1776,10 @@ async def criar_sala_ludo(dados: NovaSalaLudo):
 # ---------------------------------------------------------------------------
 # Endpoints — Jogo da Velha
 # ---------------------------------------------------------------------------
+
+def _codigo_velha_valido(codigo: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9_-]{3,16}", codigo or ""))
+
 
 @app.post("/velha/recordes")
 def salvar_record_velha(dados: NovoRecordVelha):
@@ -2302,7 +2331,8 @@ async def ws_ludo(websocket: WebSocket, sala: str):
 # WebSocket — Jogo da Velha (multiplayer + espectadores)
 # ---------------------------------------------------------------------------
 
-async def _vitoria_por_desistencia(sala: str, jogo: dict, peca_saiu: str, nick_saiu: str):
+async def _vitoria_por_desistencia(sala: str, jogo: dict, peca_saiu: str, nick_saiu: str,
+                                   excluido: Optional[WebSocket] = None):
     """Oponente saiu: vitória para quem ficou, placar++, depois desfaz a sala."""
     peca_ficou = "O" if peca_saiu == "X" else "X"
     slot_saiu = f"jogador_{peca_saiu.lower()}"
@@ -2319,8 +2349,10 @@ async def _vitoria_por_desistencia(sala: str, jogo: dict, peca_saiu: str, nick_s
     placar = jogo.setdefault("placar", {"X": 0, "O": 0})
     placar[peca_ficou] = placar.get(peca_ficou, 0) + 1
 
-    # Estado com vitória para quem ficou (e espectadores).
-    await transmitir_sala(sala, estado_para_cliente(jogo, peca_ficou))
+    # Estado só para quem ficou/espectadores — o que saiu não deve
+    # receber a peça do vencedor (evita creditar vitória ao perdedor).
+    await transmitir_sala(sala, estado_para_cliente(jogo, peca_ficou),
+                          {id(excluido)} if excluido is not None else None)
     await transmitir_sala(sala, {
         "tipo": "vitoria_desistencia",
         "mensagem": "Oponente saiu da sala. Você venceu!",
@@ -2461,8 +2493,15 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "avatar_o": jogo["jogador_o"].get("avatar"),
                 "quem_comeca": primeiro,
             })
-            await transmitir_sala(sala, estado_para_cliente(jogo, "X"), {id(websocket)})
-            await websocket.send_json(estado_para_cliente(jogo, my_piece))
+            # Cada conexão recebe a própria peça; quem não é jogador mantém
+            # o guard de espectador no cliente e ignora minha_peca.
+            for ws in list(conexoes_ws.get(sala, [])):
+                peca_envio = my_piece if ws is websocket else (
+                    "O" if my_piece == "X" else "X")
+                try:
+                    await ws.send_json(estado_para_cliente(jogo, peca_envio))
+                except Exception:
+                    pass
     else:
         await websocket.send_json({
             "tipo": "esperando",
@@ -2506,16 +2545,19 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 else:
                     jogo["jogador_atual"] = "O" if my_piece == "X" else "X"
 
-                await transmitir_sala(sala, estado_para_cliente(jogo, "X"))
-                if jogo["jogador_o"]:
-                    await transmitir_sala(sala, estado_para_cliente(jogo, "O"), {id(websocket)})
+                # Cada jogador recebe o estado com a própria peça; espectadores
+                # ignoram minha_peca. Evita troca de peças (vitória creditada ao perdedor).
+                await websocket.send_json(estado_para_cliente(jogo, my_piece))
+                outro = "O" if my_piece == "X" else "X"
+                await transmitir_sala(sala, estado_para_cliente(jogo, outro), {id(websocket)})
 
             elif tipo == "sair":
                 _saiu_explicitamente = True
                 # Saiu: quem ficou vence por desistência e a sala desfaz.
                 outro = "O" if my_piece == "X" else "X"
                 if jogo.get(f"jogador_{outro.lower()}"):
-                    await _vitoria_por_desistencia(sala, jogo, my_piece, nick)
+                    await _vitoria_por_desistencia(sala, jogo, my_piece, nick,
+                                                   excluido=websocket)
                     break
                 # Ninguém mais: só limpa e sai.
                 if my_piece == "X":

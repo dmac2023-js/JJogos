@@ -346,6 +346,7 @@ let lobbyWs = null;
 let lobbyPingTimer = null;
 let velhaPlacar = { X: 0, O: 0 };
 let velhaJogadores = { X: { nick: "—", avatar: null }, O: { nick: "—", avatar: null } };
+let velhaRecordSalvo = false;
 
 const telaModoVelha = document.querySelector("#tela-modo-velha");
 const telaDificuldadeVelha = document.querySelector("#tela-dificuldade-velha");
@@ -426,6 +427,7 @@ function limparTabuleiro() {
   velhaTabuleiro._ativo = true;
   velhaTabuleiro._resultado = null;
   velhaTabuleiro._minhaVez = true;
+  velhaRecordSalvo = false;
   desenharTabuleiro(velhaTabuleiro);
 }
 
@@ -657,9 +659,12 @@ async function jogarVelhaMaquina(posicao) {
 }
 
 async function salvarRecordVelha() {
+  if (velhaRecordSalvo) return;
+  if (velhaEspectador) return;
   await garantirIdentidade();
   // Anônimo não entra em rankings.
   if (ehAnonimoNick(nomeExibicao())) return;
+  velhaRecordSalvo = true;
   var nome = nomeUsuario();
   var nick = nomeExibicao();
   var avatar = avatarAtual();
@@ -816,12 +821,14 @@ function processarMensagemVelha(dados) {
       desenharTabuleiro(velhaTabuleiro);
       atualizarVelhaVez();
       if (!dados.jogo_ativo && dados.resultado && dados.resultado !== "empate"
-          && velhaModo === "multiplayer" && dados.resultado === velhaMinhaPeca) {
+          && velhaModo === "multiplayer" && !velhaEspectador
+          && dados.resultado === velhaMinhaPeca) {
         salvarRecordVelha();
       }
       break;
 
     case "inicio":
+      velhaRecordSalvo = false;
       esconderCodigoSala();
       var comeca = dados.quem_comeca === velhaMinhaPeca ? "você" : dados.quem_comeca;
       atualizarVelhaMensagem(
@@ -863,14 +870,13 @@ function processarMensagemVelha(dados) {
     case "vitoria_desistencia":
       // Oponente saiu: vitória para quem ficou; sala desfaz em seguida.
       velhaTabuleiro._ativo = false;
-      velhaTabuleiro._resultado = dados.vencedor || velhaMinhaPeca;
-      if (dados.vencedor && velhaMinhaPeca) {
-        velhaTabuleiro._resultado = dados.vencedor;
-      }
+      velhaTabuleiro._resultado = dados.vencedor || null;
       atualizarVelhaVez();
-      if (dados.vencedor === velhaMinhaPeca) {
+      if (dados.vencedor && dados.vencedor === velhaMinhaPeca && !velhaEspectador) {
         atualizarVelhaMensagem(dados.mensagem || "Oponente saiu. Você venceu!", "sucesso");
         salvarRecordVelha();
+      } else if (dados.vencedor && velhaMinhaPeca && dados.vencedor !== velhaMinhaPeca) {
+        atualizarVelhaMensagem(dados.mensagem || "Oponente saiu.", "erro");
       } else {
         atualizarVelhaMensagem(dados.mensagem || "Oponente saiu.", "");
       }
@@ -927,12 +933,21 @@ async function criarSalaVelha() {
   var nome = nomeUsuario();
   var nick = nomeExibicao();
   var avatar = avatarAtual();
+  var codigo = (document.querySelector("#velha-codigo-sala").value || "").trim().toLowerCase();
+  var publica = !!document.querySelector("#velha-sala-publica").checked;
 
   try {
     var res = await fetch("./velha/novo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modo: "multiplayer", nome: nome, nick: nick, avatar: avatar }),
+      body: JSON.stringify({
+        modo: "multiplayer",
+        nome: nome,
+        nick: nick,
+        avatar: avatar,
+        codigo: codigo || null,
+        publica: publica,
+      }),
     });
     var dados = await res.json();
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
@@ -956,15 +971,6 @@ async function criarSalaVelha() {
     limparTabuleiro();
 
     conectarWsVelha(dados.sala, nome, nick, false);
-
-    if (discordSdkGlobal) {
-      try {
-        await discordSdkGlobal.commands.shareLink({
-          message: "Entra no Jogo da Velha! Sala: " + dados.sala,
-          custom_id: "velha-" + dados.sala,
-        });
-      } catch (e) { /* user may cancel */ }
-    }
   } catch (erro) {
     atualizarVelhaMensagem(erro.message, "erro");
   }
@@ -1015,12 +1021,12 @@ casasEl.forEach(function (casa) {
 
 document.querySelector("#criar-sala-velha").addEventListener("click", criarSalaVelha);
 
-document.querySelector("#entrar-sala-codigo").addEventListener("click", function () {
-  var codigo = document.querySelector("#codigo-sala-input").value.trim();
+document.querySelector("#entrar-sala-velha").addEventListener("click", function () {
+  var codigo = document.querySelector("#velha-codigo-sala").value.trim();
   if (codigo) entrarSalaVelha(codigo);
 });
 
-document.querySelector("#codigo-sala-input").addEventListener("keydown", function (e) {
+document.querySelector("#velha-codigo-sala").addEventListener("keydown", function (e) {
   if (e.key === "Enter") {
     var codigo = this.value.trim();
     if (codigo) entrarSalaVelha(codigo);
@@ -1845,7 +1851,6 @@ document.querySelectorAll(".botao-modo").forEach(function (botao) {
       mostrarTela(telaDificuldadeVelha);
     } else if (modo === "multiplayer") {
       mostrarTela(telaLobbyVelha);
-      carregarParticipantesDiscord();
       conectarLobbyWs();
     } else if (modo === "espectar") {
       mostrarTela(telaEspectarVelha);
@@ -1906,10 +1911,6 @@ carregarRankingVelha();
 document.querySelector("#verificar").addEventListener("click", verificarResposta);
 document.querySelector("#reiniciar").addEventListener("click", function () {
   iniciarSudoku(dificuldadeAtual);
-});
-
-document.querySelector("#fechar-popup-convite").addEventListener("click", function () {
-  document.querySelector("#popup-convite").classList.remove("ativo");
 });
 
 // ---------------------------------------------------------------------------
@@ -2368,61 +2369,8 @@ document.querySelector("#sudoku-parar").addEventListener("click", function () {
 });
 
 // ---------------------------------------------------------------------------
-// Discord — conexão e participantes
+// Discord — conexão
 // ---------------------------------------------------------------------------
-async function carregarParticipantesDiscord() {
-  var container = document.querySelector("#lista-participantes");
-  if (!discordSdkGlobal) {
-    container.innerHTML = '<p class="vazio">Conecte-se ao Discord para ver participantes.</p>';
-    return;
-  }
-
-  try {
-    var participantes = await discordSdkGlobal.commands.getInstanceConnectedParticipants();
-    var lista = participantes.participants || [];
-    container.innerHTML = "";
-
-    if (lista.length === 0) {
-      container.innerHTML = '<p class="vazio">Nenhum participante encontrado.</p>';
-      return;
-    }
-
-    lista.forEach(function (p) {
-      if (p.id === usuarioDiscord?.id) return;
-      var item = document.createElement("div");
-      item.className = "participante";
-      var iniciais = (p.global_name || p.username || "?").charAt(0).toUpperCase();
-      item.innerHTML =
-        '<div class="participante-avatar">' + iniciais + "</div>" +
-        '<div class="participante-info"><strong>' + (p.global_name || p.username) + "</strong>" +
-        "<small>@" + p.username + "</small></div>" +
-        '<button class="botao-convidar" data-user-id="' + p.id + '" data-nick="' + (p.global_name || p.username) + '">Convidar</button>';
-      container.appendChild(item);
-    });
-
-    container.querySelectorAll(".botao-convidar").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        var userId = btn.dataset.userId;
-        try {
-          await discordSdkGlobal.commands.inviteUserEmbedded({
-            user_id: userId,
-            content: "Vem jogar Jogo da Velha comigo!",
-          });
-        } catch (e) {
-          try {
-            await discordSdkGlobal.commands.shareLink({
-              message: "Entra no Jogo da Velha!",
-              custom_id: "velha-invite",
-            });
-          } catch (e2) { /* ignore */ }
-        }
-      });
-    });
-  } catch (erro) {
-    container.innerHTML = '<p class="vazio">Não foi possível carregar participantes.</p>';
-  }
-}
-
 async function conectarAoDiscord() {
   if (conexaoDiscordPromise) return conexaoDiscordPromise;
   conexaoDiscordPromise = (async function () {
