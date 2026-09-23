@@ -338,3 +338,65 @@ footer a:hover { color: #c8baff; }
   font-weight: bold; cursor: pointer; white-space: nowrap;
 }
 .multi-tile-voltar:hover { background: #7655e8; color: #fff; }
+.multi-tile-volume {
+  width: 72px; height: 30px; accent-color: #8664ff; cursor: pointer;
+  background: rgba(10, 12, 24, .78); border: 0; border-radius: 8px; padding: 0 4px;
+}
+
+/* Campo Minado */
+.tabuleiro-campo {
+  display: grid; gap: 2px; margin: 0 auto; max-width: min(640px, 100%);
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  background: #0e101c; border: 2px solid #454b69; border-radius: 8px; padding: 6px;
+}
+.campo-cel {
+  aspect-ratio: 1; border: 1px solid #3a3f5c; border-radius: 3px;
+  background: linear-gradient(145deg, #3d4466, #2a2f4a);
+  display: grid; place-items: center; font-weight: bold;
+  font-size: clamp(11px, 2.4vw, 16px); cursor: pointer; color: transparent;
+  min-width: 0; padding: 0; line-height: 1;
+}
+.campo-cel:hover:not(.aberta) { border-color: #9c7cff; background: linear-gradient(145deg, #4a5280, #343a5c); }
+.campo-cel.aberta { background: #171a29; border-color: #23263a; cursor: default; }
+.campo-cel.bandeira { background: #4d2028; border-color: #ff6b6b; }
+.campo-cel.bandeira::after { content: "🚩"; font-size: 0.95em; }
+.campo-cel.bomba { background: #6b1a1a; border-color: #ff4d4d; }
+.campo-cel.bomba::after { content: "💣"; font-size: 0.95em; }
+.campo-cel.perigo { background: #8b2020; }
+.campo-cel.n1 { color: #6cb6ff; } .campo-cel.n2 { color: #85e0ae; }
+.campo-cel.n3 { color: #ff9a9a; } .campo-cel.n4 { color: #c8baff; }
+.campo-cel.n5 { color: #ffd36a; } .campo-cel.n6 { color: #7eb6ff; }
+.campo-cel.n7 { color: #f4f6ff; } .campo-cel.n8 { color: #aeb2c7; }
+.recode-vert, .recorde-vert { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+.recode-vert .vitorias-linha, .recorde-vert .vitorias-linha { color: #ffd700; font-weight: bold; font-size: 12px; }
+.recode-vert .tempo-linha, .recorde-vert .tempo-linha { color: #85e0ae; font-size: 11px; font-variant-numeric: tabular-nums; }
+.registro-recorde.campo-top { align-items: flex-start; }
+
+/* Campo Minado */
+.tabuleiro-campo {
+  display: grid; gap: 2px; margin: 0 auto; max-width: min(640px, 100%);
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  background: #0e101c; border: 2px solid #454b69; border-radius: 8px; padding: 6px;
+}
+.campo-cel {
+  aspect-ratio: 1; border: 1px solid #3a3f5c; border-radius: 3px;
+  background: linear-gradient(145deg, #3d4466, #2a2f4a);
+  display: grid; place-items: center; font-weight: bold;
+  font-size: clamp(11px, 2.4vw, 16px); cursor: pointer; color: transparent;
+  min-width: 0; padding: 0; line-height: 1;
+}
+.campo-cel:hover:not(.aberta) { border-color: #9c7cff; background: linear-gradient(145deg, #4a5280, #343a5c); }
+.campo-cel.aberta { background: #171a29; border-color: #23263a; cursor: default; }
+.campo-cel.bandeira { background: #4d2028; border-color: #ff6b6b; }
+.campo-cel.bandeira::after { content: "🚩"; font-size: 0.95em; }
+.campo-cel.bomba { background: #6b1a1a; border-color: #ff4d4d; }
+.campo-cel.bomba::after { content: "💣"; font-size: 0.95em; }
+.campo-cel.perigo { background: #8b2020; }
+.campo-cel.n1 { color: #6cb6ff; } .campo-cel.n2 { color: #85e0ae; }
+.campo-cel.n3 { color: #ff9a9a; } .campo-cel.n4 { color: #c8baff; }
+.campo-cel.n5 { color: #ffd36a; } .campo-cel.n6 { color: #7eb6ff; }
+.campo-cel.n7 { color: #f4f6ff; } .campo-cel.n8 { color: #aeb2c7; }
+.recode-vert, .recorde-vert { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+.recode-vert .vitorias-linha, .recorde-vert .vitorias-linha { color: #ffd700; font-weight: bold; font-size: 12px; }
+.recode-vert .tempo-linha, .recorde-vert .tempo-linha { color: #85e0ae; font-size: 11px; font-variant-numeric: tabular-nums; }
+.registro-recorde.campo-top { align-items: flex-start; }

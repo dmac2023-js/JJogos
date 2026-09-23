@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-11" />
+    <link rel="stylesheet" href="./style.css?v=20260924-12" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -229,6 +229,10 @@
         background: rgba(10, 12, 24, .78); color: #c8baff; font-size: 14px; cursor: pointer;
       }
       .multi-tile-ctrls button:hover { background: #34275d; }
+      .multi-tile-volume {
+        width: 72px; height: 30px; accent-color: #8664ff; cursor: pointer;
+        background: rgba(10, 12, 24, .78); border: 0; border-radius: 8px; padding: 0 4px;
+      }
       .multi-tile-rodape {
         display: flex; align-items: center; gap: 8px; padding: 8px 10px;
         background: #1b1e30; font-size: 13px; color: #c9ccda;
@@ -247,6 +251,35 @@
         font-weight: bold; cursor: pointer; white-space: nowrap;
       }
       .multi-tile-voltar:hover { background: #7655e8; color: #fff; }
+
+      /* Campo Minado */
+      .tabuleiro-campo {
+        display: grid; gap: 2px; margin: 0 auto; max-width: min(640px, 100%);
+        user-select: none; -webkit-user-select: none; touch-action: manipulation;
+        background: #0e101c; border: 2px solid #454b69; border-radius: 8px; padding: 6px;
+      }
+      .campo-cel {
+        aspect-ratio: 1; border: 1px solid #3a3f5c; border-radius: 3px;
+        background: linear-gradient(145deg, #3d4466, #2a2f4a);
+        display: grid; place-items: center; font-weight: bold;
+        font-size: clamp(11px, 2.4vw, 16px); cursor: pointer; color: transparent;
+        min-width: 0; padding: 0; line-height: 1;
+      }
+      .campo-cel:hover:not(.aberta) { border-color: #9c7cff; background: linear-gradient(145deg, #4a5280, #343a5c); }
+      .campo-cel.aberta { background: #171a29; border-color: #23263a; cursor: default; }
+      .campo-cel.bandeira { background: #4d2028; border-color: #ff6b6b; }
+      .campo-cel.bandeira::after { content: "🚩"; font-size: 0.95em; }
+      .campo-cel.bomba { background: #6b1a1a; border-color: #ff4d4d; }
+      .campo-cel.bomba::after { content: "💣"; font-size: 0.95em; }
+      .campo-cel.perigo { background: #8b2020; }
+      .campo-cel.n1 { color: #6cb6ff; } .campo-cel.n2 { color: #85e0ae; }
+      .campo-cel.n3 { color: #ff9a9a; } .campo-cel.n4 { color: #c8baff; }
+      .campo-cel.n5 { color: #ffd36a; } .campo-cel.n6 { color: #7eb6ff; }
+      .campo-cel.n7 { color: #f4f6ff; } .campo-cel.n8 { color: #aeb2c7; }
+      .recorde-vert { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+      .recorde-vert .vitorias-linha { color: #ffd700; font-weight: bold; font-size: 12px; }
+      .recorde-vert .tempo-linha { color: #85e0ae; font-size: 11px; font-variant-numeric: tabular-nums; }
+      .registro-recorde.campo-top { align-items: flex-start; }
       #transmissao-qualidade.bloqueada { opacity: .45; pointer-events: none; }
       #transmissao-qualidade.bloqueada::after {
         content: "Fixo 720p 30fps na multi-tela"; display: block; margin-top: 8px;
@@ -402,6 +435,14 @@
           <span>
             <strong>Ludo</strong>
             <small>Clássico com até 4 jogadores online.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
+        <button id="jogo-campo" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">&#128163;</span>
+          <span>
+            <strong>Campo Minado</strong>
+            <small>Solo contra o tempo ou 1x1 online.</small>
           </span>
           <span class="seta">&rarr;</span>
         </button>
@@ -742,6 +783,138 @@
         <div id="lista-espectacao"><p class="vazio">Carregando salas...</p></div>
       </section>
 
+      <!-- Tela: Modo Campo Minado -->
+      <section id="tela-modo-campo" class="tela">
+        <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
+        <div class="titulo-tela">
+          <h2>Campo Minado</h2>
+          <p>Escolha como deseja jogar.</p>
+        </div>
+        <div class="modo-selecao">
+          <button class="botao-modo" data-modo-campo="solo">
+            <span class="icone">&#9201;</span>
+            <strong>Solo</strong>
+            <small>Contra o tempo nas 3 dificuldades</small>
+          </button>
+          <button class="botao-modo" data-modo-campo="online">
+            <span class="icone">&#128101;</span>
+            <strong>Online 1x1</strong>
+            <small>Sala pública ou privada — quem limpar primeiro</small>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tela: Dificuldade Campo (solo) -->
+      <section id="tela-dificuldade-campo" class="tela">
+        <button class="voltar" data-tela="tela-modo-campo">&larr; Voltar</button>
+        <div class="titulo-tela">
+          <h2>Escolha a dificuldade</h2>
+          <p>Quanto maior, mais bombas e grade maior.</p>
+        </div>
+        <div class="dificuldades">
+          <button class="botao-dificuldade" data-dificuldade-campo="facil"><strong>Fácil</strong><small>10×10 · 12 bombas</small></button>
+          <button class="botao-dificuldade" data-dificuldade-campo="medio"><strong>Médio</strong><small>18×18 · 45 bombas</small></button>
+          <button class="botao-dificuldade" data-dificuldade-campo="dificil"><strong>Difícil</strong><small>24×24 · 90 bombas</small></button>
+        </div>
+        <div class="titulo-tela" style="margin-top:28px;">
+          <h2>Como jogar</h2>
+          <p>Botão esquerdo / toque: revela. Botão direito / pressão longa: bandeira vermelha (2º clique remove).</p>
+        </div>
+      </section>
+
+      <!-- Tela: Lobby Campo Minado -->
+      <section id="tela-lobby-campo" class="tela">
+        <button class="voltar" data-tela="tela-modo-campo">&larr; Voltar</button>
+        <div class="titulo-tela">
+          <h2>Campo Minado online</h2>
+          <p>Máximo 2 jogadores. Quem revelar todas as células seguras primeiro vence.</p>
+        </div>
+        <div class="grupo-preset">
+          <span class="preset-label">Dificuldade</span>
+          <div class="preset-opcoes" id="campo-dificuldade-online">
+            <button type="button" class="botao-preset selecionado" data-dif="facil">Fácil</button>
+            <button type="button" class="botao-preset" data-dif="medio">Médio</button>
+            <button type="button" class="botao-preset" data-dif="dificil">Difícil</button>
+          </div>
+        </div>
+        <div class="sala-container" style="margin-top:12px;">
+          <div class="sala-input">
+            <input type="text" id="campo-codigo-sala" placeholder="Código da sala privada (opcional)" maxlength="16" />
+            <button id="criar-sala-campo" class="botao principal">Criar sala</button>
+            <button id="entrar-sala-campo" class="botao">Entrar</button>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
+            <input type="checkbox" id="campo-sala-publica" checked style="width:16px; height:16px; accent-color:#8664ff;" />
+            Sala pública (aparece na lista)
+          </label>
+        </div>
+        <div id="mensagem-campo-lobby" class="mensagem" style="margin-top:12px;"></div>
+        <div class="sala-lista" id="lista-salas-campo">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:18px;">
+            <h2 style="font-size:16px; margin:0;">Salas públicas</h2>
+            <button id="atualizar-salas-campo" class="botao" style="width:auto; min-height:32px; padding:4px 12px; font-size:13px;">Atualizar lista</button>
+          </div>
+          <div id="salas-campo-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
+        </div>
+      </section>
+
+      <!-- Tela: Jogo Campo Minado -->
+      <section id="tela-campo" class="tela">
+        <div class="cabecalho-jogo">
+          <button class="voltar" data-tela="tela-modo-campo" id="voltar-campo">&larr; Sair</button>
+          <div class="informacoes-jogo">
+            <span id="campo-dificuldade-label" class="etiqueta">Fácil</span>
+            <span id="campo-cronometro" class="cronometro">00:00</span>
+          </div>
+        </div>
+
+        <div class="sala-codigo-display" id="campo-sala-bar" style="display:none;">
+          <span class="sala-codigo-label">Sala:</span>
+          <span id="campo-sala-codigo" class="sala-codigo-valor"></span>
+          <button id="copiar-codigo-campo" class="botao-copiar">Copiar</button>
+        </div>
+
+        <div id="mensagem-campo" class="mensagem">Escolha a dificuldade para começar.</div>
+
+        <div id="campo-status-bar" style="display:flex; justify-content:center; gap:16px; margin-bottom:12px; font-size:14px; color:#aeb2c7;">
+          <span>&#128163; <strong id="campo-bombas-restantes">0</strong></span>
+          <span>&#128681; <strong id="campo-bandeiras">0</strong></span>
+          <span id="campo-progresso-wrap">Abertas: <strong id="campo-progresso">0</strong>/<strong id="campo-seguras">0</strong></span>
+        </div>
+
+        <div id="placar-times-campo" class="placar-times placar-ludo" style="display:none;">
+          <div class="placar-lado" data-slot="p1">
+            <span class="placar-avatar" id="placar-campo-avatar-p1">?</span>
+            <span class="placar-nick" id="placar-campo-nick-p1">—</span>
+            <span class="placar-gol" id="placar-campo-gol-p1">0</span>
+          </div>
+          <span class="placar-x">&times;</span>
+          <div class="placar-lado" data-slot="p2">
+            <span class="placar-avatar" id="placar-campo-avatar-p2">?</span>
+            <span class="placar-nick" id="placar-campo-nick-p2">—</span>
+            <span class="placar-gol" id="placar-campo-gol-p2">0</span>
+          </div>
+        </div>
+
+        <div class="jogo-conteudo">
+          <div class="jogo-grade-area">
+            <div id="tabuleiro-campo" class="tabuleiro-campo"></div>
+            <div class="acoes">
+              <button id="campo-reiniciar" class="botao principal" style="display:none;">Jogar de novo</button>
+              <button id="campo-pedir-revanche" class="botao" style="display:none;">Pedir revanche</button>
+              <button id="campo-responder-sim" class="botao principal" style="display:none;">Aceitar revanche</button>
+              <button id="campo-responder-nao" class="botao" style="display:none;">Recusar</button>
+              <button id="campo-sair-sala" class="botao" style="display:none;">Sair da sala</button>
+            </div>
+          </div>
+
+          <aside class="painel-recordes">
+            <h2>Top 3 vitórias</h2>
+            <div id="lista-ranking-campo"><p class="vazio">Carregando...</p></div>
+          </aside>
+        </div>
+      </section>
+
       <!-- Tela: Compartilhar Tela (hub) -->
       <section id="tela-compartilhar" class="tela">
         <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
@@ -818,7 +991,7 @@
           <p class="aviso-upload" id="aviso-upload"></p>
           <p class="aviso-upload" style="color:#c8baff;">
             Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba).
-            Em <strong>janela</strong>, vai só o som daquela janela (não o sistema inteiro).
+            Em <strong>janela</strong>, marque a opção de áudio se aparecer (ou use aba).
             Em <strong>tela inteira</strong>, marque <strong>Share system audio</strong> se quiser o som do sistema.
           </p>
 
@@ -963,6 +1136,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-11"></script>
+    <script src="./app.js?v=20260924-12"></script>
   </body>
 </html>
