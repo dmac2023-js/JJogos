@@ -90,6 +90,12 @@ function mostrarTela(tela) {
   if (!tela || tela.id !== "tela-transmissao") {
     document.body.classList.remove("modo-cheia-transmissao");
   }
+  // Sai da multi se o usuário navegar para outra tela sem usar o botão Sair.
+  // (sairSalaMulti limpa os flags ANTES de chamar mostrarTela de novo.)
+  if (multiNaTela && tela && tela.id !== "tela-multitela") {
+    multiNaTela = false;
+    sairSalaMulti();
+  }
 }
 
 function mostrarMensagem(texto, tipo = "") {
@@ -482,6 +488,10 @@ function conectarLobbyWs() {
     if (dados.tipo === "salas_atualizadas") {
       renderizarSalasLobby(dados.salas);
       renderizarSalasEspectacao(dados.salas);
+    } else if (dados.tipo === "salas_multi") {
+      renderizarSalasMulti(dados.salas || []);
+    } else if (dados.tipo === "multi_removida") {
+      carregarSalasMulti();
     }
   };
 
@@ -1782,6 +1792,15 @@ var relayAudioCh = 2;
 var relayAudioChavePendente = true;
 var relayAudioCfgDecoder = { sr: 0, ch: 0 };
 
+// Sala multi-tela: várias lives simultâneas (720p30 fixo, máx. 8).
+var multiSala = null;
+var multiWs = null;
+var multiPingTimer = null;
+var multiEstado = null;
+var multiTiles = {}; // sala_live -> contexto do tile
+var multiHostSala = null; // live que ESTE cliente está transmitindo
+var multiNaTela = false;
+
 function logRelayDiag(etapa, extra) {
   var msg = { tipo: "relay_diag", etapa: etapa };
   if (extra) {
@@ -1943,6 +1962,7 @@ function aplicarQualidadeNosViewers() {
 }
 
 function definirResolucao(valor) {
+  if (multiSala) return; // multi-tela: 720p30 fixo
   telaResolucao = valor;
   ["#preset-resolucao", "#live-resolucao"].forEach(function (sel) {
     document.querySelectorAll(sel + " .botao-preset").forEach(function (b) {
@@ -1959,6 +1979,7 @@ function definirResolucao(valor) {
 }
 
 function definirFps(valor) {
+  if (multiSala) return; // multi-tela: 720p30 fixo
   telaFps = valor;
   ["#preset-fps", "#live-fps"].forEach(function (sel) {
     document.querySelectorAll(sel + " .botao-preset").forEach(function (b) {
@@ -2578,7 +2599,7 @@ async function iniciarEncoderRelay() {
   canvas.height = preset.altura;
   var ctx = canvas.getContext("2d", { alpha: false });
 
-  var video = videoTransmissaoEl;
+  var video = hostVideoEncoder();
   var tsUs = 0;
   var ultimoKey = 0;
   var ticksSemVideo = 0;
@@ -2756,6 +2777,33 @@ async function iniciarEncoderRelay() {
   agendarDraw();
 }
 
+// Vídeo off-screen do host na multi-tela: a seção #tela-transmissao fica
+// escondida (o grid assume a tela) e o encoder precisa de um <video> visível
+// ao compositor para continuar lendo frames.
+var hostOffVideo = null;
+function hostVideoEncoder() {
+  if (multiSala && telaEhHost && telaStream) {
+    if (!hostOffVideo) {
+      hostOffVideo = document.createElement("video");
+      hostOffVideo.autoplay = true;
+      hostOffVideo.muted = true;
+      hostOffVideo.playsInline = true;
+      hostOffVideo.setAttribute("playsinline", "");
+      hostOffVideo.style.cssText =
+        "position:fixed;left:-9999px;top:0;width:16px;height:16px;opacity:0.01;pointer-events:none;";
+      document.body.appendChild(hostOffVideo);
+    }
+    if (hostOffVideo.srcObject !== telaStream) hostOffVideo.srcObject = telaStream;
+    if (hostOffVideo.paused) {
+      var pr = hostOffVideo.play();
+      if (pr && pr.catch) pr.catch(function () {});
+    }
+    return hostOffVideo;
+  }
+  if (hostOffVideo && hostOffVideo.srcObject) hostOffVideo.srcObject = null;
+  return videoTransmissaoEl;
+}
+
 function pararEncoderRelay() {
   relayAtivo = false;
   relayProntoEnviado = false;
@@ -2811,6 +2859,7 @@ function abrirTelaCompartilhar() {
 
   atualizarAvisoUpload();
   carregarTransmissoes();
+  carregarSalasMulti();
 }
 
 async function abrirNoNavegadorParaTransmitir() {
@@ -2978,11 +3027,11 @@ async function iniciarTransmissaoTela() {
     telaStream = await capturarMidiaTransmissao(querAudio);
   } catch (e) {
     if (e && e.message === "SEU_NAVEGADOR_SEM_CAPTURE") {
-      mensagemTela("Seu navegador não suporta captura de tela nem câmera.", "erro");
+      avisoTela("Seu navegador não suporta captura de tela nem câmera.", "erro");
     } else if (e && e.name === "NotAllowedError") {
-      mensagemTela("Permissão negada. Autorize a câmera/tela no navegador para transmitir.", "erro");
+      avisoTela("Permissão negada. Autorize a câmera/tela no navegador para transmitir.", "erro");
     } else {
-      mensagemTela("Captura cancelada ou negada.", "erro");
+      avisoTela("Captura cancelada ou negada.", "erro");
     }
     return;
   }
@@ -2990,10 +3039,10 @@ async function iniciarTransmissaoTela() {
   // Avisa se o Chrome não devolveu áudio (usuário não marcou a opção).
   if (querAudio && !telaStream.getAudioTracks().length) {
     if (telaFonte === "camera") {
-      mensagemTela(
+      avisoTela(
         "Microfone não capturado: permita o microfone no celular/navegador.", "erro");
     } else {
-      mensagemTela(
+      avisoTela(
         "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
         "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
         "Você pode recapturar com Trocar janela depois.", "erro");
@@ -3006,6 +3055,12 @@ async function iniciarTransmissaoTela() {
   var instancia = compartilharInstanciaAtual() || null;
   var chkPublica = document.querySelector("#sala-publica-tela");
   var publica = chkPublica ? !!chkPublica.checked : true;
+  if (multiSala) {
+    // Multi-tela: qualidade travada em 720p30, sala só da multi.
+    telaResolucao = "720p";
+    telaFps = 30;
+    publica = false;
+  }
 
   try {
     var res = await fetch("./tela/novo", {
@@ -3017,8 +3072,9 @@ async function iniciarTransmissaoTela() {
         avatar: avatar,
         resolucao: telaResolucao,
         fps: telaFps,
-        codigo: codigoCustom || null,
+        codigo: multiSala ? null : (codigoCustom || null),
         publica: publica,
+        multi: multiSala || null,
       }),
     });
     var dados = await res.json();
@@ -3027,7 +3083,7 @@ async function iniciarTransmissaoTela() {
   } catch (e) {
     telaStream.getTracks().forEach(function (t) { t.stop(); });
     telaStream = null;
-    mensagemTela(e.message, "erro");
+    avisoTela(e.message, "erro");
     return;
   }
 
@@ -3038,11 +3094,44 @@ async function iniciarTransmissaoTela() {
   // Se o usuário parar a captura pelo botão do próprio navegador, encerra tudo.
   telaStream.getVideoTracks()[0].addEventListener("ended", function () {
     encerrarTransmissao(false);
-    mensagemTela("Transmissão encerrada: você parou a captura de tela.", "erro");
+    avisoTela("Transmissão encerrada: você parou a captura de tela.", "erro");
   });
 }
 
+function avisoTela(texto, tipo) {
+  if (multiNaTela) {
+    mensagemMulti(texto, tipo);
+    return;
+  }
+  mensagemTela(texto, tipo);
+}
+
 function configurarTelaTransmissaoHost() {
+  if (multiSala) {
+    // Na multi-tela o host fica no grid; qualidade fixa 720p30.
+    multiHostSala = telaSala;
+    telaResolucao = "720p";
+    telaFps = 30;
+    var btnAb = document.querySelector("#multi-abrir-tela");
+    var btnFe = document.querySelector("#multi-fechar-tela");
+    if (btnAb) btnAb.style.display = "none";
+    if (btnFe) btnFe.style.display = "";
+    var q = document.querySelector("#transmissao-qualidade");
+    if (q) q.classList.add("bloqueada");
+    mensagemMulti("Sua tela está na sala (" + rotuloFonteCaptura() + ") · 720p 30fps.", "sucesso");
+    videoTransmissaoEl.style.display = "none";
+    canvasRelayEl.style.display = "none";
+    videoTransmissaoEl.srcObject = telaStream;
+    var trAudioHostM = telaStream.getAudioTracks()[0];
+    if (trAudioHostM) trAudioHostM.enabled = !audioMudo;
+    hostVideoEncoder();
+    iniciarEncoderAudioRelay();
+    aplicarVolumeLocal();
+    if (multiNaTela && !multiTiles[telaSala]) {
+      criarTileMulti({ sala: telaSala, eu: true, nick: nomeExibicao() });
+    }
+    return;
+  }
   mostrarTela(telaTransmissaoEl);
   var fonte = rotuloFonteCaptura();
   mensagemTransmissao(
@@ -3131,13 +3220,31 @@ function encerrarTransmissao(silencioso) {
   }
   telaStream = null;
   telaEhHost = false;
+  if (hostOffVideo) hostOffVideo.srcObject = null;
   videoTransmissaoEl.srcObject = null;
   document.querySelector("#transmissao-codigo-display").style.display = "none";
   document.querySelector("#transmissao-viewers-bar").style.display = "none";
   document.querySelector("#transmissao-qualidade").style.display = "none";
+  document.querySelector("#transmissao-qualidade").classList.remove("bloqueada");
   controlesTransmissaoEl.style.display = "none";
   var badgeOff = document.querySelector("#qualidade-badge");
   if (badgeOff) badgeOff.style.display = "none";
+  if (multiSala) {
+    multiHostSala = null;
+    var btnAb = document.querySelector("#multi-abrir-tela");
+    var btnFe = document.querySelector("#multi-fechar-tela");
+    if (btnAb) btnAb.style.display = "";
+    if (btnFe) btnFe.style.display = "none";
+    if (multiNaTela) {
+      mensagemMulti("Sua tela foi encerrada.", "");
+      atualizarMultiEstado(multiEstado);
+    }
+    if (!silencioso && !multiNaTela) {
+      mostrarTela(telaCompartilhar);
+      carregarTransmissoes();
+    }
+    return;
+  }
   if (!silencioso) {
     mostrarTela(telaCompartilhar);
     carregarTransmissoes();
@@ -3198,8 +3305,10 @@ function processarOfertaHost(sdp) {
     var promessa = videoTransmissaoEl.play();
     if (promessa && promessa.then) {
       promessa.then(function () {
+        if (multiNaTela && telaEhHost) return;
         mensagemTransmissao("Recebendo vídeo de quem transmite.", "sucesso");
       }).catch(function () {
+        if (multiNaTela && telaEhHost) return;
         mensagemTransmissao("Vídeo recebido — clique no player para começar a assistir.");
       });
     }
@@ -3311,11 +3420,17 @@ function conectarWsTela(host, tentativa) {
 
     if (host) {
       encerrarTransmissao(true);
-      mensagemTela(telaAbriu
-        ? "Conexão com o servidor foi encerrada."
-        : "Não foi possível conectar ao servidor. Tente novamente.", "erro");
-      mostrarTela(telaCompartilhar);
-      carregarTransmissoes();
+      if (multiNaTela) {
+        avisoTela(telaAbriu
+          ? "Conexão com o servidor foi encerrada."
+          : "Não foi possível conectar ao servidor. Tente novamente.", "erro");
+      } else {
+        mensagemTela(telaAbriu
+          ? "Conexão com o servidor foi encerrada."
+          : "Não foi possível conectar ao servidor. Tente novamente.", "erro");
+        mostrarTela(telaCompartilhar);
+        carregarTransmissoes();
+      }
     } else {
       encerrarViewerTela(telaAbriu
         ? "Conexão com o servidor foi encerrada."
@@ -3554,6 +3669,7 @@ function processarMensagemTela(dados) {
       videoTransmissaoEl.srcObject = null;
       mensagemTransmissao("A transmissão foi encerrada" +
         (dados.motivo === "host_saiu" ? ": quem transmitiu saiu." : "."), "erro");
+      if (multiNaTela) break;
       setTimeout(function () {
         telaSala = null;
         mostrarTela(telaCompartilhar);
@@ -3565,9 +3681,12 @@ function processarMensagemTela(dados) {
       // onclose não sobrescrever esta mensagem.
       if (telaEhHost) {
         encerrarTransmissao(true);
-        mensagemTela(dados.mensagem, "erro");
-        mostrarTela(telaCompartilhar);
-        carregarTransmissoes();
+        avisoTela(dados.mensagem, "erro");
+        if (!multiNaTela) {
+          mensagemTela(dados.mensagem, "erro");
+          mostrarTela(telaCompartilhar);
+          carregarTransmissoes();
+        }
       } else {
         encerrarViewerTela(dados.mensagem);
       }
@@ -3710,6 +3829,937 @@ document.querySelector("#copiar-codigo-tela").addEventListener("click", function
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Sala multi-tela — listeners de UI
+// ---------------------------------------------------------------------------
+document.querySelector("#criar-sala-multi").addEventListener("click", criarSalaMulti);
+
+document.querySelector("#entrar-multi-codigo").addEventListener("click", function () {
+  entrarSalaMulti(document.querySelector("#codigo-multi-input").value);
+});
+
+document.querySelector("#codigo-multi-input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") entrarSalaMulti(this.value);
+});
+
+document.querySelector("#sair-sala-multi").addEventListener("click", sairSalaMulti);
+document.querySelector("#sair-multi-topo").addEventListener("click", sairSalaMulti);
+
+document.querySelector("#multi-abrir-tela").addEventListener("click", function () {
+  if (!multiNaTela) return;
+  iniciarTransmissaoTela();
+});
+
+document.querySelector("#multi-fechar-tela").addEventListener("click", function () {
+  encerrarTransmissao(false);
+});
+
+document.querySelector("#copiar-codigo-multi").addEventListener("click", function () {
+  var botao = this;
+  if (navigator.clipboard && multiSala) {
+    navigator.clipboard.writeText(multiSala).then(function () {
+      botao.textContent = "Copiado!";
+      setTimeout(function () { botao.textContent = "Copiar"; }, 2000);
+    });
+  }
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  var cheia = document.querySelector(".multi-tile.cheia");
+  if (cheia) {
+    cheia.classList.remove("cheia");
+    var b = cheia.querySelector(".multi-tile-ctrls button:last-child");
+    if (b) b.textContent = "⛶";
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sala multi-tela: várias lives 720p30, grid com volume/cheia/minimizar
+// ---------------------------------------------------------------------------
+function mensagemMulti(texto, tipo) {
+  var el = document.querySelector("#mensagem-multi");
+  if (!el) return;
+  el.textContent = texto || "";
+  el.className = "mensagem" + (tipo ? " " + tipo : "");
+}
+
+async function carregarSalasMulti() {
+  try {
+    var res = await fetch("./multitela/salas");
+    var dados = await res.json();
+    renderizarSalasMulti(dados.salas || []);
+  } catch (e) {
+    console.warn("salas multi:", e);
+  }
+}
+
+function renderizarSalasMulti(salas) {
+  var container = document.querySelector("#lista-salas-multi");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!salas || !salas.length) {
+    container.innerHTML = '<p class="vazio">Nenhuma sala multi-tela pública.</p>';
+    return;
+  }
+  salas.forEach(function (s) {
+    var item = document.createElement("div");
+    item.className = "sala-item";
+    var avatarHtml = s.dono_avatar
+      ? '<img class="sala-item-avatar" src="' + escapeHtml(s.dono_avatar) + '" alt="" />'
+      : '<span class="sala-item-inicial">' + escapeHtml((s.dono_nick || "?").charAt(0).toUpperCase()) + "</span>";
+    item.innerHTML =
+      avatarHtml +
+      '<div class="sala-item-info">' +
+      "<strong>" + escapeHtml(s.nome || ("Sala de " + (s.dono_nick || "Anônimo"))) + "</strong>" +
+      "<small>Código " + escapeHtml(s.sala) + " · " + (s.total_lives || 0) + "/" + (s.max_lives || 8) + " telas · " +
+      (s.total_membros || 0) + " na sala</small></div>";
+    var btn = document.createElement("button");
+    btn.className = "botao";
+    btn.textContent = "Entrar";
+    btn.addEventListener("click", function () { entrarSalaMulti(s.sala); });
+    item.appendChild(btn);
+    container.appendChild(item);
+  });
+}
+
+async function criarSalaMulti() {
+  try {
+    await garantirIdentidade();
+    var res = await fetch("./multitela/novo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        publica: true,
+        nick: nomeExibicao(),
+        avatar: avatarAtual() || null,
+      }),
+    });
+    var dados = await res.json();
+    if (!res.ok) throw new Error(dados.detail || "Erro ao criar a sala multi-tela.");
+    await entrarSalaMulti(dados.sala);
+  } catch (e) {
+    mensagemTela(e.message, "erro");
+  }
+}
+
+function entrarSalaMulti(codigo) {
+  codigo = (codigo || "").trim().toLowerCase();
+  if (!codigo) {
+    mensagemTela("Digite o código da multi-tela.", "erro");
+    return;
+  }
+
+  // Sai de qualquer transmissão single-player antes de entrar na multi.
+  if (telaEhHost) encerrarTransmissao(true);
+  else if (telaSala) pararDeAssistir();
+
+  multiSala = codigo;
+  multiNaTela = true;
+  multiHostSala = null;
+  document.querySelector("#multi-nome-sala").textContent = "Sala multi-tela";
+  document.querySelector("#multi-codigo-sala").textContent = codigo;
+  var btnAb = document.querySelector("#multi-abrir-tela");
+  var btnFe = document.querySelector("#multi-fechar-tela");
+  if (btnAb) btnAb.style.display = "";
+  if (btnFe) btnFe.style.display = "none";
+  var q = document.querySelector("#transmissao-qualidade");
+  if (q) q.classList.add("bloqueada");
+  telaResolucao = "720p";
+  telaFps = 30;
+  limparTilesMulti();
+  // multiNaTela já true — mostrarTela não dispara sairSalaMulti.
+  mostrarTela(document.querySelector("#tela-multitela"));
+  mensagemMulti("Conectando à sala multi-tela...");
+  conectarMultiWs();
+}
+
+function sairSalaMulti() {
+  if (!multiNaTela && !multiSala) return;
+  if (telaEhHost) encerrarTransmissao(true);
+  limparTilesMulti();
+  if (multiWs) {
+    try { multiWs.send(JSON.stringify({ tipo: "sair" })); } catch (e) { /* ignore */ }
+    var ws = multiWs;
+    multiWs = null;
+    ws.onclose = null;
+    try { ws.close(); } catch (e2) { /* ignore */ }
+  }
+  clearInterval(multiPingTimer);
+  multiPingTimer = null;
+  multiNaTela = false;
+  multiSala = null;
+  multiEstado = null;
+  multiHostSala = null;
+  var q = document.querySelector("#transmissao-qualidade");
+  if (q) q.classList.remove("bloqueada");
+  mensagemMulti("");
+  // multiNaTela já false — não reentra no if de sair do mostrarTela.
+  mostrarTela(telaCompartilhar);
+  carregarTransmissoes();
+  carregarSalasMulti();
+}
+
+function conectarMultiWs() {
+  if (multiWs) {
+    var antigo = multiWs;
+    multiWs = null;
+    antigo.onclose = null;
+    try { antigo.close(); } catch (e) { /* ignore */ }
+  }
+  clearInterval(multiPingTimer);
+
+  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : (nomeExibicao() || "Anônimo");
+  var avatar = avatarAtual() || "";
+  var logado = usuarioDiscord ? "1" : "0";
+  var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
+  var url = protocolo + "//" + location.host + "/ws/multitela/" + encodeURIComponent(multiSala) +
+    "?nick=" + encodeURIComponent(nick) +
+    "&avatar=" + encodeURIComponent(avatar) +
+    "&logado=" + logado;
+
+  var ws = new WebSocket(url);
+  multiWs = ws;
+
+  multiPingTimer = setInterval(function () {
+    if (multiWs && multiWs.readyState === WebSocket.OPEN) {
+      multiWs.send(JSON.stringify({ tipo: "ping" }));
+    }
+  }, 20000);
+
+  ws.onmessage = function (evento) {
+    try {
+      processarMultiMensagem(JSON.parse(evento.data));
+    } catch (e) {
+      console.error("Erro multi:", e);
+    }
+  };
+
+  ws.onclose = function () {
+    if (ws !== multiWs) return;
+    if (!multiNaTela) return;
+    mensagemMulti("Conexão perdida. Reconectando...", "erro");
+    setTimeout(function () {
+      if (multiNaTela && multiSala) conectarMultiWs();
+    }, 2000);
+  };
+
+  ws.onerror = function () {};
+}
+
+function processarMultiMensagem(dados) {
+  switch (dados.tipo) {
+    case "multi_estado":
+      atualizarMultiEstado(dados);
+      break;
+    case "multi_encerrada":
+      mensagemMulti("A sala multi-tela foi encerrada" +
+        (dados.motivo ? " (" + dados.motivo + ")." : "."), "erro");
+      setTimeout(function () {
+        if (multiNaTela) sairSalaMulti();
+      }, 1800);
+      break;
+    case "erro":
+      mensagemMulti(dados.mensagem || "Erro na sala multi-tela.", "erro");
+      if (dados.mensagem && dados.mensagem.indexOf("não encontrada") !== -1) {
+        setTimeout(function () { if (multiNaTela) sairSalaMulti(); }, 1800);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function atualizarMultiEstado(estado) {
+  multiEstado = estado;
+  if (!multiNaTela) return;
+
+  var nome = estado.nome || ("Sala de " + (estado.dono_nick || "Anônimo"));
+  document.querySelector("#multi-nome-sala").textContent = nome + " - Código";
+  document.querySelector("#multi-codigo-sala").textContent = estado.sala || multiSala || "";
+  document.querySelector("#multi-membros-total").textContent = String(estado.total_membros || 0);
+
+  var lives = estado.lives || [];
+  var btnAb = document.querySelector("#multi-abrir-tela");
+  if (btnAb && !multiHostSala) {
+    var cheia = (estado.total_lives || 0) >= (estado.max_lives || 8);
+    btnAb.disabled = cheia;
+    btnAb.textContent = cheia
+      ? "Telas cheias (" + (estado.max_lives || 8) + ")"
+      : "Compartilhar minha tela";
+  }
+
+  var alvo = {};
+  lives.forEach(function (l) { alvo[l.sala] = l; });
+  // Tile do host local: mantém mesmo antes do host_ws entrar no lives.
+  if (multiHostSala) {
+    if (!alvo[multiHostSala]) {
+      alvo[multiHostSala] = {
+        sala: multiHostSala,
+        nick: nomeExibicao(),
+        avatar: avatarAtual() || null,
+      };
+    }
+    alvo[multiHostSala].eu = true;
+  }
+
+  // Remove tiles de lives que sumiram (nunca o tile do host local).
+  Object.keys(multiTiles).forEach(function (sala) {
+    if (sala === multiHostSala) return;
+    if (!alvo[sala]) removerTileMulti(sala);
+  });
+
+  // Cria/atualiza tiles.
+  Object.keys(alvo).forEach(function (sala) {
+    if (!multiTiles[sala]) criarTileMulti(alvo[sala]);
+    else atualizarDadosTile(multiTiles[sala], alvo[sala]);
+  });
+}
+
+function limparTilesMulti() {
+  Object.keys(multiTiles).forEach(function (sala) {
+    removerTileMulti(sala);
+  });
+}
+
+function removerTileMulti(sala) {
+  var tile = multiTiles[sala];
+  if (!tile) return;
+  desligarViewerMulti(tile);
+  if (tile.el && tile.el.parentNode) tile.el.parentNode.removeChild(tile.el);
+  delete multiTiles[sala];
+}
+
+function avatarOuIni(nick, avatar) {
+  if (avatar) {
+    return '<img src="' + escapeHtml(avatar) + '" alt="" onerror="this.outerHTML=\'<span class=&quot;ini&quot;>' +
+      escapeHtml((nick || "?").charAt(0).toUpperCase()) + '</span>\'" />';
+  }
+  return '<span class="ini">' + escapeHtml((nick || "?").charAt(0).toUpperCase()) + "</span>";
+}
+
+function criarTileMulti(live) {
+  var sala = live.sala;
+  var ehEu = !!live.eu || sala === multiHostSala;
+  var nick = ehEu ? (nomeExibicao() || "Você") : (live.nick || "Anônimo");
+  var avatar = ehEu ? avatarAtual() : live.avatar;
+
+  var el = document.createElement("div");
+  el.className = "multi-tile" + (ehEu ? " multi-tile-eu" : "");
+  el.dataset.sala = sala;
+
+  var media = document.createElement("div");
+  media.className = "multi-tile-media";
+
+  var canvas = document.createElement("canvas");
+  canvas.width = 1280;
+  canvas.height = 720;
+  media.appendChild(canvas);
+
+  var video = null;
+  if (!dentroDaActivity() && !ehEu) {
+    video = document.createElement("video");
+    video.playsInline = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.style.display = "none";
+    media.appendChild(video);
+  }
+
+  var placeholder = document.createElement("div");
+  placeholder.className = "multi-tile-placeholder";
+  placeholder.textContent = ehEu
+    ? "Você está transmitindo"
+    : "Clique para assistir";
+  media.appendChild(placeholder);
+
+  var ctrls = document.createElement("div");
+  ctrls.className = "multi-tile-ctrls";
+
+  var btnVol = document.createElement("button");
+  btnVol.type = "button";
+  btnVol.title = "Volume (começa mudo)";
+  btnVol.textContent = "🔇";
+
+  var btnOcultar = document.createElement("button");
+  btnOcultar.type = "button";
+  btnOcultar.title = "Não exibir / reassistir";
+  btnOcultar.textContent = "👁";
+
+  var btnMini = document.createElement("button");
+  btnMini.type = "button";
+  btnMini.title = "Minimizar";
+  btnMini.textContent = "▁";
+
+  var btnCheia = document.createElement("button");
+  btnCheia.type = "button";
+  btnCheia.title = "Tela cheia";
+  btnCheia.textContent = "⛶";
+
+  ctrls.appendChild(btnVol);
+  ctrls.appendChild(btnOcultar);
+  ctrls.appendChild(btnMini);
+  ctrls.appendChild(btnCheia);
+  media.appendChild(ctrls);
+
+  var rodape = document.createElement("div");
+  rodape.className = "multi-tile-rodape";
+  rodape.innerHTML = avatarOuIni(nick, avatar) +
+    "<strong>" + escapeHtml(nick) + "</strong>" +
+    (ehEu ? '<span class="etiqueta-eu">Você</span>' : "");
+
+  el.appendChild(media);
+  el.appendChild(rodape);
+  document.querySelector("#multi-grid").appendChild(el);
+
+  var tile = {
+    sala: sala,
+    eu: ehEu,
+    nick: nick,
+    el: el,
+    canvas: canvas,
+    video: video,
+    placeholder: placeholder,
+    btnVol: btnVol,
+    btnOcultar: btnOcultar,
+    btnMini: btnMini,
+    btnCheia: btnCheia,
+    live: live,
+    assistindo: false,
+    oculta: false,
+    mudo: true,
+    ws: null,
+    pc: null,
+    decoder: null,
+    audioDecoder: null,
+    audioCtx: null,
+    gain: null,
+    partes: {},
+    temKey: false,
+    codec: "vp8",
+    resolucao: live.resolucao || "720p",
+    tentativas: 0,
+    abriu: false,
+    relay: dentroDaActivity(),
+    ofertaTimer: null,
+    audioCfg: { sr: 0, ch: 0 },
+    audioChave: true,
+    redeTimer: null,
+  };
+  multiTiles[sala] = tile;
+
+  // Host: preview local no próprio tile (mudo).
+  if (ehEu && telaStream) {
+    canvas.style.display = "none";
+    var prev = document.createElement("video");
+    prev.autoplay = true;
+    prev.muted = true;
+    prev.playsInline = true;
+    prev.srcObject = telaStream;
+    prev.style.display = "block";
+    prev.style.width = "100%";
+    prev.style.height = "100%";
+    prev.style.objectFit = "contain";
+    prev.style.background = "#000";
+    media.insertBefore(prev, placeholder);
+    tile.preview = prev;
+    var pp = prev.play();
+    if (pp && pp.catch) pp.catch(function () {});
+    placeholder.textContent = "Transmitindo 720p 30fps";
+    btnVol.disabled = true;
+    btnOcultar.disabled = true;
+    return tile;
+  }
+
+  if (ehEu) {
+    return tile;
+  }
+
+  // Auto-assiste lives (mutadas). Clique no media também religa se oculto.
+  media.addEventListener("click", function (ev) {
+    if (ev.target === btnVol || ev.target === btnOcultar ||
+        ev.target === btnMini || ev.target === btnCheia) return;
+    if (tile.oculta) {
+      tile.oculta = false;
+      el.classList.remove("oculta");
+      btnOcultar.textContent = "👁";
+      ligarViewerMulti(tile);
+    } else if (!tile.assistindo) {
+      ligarViewerMulti(tile);
+    }
+  });
+
+  btnVol.addEventListener("click", function () {
+    tile.mudo = !tile.mudo;
+    btnVol.textContent = tile.mudo ? "🔇" : "🔊";
+    if (tile.gain) tile.gain.gain.value = tile.mudo ? 0 : 1;
+    if (tile.video) tile.video.muted = tile.mudo;
+    if (!tile.mudo && tile.audioCtx && tile.audioCtx.state === "suspended") {
+      tile.audioCtx.resume().catch(function () {});
+    }
+  });
+
+  btnOcultar.addEventListener("click", function () {
+    if (tile.oculta) {
+      tile.oculta = false;
+      el.classList.remove("oculta");
+      btnOcultar.textContent = "👁";
+      ligarViewerMulti(tile);
+    } else {
+      tile.oculta = true;
+      el.classList.add("oculta");
+      btnOcultar.textContent = "🙈";
+      desligarViewerMulti(tile);
+    }
+  });
+
+  btnMini.addEventListener("click", function () {
+    el.classList.toggle("minimizado");
+    btnMini.textContent = el.classList.contains("minimizado") ? "▔" : "▁";
+    if (el.classList.contains("cheia")) {
+      el.classList.remove("cheia");
+      btnCheia.textContent = "⛶";
+    }
+  });
+
+  btnCheia.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    var cheiaAgora = el.classList.contains("cheia");
+    document.querySelectorAll(".multi-tile.cheia").forEach(function (t) {
+      t.classList.remove("cheia");
+      var b = t.querySelector(".multi-tile-ctrls button:last-child");
+      if (b) b.textContent = "⛶";
+    });
+    if (!cheiaAgora) {
+      el.classList.add("cheia");
+      el.classList.remove("minimizado");
+      btnCheia.textContent = "✕";
+      btnMini.textContent = "▁";
+    }
+  });
+
+  ligarViewerMulti(tile);
+  return tile;
+}
+
+function atualizarDadosTile(tile, live) {
+  tile.live = live;
+  if (tile.eu) return;
+  var nick = live.nick || "Anônimo";
+  var forte = tile.el.querySelector(".multi-tile-rodape strong");
+  if (forte) forte.textContent = nick;
+}
+
+function enviarMulti(obj) {
+  if (multiWs && multiWs.readyState === WebSocket.OPEN) {
+    multiWs.send(JSON.stringify(obj));
+  }
+}
+
+function enviarTile(tile, obj) {
+  if (tile.ws && tile.ws.readyState === WebSocket.OPEN) {
+    tile.ws.send(JSON.stringify(obj));
+  }
+}
+
+function desligarViewerMulti(tile) {
+  tile.assistindo = false;
+  clearTimeout(tile.ofertaTimer);
+  clearInterval(tile.redeTimer);
+  tile.redeTimer = null;
+  if (tile.ws) {
+    var ws = tile.ws;
+    tile.ws = null;
+    ws.onclose = null;
+    ws.onmessage = null;
+    try { ws.close(); } catch (e) { /* ignore */ }
+  }
+  if (tile.pc) {
+    try { tile.pc.close(); } catch (e) { /* ignore */ }
+    tile.pc = null;
+  }
+  if (tile.decoder && tile.decoder.state !== "closed") {
+    try { tile.decoder.close(); } catch (e) { /* ignore */ }
+  }
+  tile.decoder = null;
+  if (tile.audioDecoder && tile.audioDecoder.state !== "closed") {
+    try { tile.audioDecoder.close(); } catch (e) { /* ignore */ }
+  }
+  tile.audioDecoder = null;
+  if (tile.audioCtx) {
+    try { tile.audioCtx.close(); } catch (e) { /* ignore */ }
+  }
+  tile.audioCtx = null;
+  tile.gain = null;
+  tile.partes = {};
+  tile.temKey = false;
+  tile.abriu = false;
+  tile.tentativas = 0;
+  if (tile.video) tile.video.srcObject = null;
+  var ctx = tile.canvas.getContext("2d", { alpha: false });
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, tile.canvas.width, tile.canvas.height);
+  if (!tile.oculta) tile.placeholder.textContent = "Clique para assistir";
+}
+
+function ligarViewerMulti(tile) {
+  if (tile.eu || tile.assistindo || !multiNaTela) return;
+  tile.assistindo = true;
+  tile.tentativas = 0;
+  tile.relay = dentroDaActivity();
+  tile.placeholder.textContent = "Conectando...";
+  abrirWsViewerMulti(tile);
+}
+
+function abrirWsViewerMulti(tile) {
+  var nick = usuarioDiscord ? (usuarioDiscord.global_name || usuarioDiscord.username) : (nomeExibicao() || "Anônimo");
+  var avatar = avatarAtual() || "";
+  var logado = usuarioDiscord ? "1" : "0";
+  var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
+  var url = protocolo + "//" + location.host + "/ws/tela/" + encodeURIComponent(tile.sala) +
+    "?papel=viewer" +
+    "&nick=" + encodeURIComponent(nick) +
+    "&avatar=" + encodeURIComponent(avatar) +
+    "&logado=" + logado +
+    (tile.relay ? "&transporte=relay" : "");
+
+  var ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
+  tile.ws = ws;
+  tile.abriu = false;
+
+  ws.onopen = function () {
+    tile.abriu = true;
+    tile.tentativas = 0;
+    tile.placeholder.textContent = "Aguardando vídeo...";
+  };
+
+  ws.onmessage = function (evento) {
+    if (typeof evento.data !== "string") {
+      if (tile.relay) receberRelayTile(tile, evento.data);
+      return;
+    }
+    try {
+      processarMsgTile(tile, JSON.parse(evento.data));
+    } catch (e) {
+      console.warn("msg tile:", e);
+    }
+  };
+
+  ws.onclose = function () {
+    if (ws !== tile.ws) return;
+    tile.ws = null;
+    tile.assistindo = false;
+    if (!multiNaTela || tile.oculta || !multiTiles[tile.sala]) return;
+    if (!tile.abriu && tile.tentativas < 3) {
+      tile.tentativas++;
+      tile.placeholder.textContent = "Reconectando... (" + tile.tentativas + "/3)";
+      setTimeout(function () {
+        if (multiTiles[tile.sala] && !tile.oculta) ligarViewerMulti(tile);
+      }, 1500 * tile.tentativas);
+      return;
+    }
+    tile.placeholder.textContent = "Conexão perdida — clique para reassistir";
+  };
+
+  ws.onerror = function () {};
+}
+
+function processarMsgTile(tile, dados) {
+  switch (dados.tipo) {
+    case "entrada_ok":
+      tile.resolucao = dados.resolucao || "720p";
+      if (dados.codec) tile.codec = dados.codec;
+      tile.placeholder.textContent = "Aguardando vídeo...";
+      if (tile.relay) {
+        iniciarDecoderTile(tile, tile.resolucao, tile.codec);
+        clearTimeout(tile.ofertaTimer);
+        tile.ofertaTimer = setTimeout(function () {
+          if (tile.assistindo && tile.placeholder.textContent.indexOf("vídeo") === -1 &&
+              tile.placeholder.textContent.indexOf("Recebendo") === -1) {
+            tile.placeholder.textContent = "Host sem vídeo ainda — clique para reassistir";
+          }
+        }, 12000);
+      }
+      break;
+    case "host_conectado":
+      // WebRTC: host avisa; oferta vem em seguida.
+      break;
+    case "quadro":
+      if (tile.relay && dados.d) montarQuadroTile(tile, dados);
+      break;
+    case "audio":
+      if (tile.relay) receberAudioTile(tile, dados);
+      break;
+    case "relay_codec":
+      if (dados.codec) {
+        tile.codec = dados.codec;
+        if (tile.relay && tile.assistindo) iniciarDecoderTile(tile, tile.resolucao, tile.codec);
+      }
+      break;
+    case "config":
+      if (tile.relay && dados.resolucao) {
+        iniciarDecoderTile(tile, dados.resolucao, tile.codec);
+      }
+      break;
+    case "oferta":
+      if (!tile.relay) processarOfertaTile(tile, dados.dados);
+      break;
+    case "resposta":
+      if (tile.pc) tile.pc.setRemoteDescription({ type: "answer", sdp: dados.dados }).catch(function () {});
+      break;
+    case "ice":
+      if (tile.pc) tile.pc.addIceCandidate(dados.dados).catch(function () {});
+      break;
+    case "aguardando_host":
+      tile.placeholder.textContent = "Aguardando quem transmite conectar...";
+      break;
+    case "transmissao_encerrada":
+      desligarViewerMulti(tile);
+      tile.placeholder.textContent = "Live encerrada — clique para reassistir se voltar";
+      break;
+    case "erro":
+      tile.placeholder.textContent = dados.mensagem || "Erro na live";
+      break;
+    default:
+      break;
+  }
+}
+
+function processarOfertaTile(tile, sdp) {
+  if (tile.pc) {
+    try { tile.pc.close(); } catch (e) { /* ignore */ }
+  }
+  var pc = new RTCPeerConnection(RTC_CONFIG);
+  tile.pc = pc;
+
+  pc.ontrack = function (evento) {
+    if (!tile.video) return;
+    tile.video.srcObject = evento.streams[0];
+    tile.video.muted = tile.mudo;
+    tile.placeholder.style.display = "none";
+    tile.canvas.style.display = "none";
+    tile.video.style.display = "";
+    var p = tile.video.play();
+    if (p && p.catch) p.catch(function () {});
+  };
+
+  pc.onicecandidate = function (evento) {
+    if (evento.candidate) {
+      enviarTile(tile, { tipo: "ice", dados: evento.candidate.toJSON() });
+    }
+  };
+
+  pc.setRemoteDescription({ type: "offer", sdp: sdp })
+    .then(function () { return pc.createAnswer(); })
+    .then(function (resposta) { return pc.setLocalDescription(resposta); })
+    .then(function () {
+      enviarTile(tile, { tipo: "resposta", dados: pc.localDescription.sdp });
+      tile.placeholder.textContent = "Recebendo vídeo...";
+    })
+    .catch(function () {
+      tile.placeholder.textContent = "Falha ao conectar P2P nesta live.";
+    });
+}
+
+function iniciarDecoderTile(tile, resolucao, codec) {
+  if (tile.decoder && tile.decoder.state !== "closed") {
+    try { tile.decoder.close(); } catch (e) { /* ignore */ }
+  }
+  tile.decoder = null;
+  tile.temKey = false;
+  tile.partes = {};
+  var dims = { "480p": [854, 480], "720p": [1280, 720], "1080p": [1920, 1080] }[resolucao] || [1280, 720];
+  tile.canvas.width = dims[0];
+  tile.canvas.height = dims[1];
+  if (typeof VideoDecoder === "undefined") {
+    tile.placeholder.textContent = "Seu navegador não suporta o modo de vídeo da multi-tela.";
+    return;
+  }
+  var ctx = tile.canvas.getContext("2d", { alpha: false });
+  tile.decoder = new VideoDecoder({
+    output: function (frame) {
+      try {
+        ctx.drawImage(frame, 0, 0, tile.canvas.width, tile.canvas.height);
+        if (!tile.oculta) {
+          tile.placeholder.style.display = "none";
+          tile.canvas.style.display = "block";
+          if (tile.preview) tile.preview.style.display = "none";
+        }
+      } catch (e) { /* ignore */ }
+      try { frame.close(); } catch (e2) { /* ignore */ }
+    },
+    error: function () {
+      if (tile.decoder && tile.decoder.state !== "closed") {
+        try { tile.decoder.close(); } catch (e) { /* ignore */ }
+      }
+      tile.decoder = null;
+      tile.temKey = false;
+      if (tile.codec !== "vp8") {
+        tile.codec = "vp8";
+        iniciarDecoderTile(tile, resolucao, "vp8");
+      }
+    },
+  });
+  var alvo = codec === "h264" ? ["avc1.42001f", "vp8"] : ["vp8", "avc1.42001f"];
+  function tentar(lista) {
+    if (!lista.length || !tile.decoder) return;
+    var codecStr = lista[0];
+    var resto = lista.slice(1);
+    var cfg = { codec: codecStr, optimizeForLatency: true };
+    var promessa = (typeof VideoDecoder.isConfigSupported === "function")
+      ? VideoDecoder.isConfigSupported(cfg)
+      : Promise.resolve({ supported: true });
+    promessa.then(function (sup) {
+      if (!tile.decoder) return;
+      if (sup && sup.supported === false) { tentar(resto); return; }
+      try {
+        tile.decoder.configure(cfg);
+        if (tile.decoder.state !== "configured") tentar(resto);
+      } catch (e) { tentar(resto); }
+    }).catch(function () {
+      if (!tile.decoder) return;
+      try { tile.decoder.configure(cfg); } catch (e) { tentar(resto); }
+    });
+  }
+  tentar(alvo);
+  iniciarDecoderAudioTile(tile, 48000, 2);
+}
+
+function receberRelayTile(tile, buffer) {
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 5) return;
+  var dv = new DataView(buffer);
+  decodificarRelayFrameTile(tile, dv.getUint8(0) === 1, dv.getUint32(1), new Uint8Array(buffer, 5));
+}
+
+function montarQuadroTile(tile, dados) {
+  if (!dados || !dados.d) return;
+  if (!dados.n || dados.n <= 1) {
+    processarParteRelayTile(tile, dados.t, dados);
+    return;
+  }
+  var t = dados.t;
+  var buf = tile.partes[t];
+  if (!buf) buf = tile.partes[t] = { k: dados.k, n: dados.n, recebidas: 0, partes: [] };
+  if (buf.partes[dados.i]) return;
+  buf.partes[dados.i] = dados.d;
+  buf.recebidas++;
+  if (buf.recebidas >= buf.n) {
+    delete tile.partes[t];
+    processarParteRelayTile(tile, t, { k: buf.k, d: buf.partes.join("") });
+  }
+}
+
+function processarParteRelayTile(tile, t, dados) {
+  try {
+    var bin = atob(dados.d);
+    var payload = new Uint8Array(bin.length);
+    for (var qi = 0; qi < bin.length; qi++) payload[qi] = bin.charCodeAt(qi);
+    decodificarRelayFrameTile(tile, dados.k === 1, t >>> 0, payload);
+  } catch (e) { /* ignore */ }
+}
+
+function decodificarRelayFrameTile(tile, ehKey, timestamp, payload) {
+  if (!tile.decoder || tile.decoder.state === "closed") return;
+  if (!payload || payload.byteLength < 1) return;
+  if (!ehKey && !tile.temKey) return;
+  if (ehKey) tile.temKey = true;
+  if (tile.decoder.decodeQueueSize > 30 && !ehKey) return;
+  try {
+    tile.decoder.decode(new EncodedVideoChunk({
+      type: ehKey ? "key" : "delta",
+      timestamp: timestamp,
+      data: payload,
+    }));
+  } catch (e) {
+    tile.temKey = false;
+  }
+}
+
+function iniciarDecoderAudioTile(tile, sr, ch) {
+  if (tile.audioDecoder && tile.audioDecoder.state !== "closed") {
+    try { tile.audioDecoder.close(); } catch (e) { /* ignore */ }
+  }
+  tile.audioDecoder = null;
+  if (typeof AudioDecoder === "undefined" || typeof AudioContext === "undefined") return;
+  if (!tile.audioCtx) {
+    try {
+      tile.audioCtx = new AudioContext({ sampleRate: 48000 });
+    } catch (e) {
+      tile.audioCtx = new AudioContext();
+    }
+    tile.gain = tile.audioCtx.createGain();
+    tile.gain.gain.value = tile.mudo ? 0 : 1;
+    tile.gain.connect(tile.audioCtx.destination);
+  }
+  tile.audioCfg = { sr: sr || 48000, ch: ch || 2 };
+  tile.audioChave = true;
+  var proxima = 0;
+  tile.audioDecoder = new AudioDecoder({
+    output: function (frame) {
+      try {
+        if (!tile.audioCtx || !tile.gain) { frame.close(); return; }
+        if (tile.audioCtx.state === "suspended") tile.audioCtx.resume().catch(function () {});
+        var n = frame.numberOfFrames;
+        var ab = tile.audioCtx.createBuffer(frame.numberOfChannels, n, frame.sampleRate);
+        for (var c = 0; c < frame.numberOfChannels; c++) {
+          var plane = new Float32Array(n);
+          frame.copyTo(plane, { planeIndex: c, format: "f32-planar" });
+          ab.copyToChannel(plane, c);
+        }
+        var src = tile.audioCtx.createBufferSource();
+        src.buffer = ab;
+        src.connect(tile.gain);
+        var agora = tile.audioCtx.currentTime;
+        if (proxima < agora || proxima > agora + 0.5) proxima = agora + 0.02;
+        src.start(proxima);
+        proxima += n / frame.sampleRate;
+      } catch (e) { /* ignore */ }
+      try { frame.close(); } catch (e2) { /* ignore */ }
+    },
+    error: function () { tile.audioDecoder = null; },
+  });
+  try {
+    tile.audioDecoder.configure({ codec: "opus", sampleRate: tile.audioCfg.sr, numberOfChannels: tile.audioCfg.ch });
+  } catch (e) { /* ignore */ }
+}
+
+function receberAudioTile(tile, dados) {
+  if (!dados || !dados.d) return;
+  if (!tile.audioCtx || !tile.audioDecoder || tile.audioDecoder.state === "closed") {
+    iniciarDecoderAudioTile(tile, parseInt(dados.sr, 10) || 48000, parseInt(dados.ch, 10) || 2);
+  }
+  if (!tile.audioDecoder || tile.audioDecoder.state === "closed") return;
+  var sr = parseInt(dados.sr, 10) || tile.audioCfg.sr;
+  var ch = parseInt(dados.ch, 10) || tile.audioCfg.ch;
+  if (sr !== tile.audioCfg.sr || ch !== tile.audioCfg.ch) {
+    iniciarDecoderAudioTile(tile, sr, ch);
+    if (!tile.audioDecoder || tile.audioDecoder.state === "closed") return;
+  }
+  if (tile.audioCtx && tile.audioCtx.state === "suspended") {
+    tile.audioCtx.resume().catch(function () {});
+  }
+  try {
+    var bin = atob(dados.d);
+    var payload = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) payload[i] = bin.charCodeAt(i);
+    if (tile.audioDecoder.decodeQueueSize > 40) return;
+    var tipo = "delta";
+    if (dados.k) tipo = "key";
+    else if (tile.audioChave) { tipo = "key"; tile.audioChave = false; }
+    tile.audioDecoder.decode(new EncodedAudioChunk({
+      type: tipo,
+      timestamp: dados.t || 0,
+      data: payload,
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+function irParaMulti() {
+  if (!multiNaTela || !multiSala) return;
+  mostrarTela(document.querySelector("#tela-multitela"));
+}
 
 // ---------------------------------------------------------------------------
 // Discord OAuth2 - login no site (modo navegador)

@@ -116,6 +116,14 @@ class NovaTransmissao(BaseModel):
     fps: int = 30
     codigo: Optional[str] = None
     publica: bool = False
+    multi: Optional[str] = None
+
+
+class NovaSalaMulti(BaseModel):
+    codigo: Optional[str] = None
+    publica: bool = True
+    nick: str = "Anônimo"
+    avatar: Optional[str] = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -140,6 +148,12 @@ RECONNECT_GRACE_SECONDS = 15
 # Sudoku online: código -> estado da sala (2 jogadores, mesmo puzzle)
 salas_sudoku: Dict[str, dict] = {}
 SUDOKU_SALA_SEM_WS_SEGUNDOS = 60
+
+# Sala multi-tela: código -> membros + lives (até 8) 720p30 fixo.
+# Vive enquanto houver pelo menos 1 membro com WS.
+salas_multi: Dict[str, dict] = {}
+MAX_LIVES_MULTI = 8
+SALA_MULTI_SEM_MEMBRO_SEGUNDOS = 90
 
 
 # ---------------------------------------------------------------------------
@@ -1061,6 +1075,10 @@ async def ws_lobby(websocket: WebSocket):
     conexoes_lobby.append(websocket)
     try:
         await transmitir_salas_lobby()
+        try:
+            await websocket.send_json({"tipo": "salas_multi", "salas": await listar_salas_multi_publicas()})
+        except Exception:
+            pass
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
@@ -1343,7 +1361,115 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
     }
     if transmissao.get("relay_codec"):
         info["codec"] = transmissao["relay_codec"]
+    if transmissao.get("multi"):
+        info["multi"] = transmissao["multi"]
     return info
+
+
+def _codigo_multi_valido(codigo: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9_-]{3,16}", codigo or ""))
+
+
+def lives_da_multi(codigo_multi: str) -> list:
+    return [
+        info_transmissao(sala, t)
+        for sala, t in salas_tela.items()
+        if t.get("multi") == codigo_multi and t.get("host_ws") is not None
+    ]
+
+
+def info_sala_multi(codigo: str, s: dict) -> dict:
+    membros = [
+        {
+            "id": mid,
+            "nick": m.get("nick") or "Anônimo",
+            "avatar": m.get("avatar"),
+            "logado": bool(m.get("logado")),
+            "conectado": m.get("ws") is not None,
+        }
+        for mid, m in s.get("membros", {}).items()
+    ]
+    lives = lives_da_multi(codigo)
+    return {
+        "tipo": "multi_estado",
+        "sala": codigo,
+        "nome": s.get("nome") or ("Sala de " + (s.get("dono_nick") or "Anônimo")),
+        "dono_nick": s.get("dono_nick") or "Anônimo",
+        "dono_avatar": s.get("dono_avatar"),
+        "publica": bool(s.get("publica")),
+        "membros": membros,
+        "total_membros": len(membros),
+        "lives": lives,
+        "total_lives": len(lives),
+        "max_lives": MAX_LIVES_MULTI,
+    }
+
+
+async def notificar_multi(codigo: str) -> None:
+    s = salas_multi.get(codigo)
+    if not s:
+        return
+    payload = info_sala_multi(codigo, s)
+    for m in list(s.get("membros", {}).values()):
+        ws = m.get("ws")
+        if ws:
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                pass
+
+
+async def destruir_multi(codigo: str, motivo: str) -> None:
+    """Sala multi só morre sem membros — derruba as lives filhas junto."""
+    s = salas_multi.pop(codigo, None)
+    if not s:
+        return
+    log_tela("multi destruida sala=%s motivo=%s" % (codigo, motivo))
+    for sala_tela, t in list(salas_tela.items()):
+        if t.get("multi") == codigo:
+            await _encerrar_transmissao(sala_tela, t, "sala_multi_encerrada")
+    for m in list(s.get("membros", {}).values()):
+        ws = m.get("ws")
+        if ws:
+            try:
+                await ws.send_json({"tipo": "multi_encerrada", "motivo": motivo})
+                await ws.close()
+            except Exception:
+                pass
+    for ws in list(conexoes_lobby):
+        try:
+            await ws.send_json({"tipo": "multi_removida", "sala": codigo})
+        except Exception:
+            pass
+
+
+async def listar_salas_multi_publicas() -> list:
+    lista = []
+    for codigo, s in salas_multi.items():
+        if not s.get("publica"):
+            continue
+        conectados = sum(1 for m in s.get("membros", {}).values() if m.get("ws"))
+        if conectados <= 0:
+            continue
+        lista.append({
+            "sala": codigo,
+            "nome": s.get("nome") or ("Sala de " + (s.get("dono_nick") or "Anônimo")),
+            "dono_nick": s.get("dono_nick") or "Anônimo",
+            "dono_avatar": s.get("dono_avatar"),
+            "total_membros": conectados,
+            "total_lives": len(lives_da_multi(codigo)),
+            "max_lives": MAX_LIVES_MULTI,
+        })
+    return lista
+
+
+async def notificar_lobbies_multi() -> None:
+    msg = {"tipo": "salas_multi", "salas": await listar_salas_multi_publicas()}
+    for ws in list(conexoes_lobby):
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            pass
 
 
 def lista_viewers_info(transmissao: dict) -> list:
@@ -1363,6 +1489,8 @@ async def _notificar_viewers_lista(transmissao: dict):
         })
     except Exception:
         pass
+    if transmissao.get("multi"):
+        await notificar_multi(transmissao["multi"])
 
 
 def purgar_transmissoes_obsoletas() -> None:
@@ -1375,8 +1503,21 @@ def purgar_transmissoes_obsoletas() -> None:
 
 
 @app.post("/tela/novo")
-def criar_transmissao(dados: NovaTransmissao):
+async def criar_transmissao(dados: NovaTransmissao):
     resolucao = dados.resolucao.lower()
+    multi = (dados.multi or "").strip().lower() or None
+    if multi:
+        if multi not in salas_multi:
+            raise HTTPException(status_code=404, detail="Sala multi-tela não encontrada.")
+        # Qualidade fixa na multi-tela: 720p30, não alterável.
+        resolucao = "720p"
+        dados.fps = 30
+        dados.publica = False
+        atuais = [1 for t in salas_tela.values() if t.get("multi") == multi]
+        if len(atuais) >= MAX_LIVES_MULTI:
+            raise HTTPException(
+                status_code=409,
+                detail="Sala multi-tela cheia (máximo de %d telas)." % MAX_LIVES_MULTI)
     if resolucao not in RESOLUCOES_VALIDAS:
         raise HTTPException(status_code=400, detail="Resolução inválida.")
     if dados.fps not in FPS_VALIDOS:
@@ -1405,11 +1546,14 @@ def criar_transmissao(dados: NovaTransmissao):
         "viewers_info": {},
         "relay_ws": {},  # espectadores da Activity (vídeo via WS binário)
         "criado_em": time.time(),
+        "multi": multi,
     }
-    log_tela("sala criada sala=%s res=%s fps=%s publica=%s instancia=%s" % (
-        sala, resolucao, dados.fps, dados.publica,
+    log_tela("sala criada sala=%s res=%s fps=%s publica=%s multi=%s instancia=%s" % (
+        sala, resolucao, dados.fps, dados.publica, multi or "-",
         salas_tela[sala]["instancia"] or "-"))
-    return {"sala": sala, "resolucao": resolucao, "fps": dados.fps}
+    if multi:
+        await notificar_multi(multi)
+    return {"sala": sala, "resolucao": resolucao, "fps": dados.fps, "multi": multi}
 
 
 @app.get("/tela/transmissoes")
@@ -1422,6 +1566,7 @@ def listar_transmissoes(instancia: str = ""):
             info_transmissao(sala, t)
             for sala, t in salas_tela.items()
             if t["host_ws"] is not None
+            and not t.get("multi")
             and (t.get("publica") or (instancia and t["instancia"] == instancia))
         ]
     }
@@ -1447,6 +1592,9 @@ async def _encerrar_transmissao(sala: str, transmissao: dict, motivo: str):
         except Exception:
             pass
     salas_tela.pop(sala, None)
+    codigo_multi = transmissao.get("multi")
+    if codigo_multi and codigo_multi in salas_multi:
+        await notificar_multi(codigo_multi)
 
 
 async def _notificar_total(transmissao: dict):
@@ -1501,6 +1649,8 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
             pass
 
     log_tela("host conectado sala=%s nick=%s" % (sala, nick))
+    if transmissao.get("multi"):
+        await notificar_multi(transmissao["multi"])
     # Espectadores WebRTC já na sala precisam de oferta do (novo) host.
     relay_ws_map = transmissao.setdefault("relay_ws", {})
     for viewer_id, ws in list(transmissao["viewers"].items()):
@@ -1661,7 +1811,15 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
     finally:
         if transmissao.get("host_ws") is websocket:
             log_tela("host desconectado sala=" + sala)
+            codigo_multi = transmissao.get("multi")
             await _encerrar_transmissao(sala, transmissao, "host_saiu")
+            # Liga a live ao membro que a abriu (para sair da multi = fechar live).
+            if codigo_multi and codigo_multi in salas_multi:
+                s = salas_multi[codigo_multi]
+                for m in s.get("membros", {}).values():
+                    if m.get("nick") == nick and not m.get("live_sala"):
+                        m["live_sala"] = sala
+                        break
         else:
             log_tela("conexao antiga de host ignorada sala=" + sala)
 
@@ -1798,6 +1956,136 @@ async def ws_tela(websocket: WebSocket, sala: str):
         await _ws_tela_host(websocket, sala, transmissao, nick)
     else:
         await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte, avatar, logado)
+
+
+# ---------------------------------------------------------------------------
+# Sala multi-tela (até 8 lives 720p30; vive enquanto houver membros)
+# ---------------------------------------------------------------------------
+
+@app.post("/multitela/novo")
+async def criar_sala_multi(dados: NovaSalaMulti):
+    codigo = (dados.codigo or "").strip().lower()
+    if codigo:
+        if not _codigo_multi_valido(codigo):
+            raise HTTPException(
+                status_code=400,
+                detail="Código da sala: use de 3 a 16 caracteres (letras, números, - ou _).")
+        if codigo in salas_multi:
+            raise HTTPException(status_code=409, detail="Este código já está em uso. Escolha outro.")
+    else:
+        while True:
+            codigo = secrets.token_urlsafe(6).lower().replace("-", "").replace("_", "")[:10]
+            if len(codigo) >= 3 and codigo not in salas_multi:
+                break
+
+    nick = (dados.nick or "Anônimo").strip() or "Anônimo"
+    dono_id = secrets.token_urlsafe(8)
+    salas_multi[codigo] = {
+        "codigo": codigo,
+        "nome": "Sala de " + nick,
+        "dono_nick": nick,
+        "dono_avatar": dados.avatar or None,
+        "publica": bool(dados.publica),
+        "criado_em": time.time(),
+        "dono_id": dono_id,
+        "membros": {},  # mid -> {nick, avatar, logado, ws}
+    }
+    log_tela("multi criada sala=%s dono=%s publica=%s" % (codigo, nick, dados.publica))
+    await notificar_lobbies_multi()
+    return {"sala": codigo, "nome": salas_multi[codigo]["nome"], "dono_id": dono_id}
+
+
+@app.get("/multitela/salas")
+async def listar_salas_multi():
+    return {"salas": await listar_salas_multi_publicas()}
+
+
+@app.get("/multitela/sala/{codigo}")
+async def obter_sala_multi(codigo: str):
+    codigo = (codigo or "").strip().lower()
+    s = salas_multi.get(codigo)
+    if not s:
+        raise HTTPException(status_code=404, detail="Sala multi-tela não encontrada.")
+    return info_sala_multi(codigo, s)
+
+
+@app.websocket("/ws/multitela/{codigo}")
+@app.websocket("/multitela/{codigo}")
+async def ws_multitela(websocket: WebSocket, codigo: str):
+    await websocket.accept()
+    codigo = (codigo or "").strip().lower()
+    nick = websocket.query_params.get("nick", "Anônimo") or "Anônimo"
+    avatar = websocket.query_params.get("avatar") or None
+    logado = websocket.query_params.get("logado", "") in ("1", "true", "True")
+
+    s = salas_multi.get(codigo)
+    if not s:
+        await websocket.send_json({"tipo": "erro", "mensagem": "Sala multi-tela não encontrada."})
+        await websocket.close()
+        return
+
+    if len(s.get("membros", {})) >= MAX_LIVES_MULTI:
+        # Teto de pessoas/telas da sala multi.
+        if not any(m.get("ws") is None for m in s.get("membros", {}).values()):
+            await websocket.send_json({
+                "tipo": "erro",
+                "mensagem": "Sala multi-tela cheia (máximo de %d pessoas)." % MAX_LIVES_MULTI,
+            })
+            await websocket.close()
+            return
+
+    mid = secrets.token_urlsafe(8)
+    s.setdefault("membros", {})[mid] = {
+        "id": mid,
+        "nick": nick,
+        "avatar": avatar,
+        "logado": bool(logado),
+        "ws": websocket,
+        "live_sala": None,
+        "entrou_em": time.time(),
+    }
+    log_tela("multi membro entrou sala=%s nick=%s total=%d" % (
+        codigo, nick, len(s["membros"])))
+    await notificar_multi(codigo)
+    await notificar_lobbies_multi()
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            text = msg.get("text")
+            if not text or text == "ping":
+                continue
+            try:
+                dados = json.loads(text)
+            except Exception:
+                continue
+            tipo = dados.get("tipo")
+            if tipo == "ping":
+                continue
+            if tipo == "atualizar":
+                await notificar_multi(codigo)
+            # sair explícito cai no finally
+            if tipo == "sair":
+                break
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        membro = s.get("membros", {}).get(mid)
+        if membro and membro.get("ws") is websocket:
+            del s["membros"][mid]
+            # Se a live desse membro existir, derruba só ela.
+            live = membro.get("live_sala")
+            if live and live in salas_tela and salas_tela[live].get("multi") == codigo:
+                await _encerrar_transmissao(live, salas_tela[live], "membro_saiu")
+            log_tela("multi membro saiu sala=%s nick=%s restantes=%d" % (
+                codigo, nick, len(s["membros"])))
+            if not s["membros"]:
+                await destruir_multi(codigo, "sem_membros")
+            else:
+                await notificar_multi(codigo)
+                await notificar_lobbies_multi()
 
 
 # ---------------------------------------------------------------------------
