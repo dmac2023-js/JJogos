@@ -1771,7 +1771,9 @@ async def _iniciar_contagem_sudoku(sala: str):
             pass
 
 
+# Activity do Discord às vezes corta o prefixo /ws no WS — alias igual à velha/lobby.
 @app.websocket("/ws/sudoku/{sala}")
+@app.websocket("/sudoku/{sala}")
 async def ws_sudoku(websocket: WebSocket, sala: str):
     await websocket.accept()
     query = websocket.query_params

@@ -1209,6 +1209,7 @@ function conectarWsSudoku(sala) {
   var ws = new WebSocket(url);
   sudokuWs = ws;
   sudokuSala = sala;
+  var recebeuEstado = false;
 
   clearInterval(sudokuPingTimer);
   sudokuPingTimer = setInterval(function () {
@@ -1219,11 +1220,16 @@ function conectarWsSudoku(sala) {
 
   ws.onmessage = function (ev) {
     if (typeof ev.data !== "string") return;
-    try { processarMensagemSudoku(JSON.parse(ev.data)); } catch (e) { console.warn(e); }
+    try {
+      recebeuEstado = true;
+      processarMensagemSudoku(JSON.parse(ev.data));
+    } catch (e) { console.warn(e); }
   };
   ws.onclose = function () {
-    if (sudokuOnlineAtivo && sudokuFase !== "fim") {
-      // desconectado sem motivo claro — não fecha a UI se só foi reaberta
+    // 403/erro de rota: nunca chegou estado — não deixa "Entrando..." eterno.
+    if (!recebeuEstado && sudokuOnlineAtivo && sudokuSala === sala) {
+      fecharSudokuOnline("Não consegui entrar na sala " + sala + ". Recarregue (Ctrl+F5) e tente de novo.");
+      mostrarTela(telaDificuldade);
     }
   };
   ws.onerror = function () {};
@@ -1836,14 +1842,15 @@ function bitrateEfetivo() {
   return telaFps === 60 ? Math.round(base * 1.5) : base;
 }
 
-// Relay: usa o preset cheio (não limita) — fragmentação em 12KB cabe no proxy.
+// Relay: prefere fluidez (pouco fps/delay) sobre bitrate máximo — o proxy do
+// Discord engasga com ~8 Mbps de JSON base64 e aí o vídeo "trava".
 function bitrateRelay() {
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  // Teto generoso só pra não estourar CPU em 1080p60.
-  var teto = telaResolucao === "1080p" ? 15000000
-    : telaResolucao === "720p" ? 8000000 : 4000000;
+  var teto = telaResolucao === "1080p" ? 6000000
+    : telaResolucao === "720p" ? 4500000 : 2500000;
   var b = Math.min(base, teto);
-  return telaFps === 60 ? Math.round(b * 1.4) : b;
+  // 60fps usa o MESMO budget (não multiplica) — mais bits = mais fila/delay.
+  return b;
 }
 
 function atualizarAvisoUpload() {
@@ -1910,16 +1917,8 @@ function definirFps(valor) {
   });
   atualizarAvisoUpload();
   if (telaEhHost && telaStream) {
-    // A captura pode ficar presa no frameRate inicial — re-aplica na track
-    // senão 60fps só re-desenha o mesmo frame (parece idêntico a 30fps).
-    var track = telaStream.getVideoTracks()[0];
-    if (track && track.applyConstraints) {
-      track.applyConstraints({
-        frameRate: { ideal: telaFps, max: telaFps },
-      }).catch(function (e) {
-        console.warn("applyConstraints frameRate:", e);
-      });
-    }
+    // Não applyConstraints no meio da captura (congela a track no Chrome).
+    // O timer do encoder lê telaFps ao vivo; só reconfigura/reinicia o encoder.
     aplicarQualidadeNosViewers();
     mensagemTransmissao("Qualidade alterada: " + telaResolucao + " " + telaFps + "fps.", "sucesso");
     reiniciarEncoderRelaySeAtivo();
@@ -2567,73 +2566,89 @@ async function iniciarEncoderRelay() {
   document.addEventListener("visibilitychange", aoVoltarAba);
   relayEncoderVisibilityListener = aoVoltarAba;
 
-  relayDrawTimer = setInterval(function () {
-    if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
-    if (video && video.paused) {
-      var p = video.play();
-      if (p && p.catch) p.catch(function () {});
-    }
-    if (!video || video.readyState < 2 || !video.videoWidth) {
-      ticksSemVideo++;
-      if (ticksSemVideo === 300) { // ~10s mesmo com timer throttado
-        enviarTela({ tipo: "relay_erro", mensagem: "O vídeo da captura não carregou no transmissor (readyState=" +
-          (video ? video.readyState : "nulo") + ", escondido=" + document.hidden + "). Ctrl+F5 e transmita de novo." });
-        pararEncoderRelay();
+  // setTimeout recursivo: lê telaFps ao vivo e não acumula atraso como setInterval.
+  var relayDrawRodando = false;
+  function agendarDraw() {
+    if (!relayAtivo || relayDrawRodando) return;
+    relayDrawRodando = true;
+    var intervalo = Math.max(16, Math.floor(1000 / telaFps));
+    relayDrawTimer = setTimeout(function () {
+      relayDrawRodando = false;
+      if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
+      if (video && video.paused) {
+        var p = video.play();
+        if (p && p.catch) p.catch(function () {});
       }
-      return;
-    }
-    ticksSemVideo = 0;
-        // Fila maior = menos frames descartados em picos (qualidade/fps).
-    if (relayEncoder.encodeQueueSize > 8) return;
-    var frame;
-    try {
-      // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        var vw = video.videoWidth || canvas.width;
-        var vh = video.videoHeight || canvas.height;
-        // Limita ao preset (não manda acima do combinado).
-        var maxW = preset.largura;
-        var maxH = preset.altura;
-        var escala = Math.min(1, maxW / vw, maxH / vh);
-        canvas.width = Math.round(vw * escala);
-        canvas.height = Math.round(vh * escala);
-        if (relayEncoder.state === "configured") {
-          // Reconfigura o encoder com a resolução real.
-          relayEncoder.configure(cfgEncoder(canvas.width, canvas.height));
+      if (!video || video.readyState < 2 || !video.videoWidth) {
+        ticksSemVideo++;
+        if (ticksSemVideo === 300) { // ~10s mesmo com timer throttado
+          enviarTela({ tipo: "relay_erro", mensagem: "O vídeo da captura não carregou no transmissor (readyState=" +
+            (video ? video.readyState : "nulo") + ", escondido=" + document.hidden + "). Ctrl+F5 e transmita de novo." });
+          pararEncoderRelay();
         }
+        agendarDraw();
+        return;
       }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      frame = new VideoFrame(canvas, { timestamp: tsUs });
-    } catch (e) {
-      enviarTela({ tipo: "relay_erro", mensagem: "Falha ao capturar quadro: " + e.message });
-      pararEncoderRelay();
-      return;
-    }
-    tsUs += Math.round(1000000 / telaFps);
-    var agora = performance.now();
-    // Keyframe a cada 1s (500ms desperdiça bitrate que seria de detalhe).
-    var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
-    if (forcar) { ultimoKey = agora; relayForcarKey = false; }
-    try {
-      relayEncoder.encode(frame, { keyFrame: forcar });
-    } catch (e) {
-      enviarTela({ tipo: "relay_erro", mensagem: "encode() falhou: " + e.message });
+      ticksSemVideo = 0;
+      // Fila maior = menos frames descartados em picos (qualidade/fps).
+      if (relayEncoder.encodeQueueSize > 4) {
+        agendarDraw();
+        return;
+      }
+      var frame;
+      try {
+        // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          var vw = video.videoWidth || canvas.width;
+          var vh = video.videoHeight || canvas.height;
+          // Limita ao preset (não manda acima do combinado).
+          var maxW = preset.largura;
+          var maxH = preset.altura;
+          var escala = Math.min(1, maxW / vw, maxH / vh);
+          canvas.width = Math.round(vw * escala);
+          canvas.height = Math.round(vh * escala);
+          if (relayEncoder.state === "configured") {
+            // Reconfigura o encoder com a resolução real.
+            relayEncoder.configure(cfgEncoder(canvas.width, canvas.height));
+          }
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frame = new VideoFrame(canvas, { timestamp: tsUs });
+      } catch (e) {
+        enviarTela({ tipo: "relay_erro", mensagem: "Falha ao capturar quadro: " + e.message });
+        pararEncoderRelay();
+        return;
+      }
+      tsUs += Math.round(1000000 / telaFps);
+      var agora = performance.now();
+      // Keyframe a cada 1s (500ms desperdiça bitrate que seria de detalhe).
+      var forcar = relayForcarKey || (agora - ultimoKey) >= 1000;
+      if (forcar) { ultimoKey = agora; relayForcarKey = false; }
+      try {
+        relayEncoder.encode(frame, { keyFrame: forcar });
+      } catch (e) {
+        enviarTela({ tipo: "relay_erro", mensagem: "encode() falhou: " + e.message });
+        frame.close();
+        pararEncoderRelay();
+        return;
+      }
       frame.close();
-      pararEncoderRelay();
-      return;
-    }
-    frame.close();
-    if (!relayProntoEnviado && (performance.now() - inicioSemChunk) > 6000) {
-      enviarTela({ tipo: "relay_erro", mensagem: "Encoder sem chunk em 6s (saidas=" + saidasRecebidas +
-        ", estado=" + relayEncoder.state + ", escondido=" + document.hidden + ")." });
-      pararEncoderRelay();
-    }
-  }, Math.max(16, Math.floor(1000 / telaFps)));
+      if (!relayProntoEnviado && (performance.now() - inicioSemChunk) > 6000) {
+        enviarTela({ tipo: "relay_erro", mensagem: "Encoder sem chunk em 6s (saidas=" + saidasRecebidas +
+          ", estado=" + relayEncoder.state + ", escondido=" + document.hidden + ")." });
+        pararEncoderRelay();
+        return;
+      }
+      agendarDraw();
+    }, intervalo);
+  }
+  agendarDraw();
 }
 
 function pararEncoderRelay() {
   relayAtivo = false;
   relayProntoEnviado = false;
+  clearTimeout(relayDrawTimer);
   clearInterval(relayDrawTimer);
   relayDrawTimer = null;
   if (relayEncoderVisibilityListener) {
