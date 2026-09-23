@@ -1916,6 +1916,7 @@ function limparConexaoTela() {
   clearTimeout(telaOfertaTimer);
   clearTimeout(telaRelayTimer);
   relayFrameOk = false;
+  relayHostOk = false;
   pararDecoderRelay();
   pararEncoderRelay();
   if (telaWs) {
