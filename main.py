@@ -1185,6 +1185,24 @@ async def broadcast_ludo(sala: str, msg: dict):
             pass
 
 
+async def broadcast_estado_ludo(sala: str):
+    """Envia estado personalizado (meu_slot/pode_iniciar corretos) para todos."""
+    s = salas_ludo.get(sala)
+    if not s:
+        return
+    for sl, p in list(s.get("slots", {}).items()):
+        if p and p.get("ws"):
+            try:
+                await p["ws"].send_json(estado_ludo_para(s, sl))
+            except Exception:
+                pass
+    for ws in list(s.get("espectadores", []) or []):
+        try:
+            await ws.send_json(estado_ludo_para(s, None))
+        except Exception:
+            pass
+
+
 async def _notificar_salas_ludo_lobby():
     purgar_salas_ludo_obsoletas()
     lista = []
@@ -1507,7 +1525,7 @@ async def _iniciar_contagem_ludo(sala: str):
         s["vez"] = primeiro
         s["ultimo_evento"] = {"texto": "Jogo iniciado! Vez de " +
                               ((s["slots"].get(primeiro) or {}).get("nick") or "—")}
-        await broadcast_ludo(sala, estado_ludo_para(s))
+        await broadcast_estado_ludo(sala)
     finally:
         s2 = salas_ludo.get(sala)
         if s2:
@@ -1562,7 +1580,8 @@ async def ws_ludo(websocket: WebSocket, sala: str):
             esp.append(websocket)
         s["espectadores"] = esp
 
-    await websocket.send_json(estado_ludo_para(s, slot))
+    # Envia para o jogador novo + atualiza quem já estava na sala.
+    await broadcast_estado_ludo(sala)
     await _notificar_salas_ludo_lobby()
 
     # Auto-inicia só com 4 jogadores; 2–3 esperam botão do líder.
@@ -1643,7 +1662,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     s["seis_seguidos"] = 0
                     s["opcoes"] = []
                     _ludo_avancar_vez(s)
-                    await broadcast_ludo(sala, estado_ludo_para(s))
+                    await broadcast_estado_ludo(sala)
                     continue
 
                 opcoes = _ludo_tem_opcao(s, slot, dado)
@@ -1658,7 +1677,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     s["seis_seguidos"] = 0
                     s["opcoes"] = []
                     _ludo_avancar_vez(s)
-                await broadcast_ludo(sala, estado_ludo_para(s))
+                await broadcast_estado_ludo(sala)
                 continue
 
             if tipo == "mover":
@@ -1707,7 +1726,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     s["dado"] = None
                     s["dado_ja_rolado"] = False
                     s["opcoes"] = []
-                    await broadcast_ludo(sala, estado_ludo_para(s))
+                    await broadcast_estado_ludo(sala)
                     continue
 
                 if extra:
@@ -1722,7 +1741,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     s["opcoes"] = []
                     s["seis_seguidos"] = 0
                     _ludo_avancar_vez(s)
-                await broadcast_ludo(sala, estado_ludo_para(s))
+                await broadcast_estado_ludo(sala)
                 continue
 
             if tipo == "sair":
@@ -1739,7 +1758,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                         ]
                         if len(restantes) >= 1 and s.get("vez") == slot:
                             _ludo_avancar_vez(s)
-                        await broadcast_ludo(sala, estado_ludo_para(s))
+                    await broadcast_estado_ludo(sala)
                     await _notificar_salas_ludo_lobby()
                 break
 
@@ -1794,7 +1813,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                             }
                 if not salas_ludo.get(sala):
                     return
-                await broadcast_ludo(sala, estado_ludo_para(s, None))
+                await broadcast_estado_ludo(sala)
                 await _notificar_salas_ludo_lobby()
             elif websocket in (s.get("espectadores") or []):
                 s["espectadores"] = [w for w in s["espectadores"] if w is not websocket]

@@ -1788,6 +1788,7 @@ function renderizarSalasLudo(salas) {
 }
 
 document.querySelector("#criar-sala-ludo").addEventListener("click", criarSalaLudo);
+document.querySelector("#atualizar-salas-ludo").addEventListener("click", carregarSalasLudo);
 document.querySelector("#entrar-sala-ludo").addEventListener("click", function () {
   entrarSalaLudo(document.querySelector("#ludo-codigo-sala").value);
 });

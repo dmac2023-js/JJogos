@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-09" />
+    <link rel="stylesheet" href="./style.css?v=20260924-10" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -475,7 +475,10 @@
         </div>
         <div id="mensagem-ludo-lobby" class="mensagem" style="margin-top:12px;"></div>
         <div class="sala-lista" id="lista-salas-ludo">
-          <h2 style="font-size:16px; margin-top:18px;">Salas públicas</h2>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:18px;">
+            <h2 style="font-size:16px; margin:0;">Salas públicas</h2>
+            <button id="atualizar-salas-ludo" class="botao" style="width:auto; min-height:32px; padding:4px 12px; font-size:13px;">Atualizar lista</button>
+          </div>
           <div id="salas-ludo-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
         </div>
       </section>
@@ -959,6 +962,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-09"></script>
+    <script src="./app.js?v=20260924-10"></script>
   </body>
 </html>
