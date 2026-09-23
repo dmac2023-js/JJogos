@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-07" />
+    <link rel="stylesheet" href="./style.css?v=20260924-08" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -375,6 +375,14 @@
           </span>
           <span class="seta">&rarr;</span>
         </button>
+        <button id="jogo-ludo" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">&#127922;</span>
+          <span>
+            <strong>Ludo</strong>
+            <small>Clássico com até 4 jogadores online.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
         <button id="jogo-tela" class="cartao-jogo" style="margin-top: 12px;">
           <span class="icone-jogo">&#128247;</span>
           <span>
@@ -419,9 +427,64 @@
           <input type="checkbox" id="sudoku-sala-publica" checked style="width:16px; height:16px; accent-color:#8664ff;" />
           Sala pública (aparece na lista)
         </label>
-        <div class="sala-lista" id="lista-salas-sudoku">
+        <div id="lista-salas-sudoku">
           <h2 style="font-size:16px; margin-top:18px;">Salas públicas</h2>
           <div id="salas-sudoku-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
+        </div>
+      </section>
+
+      <!-- Tela: Lobby Ludo -->
+      <section id="tela-lobby-ludo" class="tela">
+        <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
+        <div class="titulo-tela">
+          <h2>Ludo online</h2>
+          <p>Crie uma sala (até 4 jogadores) ou entre com o código.</p>
+        </div>
+        <div class="sala-container">
+          <div class="sala-input">
+            <input type="text" id="ludo-codigo-sala" placeholder="Código da sala (opcional)" maxlength="16" />
+            <button id="criar-sala-ludo" class="botao principal">Criar sala</button>
+            <button id="entrar-sala-ludo" class="botao">Entrar</button>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
+            <input type="checkbox" id="ludo-sala-publica" checked style="width:16px; height:16px; accent-color:#8664ff;" />
+            Sala pública (aparece na lista)
+          </label>
+        </div>
+        <div id="mensagem-ludo-lobby" class="mensagem" style="margin-top:12px;"></div>
+        <div class="sala-lista" id="lista-salas-ludo">
+          <h2 style="font-size:16px; margin-top:18px;">Salas públicas</h2>
+          <div id="salas-ludo-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
+        </div>
+      </section>
+
+      <!-- Tela: Jogo Ludo -->
+      <section id="tela-ludo" class="tela">
+        <div class="cabecalho-jogo">
+          <button class="voltar" data-tela="tela-lobby-ludo" id="voltar-ludo">&larr; Sair</button>
+          <div class="informacoes-jogo">
+            <span id="ludo-codigo-label" class="etiqueta" style="display:none;"></span>
+            <span id="ludo-vez-label" class="indicador-vez x">Aguardando...</span>
+          </div>
+        </div>
+
+        <div class="sala-codigo-display" id="ludo-sala-bar" style="display:none;">
+          <span class="sala-codigo-label">Sala:</span>
+          <span id="ludo-sala-codigo" class="sala-codigo-valor"></span>
+          <button id="copiar-codigo-ludo" class="botao-copiar">Copiar</button>
+        </div>
+
+        <div id="mensagem-ludo" class="mensagem">Aguardando jogadores...</div>
+
+        <div id="ludo-jogadores" class="ludo-jogadores"></div>
+
+        <div class="ludo-layout">
+          <div id="ludo-tabuleiro" class="ludo-tabuleiro" aria-label="Tabuleiro Ludo"></div>
+          <div class="ludo-painel">
+            <div id="ludo-dado" class="ludo-dado" aria-hidden="true">?</div>
+            <button id="ludo-rolar" class="botao principal" style="display:none; width:100%;">Rolar dado</button>
+            <p id="ludo-dica" class="ludo-dica">Escolha uma peça destacada.</p>
+          </div>
         </div>
       </section>
 
@@ -841,6 +904,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-07"></script>
+    <script src="./app.js?v=20260924-08"></script>
   </body>
 </html>
