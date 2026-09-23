@@ -1003,6 +1003,7 @@ var relayProntoEnviado = false;
 var relayHostOk = false;
 var relayEncoderVisibilityListener = null;
 var relayTemKey = false;
+var relayQuadros = 0;
 
 // Diagnóstico único do viewer da Activity: pergunta ao servidor o estado
 // real da sala em vez de adivinhar.
@@ -1221,6 +1222,7 @@ function iniciarDecoderRelay(resolucao) {
   var canvas = document.querySelector("#canvas-relay");
   canvas.width = dims[0];
   canvas.height = dims[1];
+  relayQuadros = 0;
   if (typeof VideoDecoder === "undefined") {
     mensagemTransmissao("Seu cliente não suporta o modo de vídeo compatível.", "erro");
     return;
@@ -1274,32 +1276,34 @@ function pararDecoderRelay() {
 }
 
 function receberRelay(buffer) {
-  if (!relayDecoder || relayDecoder.state === "closed") return;
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 5) return;
   var dv = new DataView(buffer);
-  var ehKey = dv.getUint8(0) === 1;
-  var timestamp = dv.getUint32(1);
+  decodificarRelayFrame(dv.getUint8(0) === 1, dv.getUint32(1), new Uint8Array(buffer, 5));
+}
+
+function decodificarRelayFrame(ehKey, timestamp, payload) {
+  if (!relayDecoder || relayDecoder.state === "closed") return;
+  if (!payload || payload.byteLength < 1) return;
   // VP8 exige keyframe para começar (viewer pode entrar no meio do GOP).
   if (!ehKey && !relayTemKey) return;
   if (ehKey) relayTemKey = true;
   if (relayDecoder.decodeQueueSize > 30 && !ehKey) return;
+  relayQuadros++;
   try {
     relayDecoder.decode({
       type: ehKey ? "key" : "delta",
       timestamp: timestamp,
-      data: new Uint8Array(buffer, 5),
+      data: payload,
     });
   } catch (e) {
     console.warn("decode relay:", e);
     relayTemKey = false;
   }
-  // Chegou binário: cancela o "sem vídeo" mesmo antes do 1º quadro desenhado
-  // (o diagnóstico de decodificação fica por conta do output/error do decoder).
   if (!relayFrameOk) {
     clearTimeout(telaRelayTimer);
     telaRelayTimer = setTimeout(function () {
       if (!relayFrameOk && telaModoRelay) {
-        mensagemTransmissao("Quadros chegam, mas o vídeo não foi exibido. Peça para quem transmite forçar um novo quadro (mude a qualidade) ou recarregue a Activity.", "erro");
+        mensagemTransmissao("Quadros chegam (" + relayQuadros + "), mas o vídeo não foi exibido. Recarregue a Activity.", "erro");
       }
     }, 8000);
   }
@@ -1335,14 +1339,20 @@ async function iniciarEncoderRelay() {
       try {
         saidasRecebidas++;
         if (!telaWs || telaWs.readyState !== WebSocket.OPEN) return;
-        // EncodedVideoChunk NÃO tem data() no Chrome atual (só copyTo).
         var dados = new Uint8Array(chunk.byteLength);
         chunk.copyTo(dados);
-        var pacote = new Uint8Array(5 + dados.byteLength);
-        pacote[0] = chunk.type === "key" ? 1 : 2;
-        new DataView(pacote.buffer).setUint32(1, chunk.timestamp);
-        pacote.set(dados, 5);
-        telaWs.send(pacote);
+        // O proxy do Discord NÃO repassa frame binário no WS da Activity —
+        // manda como JSON base64 (texto), que sempre atravessa.
+        var s = "";
+        for (var i = 0; i < dados.length; i += 0x8000) {
+          s += String.fromCharCode.apply(null, dados.subarray(i, i + 0x8000));
+        }
+        enviarTela({
+          tipo: "quadro",
+          k: chunk.type === "key" ? 1 : 0,
+          t: chunk.timestamp,
+          d: btoa(s),
+        });
         if (!relayProntoEnviado) {
           relayProntoEnviado = true;
           enviarTela({ tipo: "relay_pronto" });
@@ -1917,9 +1927,28 @@ function processarMensagemTela(dados) {
         }
       }
       break;
+    case "quadro":
+      // Vídeo do relay em JSON base64 (proxy do Discord não repassa binário).
+      if (telaModoRelay && !telaEhHost && dados.d) {
+        try {
+          var bin = atob(dados.d);
+          var payload = new Uint8Array(bin.length);
+          for (var qi = 0; qi < bin.length; qi++) payload[qi] = bin.charCodeAt(qi);
+          decodificarRelayFrame(dados.k === 1, dados.t >>> 0, payload);
+        } catch (e) {
+          console.warn("quadro relay:", e);
+        }
+      }
+      break;
     case "relay_pronto":
       if (telaModoRelay && !relayFrameOk) {
         mensagemTransmissao("Transmitindo via relay — aguardando os primeiros quadros...", "sucesso");
+        clearTimeout(telaRelayTimer);
+        telaRelayTimer = setTimeout(function () {
+          if (!relayFrameOk && telaModoRelay) {
+            diagnosticarRelaySemVideo();
+          }
+        }, 15000);
       }
       break;
     case "relay_erro":

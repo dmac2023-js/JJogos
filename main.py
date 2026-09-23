@@ -1264,6 +1264,18 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
                     except Exception:
                         pass
                 continue
+            if tipo == "quadro":
+                # Vídeo VP8 em JSON base64 — o proxy do Discord não repassa
+                # frame binário no WS da Activity.
+                if not transmissao.get("_relay_bytes_log"):
+                    transmissao["_relay_bytes_log"] = True
+                    log_tela("primeiro quadro json do relay sala=%s" % sala)
+                for ws in list(transmissao.get("relay_ws", {}).values()):
+                    try:
+                        await ws.send_text(text)
+                    except Exception:
+                        pass
+                continue
             if tipo == "sair":
                 break
             if tipo == "config":
