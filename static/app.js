@@ -574,6 +574,7 @@ async function iniciarVelhaMaquina(dificuldade) {
   await garantirIdentidade();
   velhaModo = "maquina";
   velhaDificuldade = dificuldade;
+  carregarRankingVelha();
   velhaMinhaPeca = "X";
   velhaEspectador = false;
   velhaPlacar = { X: 0, O: 0 };
@@ -682,10 +683,15 @@ async function carregarRankingVelha() {
   var container = document.querySelector("#lista-ranking-velha");
   if (!container) return;
   try {
-    var res = await fetch("./velha/ranking");
+    var dif = velhaDificuldade || "facil";
+    var res = await fetch("./velha/ranking?dificuldade=" + encodeURIComponent(dif));
     var dados = await res.json();
     var lista = dados.ranking || [];
     var medallas = ["\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49"];
+    var titulo = container.parentElement && container.parentElement.querySelector("h2");
+    if (titulo) {
+      titulo.textContent = "Top 3 vitórias — " + (campoNomeDif[dif] || dif);
+    }
     if (!lista.length) {
       container.innerHTML = '<p class="vazio">Nenhuma vitória ainda.</p>';
       return;
@@ -932,6 +938,8 @@ async function criarSalaVelha() {
     if (!res.ok) throw new Error(dados.detail || "Erro ao criar sala.");
 
     velhaModo = "multiplayer";
+    velhaDificuldade = "facil";
+    carregarRankingVelha();
     velhaReconnectAttempts = 0;
     velhaSala = dados.sala;
     velhaPlacar = { X: 0, O: 0 };
@@ -968,6 +976,8 @@ async function entrarSalaVelha(codigo) {
   var nick = nomeExibicao();
 
     velhaModo = "multiplayer";
+    velhaDificuldade = "facil";
+    carregarRankingVelha();
     velhaReconnectAttempts = 0;
     velhaPlacar = { X: 0, O: 0 };
     velhaJogadores = { X: { nick: "—", avatar: null }, O: { nick: "—", avatar: null } };
@@ -6379,8 +6389,8 @@ async function campoVitoriaSolo() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dificuldade: campoDificuldade,
-        nome: nomeExibicao(),
-        nick: nomeUsuario(),
+        nome: nomeUsuario(),
+        nick: nomeExibicao(),
         tempo_segundos: campoTempoFinal,
         avatar: avatarAtual(),
       }),
@@ -6955,10 +6965,15 @@ async function carregarRankingCampo() {
   var container = document.querySelector("#lista-ranking-campo");
   if (!container) return;
   try {
-    var res = await fetch("./campo/ranking");
+    var dif = campoDificuldade || "facil";
+    var res = await fetch("./campo/ranking?dificuldade=" + encodeURIComponent(dif));
     var dados = await res.json();
     var lista = dados.ranking || [];
     var medallas = ["🥇", "🥈", "🥉"];
+    var titulo = container.parentElement && container.parentElement.querySelector("h2");
+    if (titulo) {
+      titulo.textContent = "Top 3 vitórias — " + (campoNomeDif[dif] || dif);
+    }
     if (!lista.length) {
       container.innerHTML = '<p class="vazio">Nenhuma vitória ainda.</p>';
       return;
@@ -7121,6 +7136,8 @@ conectarAoDiscord();
       if (info.sala && info.nome && info.nick) {
         console.log("Auto-reconectando à sala:", info.sala);
         velhaModo = "multiplayer";
+        velhaDificuldade = "facil";
+        carregarRankingVelha();
         mostrarTela(telaVelha);
         mostrarCodigoSala(info.sala);
         atualizarVelhaMensagem("Reconectando...");

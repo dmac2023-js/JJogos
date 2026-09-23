@@ -274,6 +274,46 @@ def ranking_top(registros: list, chave: str, reverse: bool, limite: int = 3) -> 
     return sorted(filtrados, key=lambda r: r.get(chave, 0), reverse=reverse)[:limite]
 
 
+def ranking_vitorias(lista: list, dificuldade: Optional[str] = None,
+                     limite: int = 10) -> list:
+    """Top vitórias; se dificuldade informada, filtra por ela."""
+    filtrados = []
+    for r in lista:
+        if eh_anonimo(str(r.get("nick", ""))):
+            continue
+        if dificuldade and r.get("dificuldade") not in (None, dificuldade):
+            continue
+        filtrados.append(r)
+    return sorted(filtrados, key=lambda r: r.get("vitorias", 0),
+                  reverse=True)[:limite]
+
+
+def _registrar_vitoria(lista: list, nick: str, nome: str,
+                       avatar: Optional[str], dificuldade: str,
+                       tempo: Optional[int] = None) -> list:
+    """Incrementa vitória do jogador na dificuldade (mesma lista plana)."""
+    for v in lista:
+        if (v.get("nick") == nick and v.get("nome") == nome
+                and v.get("dificuldade") == dificuldade):
+            v["vitorias"] = v.get("vitorias", 0) + 1
+            if avatar:
+                v["avatar"] = avatar
+            if tempo and tempo > 0:
+                anterior = v.get("melhor_tempo")
+                if not anterior or tempo < anterior:
+                    v["melhor_tempo"] = tempo
+            return sorted(lista, key=lambda r: r.get("vitorias", 0),
+                          reverse=True)[:50]
+    novo = {"nick": nick, "nome": nome, "vitorias": 1,
+            "dificuldade": dificuldade}
+    if avatar:
+        novo["avatar"] = avatar
+    if tempo and tempo > 0:
+        novo["melhor_tempo"] = tempo
+    lista.append(novo)
+    return sorted(lista, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
+
+
 def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
     """Vitória global no Ludo (permanente; anônimo não conta)."""
     if eh_anonimo(nick):
@@ -299,33 +339,15 @@ def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
 
 
 def registrar_vitoria_campo(nick: str, nome: str, avatar: Optional[str],
-                            tempo: Optional[int] = None) -> None:
-    """Vitória global Campo Minado + melhor tempo (anônimo não conta)."""
+                            tempo: Optional[int] = None,
+                            dificuldade: str = "facil") -> None:
+    """Vitória Campo Minado por dificuldade + melhor tempo."""
     if eh_anonimo(nick):
         return
     recordes = carregar_recordes()
     lista = recordes.setdefault("campo_minado_vitorias", [])
-    for v in lista:
-        if v.get("nick") == nick and v.get("nome") == nome:
-            v["vitorias"] = v.get("vitorias", 0) + 1
-            if avatar:
-                v["avatar"] = avatar
-            if tempo and tempo > 0:
-                anterior = v.get("melhor_tempo")
-                if not anterior or tempo < anterior:
-                    v["melhor_tempo"] = tempo
-            recordes["campo_minado_vitorias"] = sorted(
-                lista, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
-            salvar_recordes(recordes)
-            return
-    novo = {"nick": nick, "nome": nome, "vitorias": 1}
-    if avatar:
-        novo["avatar"] = avatar
-    if tempo and tempo > 0:
-        novo["melhor_tempo"] = tempo
-    lista.append(novo)
-    recordes["campo_minado_vitorias"] = sorted(
-        lista, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
+    recordes["campo_minado_vitorias"] = _registrar_vitoria(
+        lista, nick, nome, avatar, dificuldade, tempo)
     salvar_recordes(recordes)
 
 
@@ -1331,10 +1353,11 @@ def obter_recordes_velha(dificuldade: str):
 
 
 @app.get("/velha/ranking")
-def ranking_vitorias():
+def ranking_vitorias_velha(dificuldade: Optional[str] = None):
     recordes = carregar_recordes()
-    ranking = ranking_top(recordes.get("velha_vitorias", []), "vitorias", reverse=True, limite=10)
-    return {"ranking": ranking}
+    ranking = ranking_vitorias(recordes.get("velha_vitorias", []),
+                               dificuldade=dificuldade, limite=10)
+    return {"ranking": ranking, "dificuldade": dificuldade}
 
 
 # ---------------------------------------------------------------------------
@@ -1742,27 +1765,15 @@ def salvar_record_velha(dados: NovoRecordVelha):
     if not eh_anonimo(dados.nick):
         recordes["velha"].setdefault(dados.dificuldade, []).append(registro)
         recordes["velha"][dados.dificuldade] = recordes["velha"][dados.dificuldade][-50:]
-
         vitorias = recordes.get("velha_vitorias", [])
-        encontrado = False
-        for v in vitorias:
-            if v["nick"] == dados.nick and v["nome"] == dados.nome:
-                v["vitorias"] = v.get("vitorias", 0) + 1
-                if dados.avatar:
-                    v["avatar"] = dados.avatar
-                encontrado = True
-                break
-        if not encontrado:
-            novo = {"nick": dados.nick, "nome": dados.nome, "vitorias": 1}
-            if dados.avatar:
-                novo["avatar"] = dados.avatar
-            vitorias.append(novo)
-        recordes["velha_vitorias"] = sorted(vitorias, key=lambda r: r["vitorias"], reverse=True)[:50]
+        recordes["velha_vitorias"] = _registrar_vitoria(
+            vitorias, dados.nick, dados.nome, dados.avatar, dados.dificuldade)
         salvar_recordes(recordes)
 
     top3 = ranking_top(recordes["velha"].get(dados.dificuldade, [])[-10:],
                        "vitorias", reverse=True, limite=3)
-    ranking = ranking_top(recordes.get("velha_vitorias", []), "vitorias", reverse=True, limite=10)
+    ranking = ranking_vitorias(recordes.get("velha_vitorias", []),
+                               dificuldade=dados.dificuldade, limite=10)
     return {"dificuldade": dados.dificuldade, "recordes": top3, "ranking": ranking}
 
 
@@ -1892,22 +1903,22 @@ def salvar_record_campo(dados: NovoRecordCampo):
             recordes["campo_minado"][dados.dificuldade][:50]
         salvar_recordes(recordes)
         registrar_vitoria_campo(dados.nick, dados.nome, dados.avatar,
-                                dados.tempo_segundos)
+                                dados.tempo_segundos, dados.dificuldade)
 
     recordes = carregar_recordes()
     top3 = ranking_top(recordes["campo_minado"].get(dados.dificuldade, []),
                        "tempo_segundos", reverse=False)
-    ranking = ranking_top(recordes.get("campo_minado_vitorias", []),
-                          "vitorias", reverse=True, limite=10)
+    ranking = ranking_vitorias(recordes.get("campo_minado_vitorias", []),
+                               dificuldade=dados.dificuldade, limite=10)
     return {"dificuldade": dados.dificuldade, "recordes": top3, "ranking": ranking}
 
 
 @app.get("/campo/ranking")
-def ranking_campo():
+def ranking_campo(dificuldade: Optional[str] = None):
     recordes = carregar_recordes()
-    ranking = ranking_top(recordes.get("campo_minado_vitorias", []),
-                          "vitorias", reverse=True, limite=10)
-    return {"ranking": ranking}
+    ranking = ranking_vitorias(recordes.get("campo_minado_vitorias", []),
+                               dificuldade=dificuldade, limite=10)
+    return {"ranking": ranking, "dificuldade": dificuldade}
 
 
 # ---------------------------------------------------------------------------
@@ -3727,7 +3738,8 @@ async def ws_campo(websocket: WebSocket, sala: str):
                         p_outro["tempo_fim"] = tempo_outro
                         registrar_vitoria_campo(
                             p_outro.get("nick", "—"), p_outro.get("nome", ""),
-                            p_outro.get("avatar"), tempo_outro)
+                            p_outro.get("avatar"), tempo_outro,
+                            s.get("dificuldade", "facil"))
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": outro,
@@ -3768,7 +3780,8 @@ async def ws_campo(websocket: WebSocket, sala: str):
                         s["fase"] = "parcial"
                         registrar_vitoria_campo(
                             p.get("nick", "—"), p.get("nome", ""),
-                            p.get("avatar"), tempo_s)
+                            p.get("avatar"), tempo_s,
+                            s.get("dificuldade", "facil"))
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": slot,
