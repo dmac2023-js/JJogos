@@ -3671,6 +3671,14 @@ async def ws_campo(websocket: WebSocket, sala: str):
     if (s.get("fase") == "esperando"
             and s["slots"]["p1"] and s["slots"]["p1"].get("ws")
             and s["slots"]["p2"] and s["slots"]["p2"].get("ws")):
+        # p1 (que já estava esperando) precisa ver o p2 entrar
+        for sl in ("p1", "p2"):
+            p = s["slots"].get(sl)
+            if p and p.get("ws") and sl != slot:
+                try:
+                    await p["ws"].send_json(estado_campo_para(s, sl))
+                except Exception:
+                    pass
         s["countdown_task"] = asyncio.create_task(_iniciar_contagem_campo(sala))
         iniciou_contagem = True
 

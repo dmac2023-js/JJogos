@@ -6720,6 +6720,7 @@ function processarMensagemCampo(dados) {
       }
       break;
     case "contagem":
+      campoFase = "contagem";
       if (dados.n > 0) {
         campoMsg("Começa em " + dados.n + "...", "");
       } else {
@@ -6727,6 +6728,7 @@ function processarMensagemCampo(dados) {
       }
       break;
     case "inicio_campo":
+      campoFase = "jogando";
       campoDificuldade = dados.dificuldade || campoDificuldade;
       campoLinhas = dados.linhas || 10;
       campoColunas = dados.colunas || 10;
