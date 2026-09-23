@@ -1357,11 +1357,13 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
     });
   }
   try {
-    relayDecoder.decode({
+    // WebCodecs exige EncodedVideoChunk — objeto literal lança TypeError.
+    var chunk = new EncodedVideoChunk({
       type: ehKey ? "key" : "delta",
       timestamp: timestamp,
       data: payload,
     });
+    relayDecoder.decode(chunk);
     relaySemOutput++;
     // Envia N decodes sem output do decoder → problema de decode.
     if (relaySemOutput === 30 && !relayFrameOk) {
