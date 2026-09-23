@@ -3821,7 +3821,11 @@ async function capturarMidiaTransmissao(querAudio) {
     try {
       var opcoes = {
         video: video,
+        // Tela inteira: permite "Share system audio" (usuário pode marcar).
         systemAudio: "include",
+        // Janela única (Chrome 141+): só o áudio DAQUELA janela,
+        // nunca o áudio do sistema inteiro. Em Chrome mais antigo é ignorado.
+        windowAudio: "window",
       };
       opcoes.audio = querAudio ? {
         echoCancellation: false,
@@ -3829,7 +3833,17 @@ async function capturarMidiaTransmissao(querAudio) {
         autoGainControl: false,
       } : false;
       telaFonte = "tela";
-      return await navigator.mediaDevices.getDisplayMedia(opcoes);
+      var streamDisplay = await navigator.mediaDevices.getDisplayMedia(opcoes);
+      try {
+        var st = streamDisplay.getVideoTracks()[0] &&
+          streamDisplay.getVideoTracks()[0].getSettings
+          ? streamDisplay.getVideoTracks()[0].getSettings() : {};
+        logRelayDiag("display_capture", {
+          surface: st.displaySurface || "?",
+          temAudio: streamDisplay.getAudioTracks().length > 0,
+        });
+      } catch (eSt) { /* settings é best-effort */ }
+      return streamDisplay;
     } catch (e) {
       if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) throw e;
       logRelayDiag("displaymedia_falhou", { msg: e && e.message });
@@ -3981,7 +3995,7 @@ async function iniciarTransmissaoTela() {
     } else {
       avisoTela(
         "Áudio não capturado: no seletor do Chrome, marque \"Compartilhar áudio\" " +
-        "(aba: \"Share tab audio\" / tela: \"Share system audio\"). " +
+        "(aba: \"Share tab audio\"; janela: só o som da janela; tela: \"Share system audio\"). " +
         "Você pode recapturar com Trocar janela depois.", "erro");
     }
   }

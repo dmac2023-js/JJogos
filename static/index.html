@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-10" />
+    <link rel="stylesheet" href="./style.css?v=20260924-11" />
     <style>
       :root { color: #f4f6ff; background: #11131d; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -811,14 +811,15 @@
             <span class="preset-label" style="margin:0;">Áudio</span>
             <span style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda;">
               <input type="checkbox" id="capturar-audio-tela" checked style="width:16px; height:16px; accent-color:#8664ff;" />
-              Compartilhar áudio (aba/sistema)
+              Compartilhar áudio
             </span>
           </label>
 
           <p class="aviso-upload" id="aviso-upload"></p>
           <p class="aviso-upload" style="color:#c8baff;">
-            Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba) ou
-            <strong>Share system audio</strong> (tela). Sem isso o Chrome não envia som.
+            Para áudio: no seletor do Chrome, marque <strong>Share tab audio</strong> (aba).
+            Em <strong>janela</strong>, vai só o som daquela janela (não o sistema inteiro).
+            Em <strong>tela inteira</strong>, marque <strong>Share system audio</strong> se quiser o som do sistema.
           </p>
 
           <button id="iniciar-transmissao" class="botao principal" style="width:100%; text-align:center;">Iniciar transmissão</button>
@@ -962,6 +963,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=20260924-10"></script>
+    <script src="./app.js?v=20260924-11"></script>
   </body>
 </html>
