@@ -3632,14 +3632,15 @@ function abrirTelaCompartilhar() {
   mostrarTela(telaCompartilhar);
   mensagemTela("");
   var naActivity = dentroDaActivity();
-  var semTela = !suportaCapturaTela() && ehMobile();
   document.querySelector("#tela-aviso-navegador").style.display = naActivity ? "" : "none";
   var painel = document.querySelector("#painel-criar");
   if (painel) painel.style.display = naActivity ? "none" : "";
   document.querySelector("#abrir-navegador-tela").style.display = "";
   var avisoMobile = document.querySelector("#tela-aviso-mobile");
   if (avisoMobile) {
-    avisoMobile.style.display = (!naActivity && semTela) ? "" : "none";
+    // Só avisa se nem câmera nem tela existirem; fallback de tela→câmera
+    // é avisado após a captura (iniciarTransmissaoTela).
+    avisoMobile.style.display = (!naActivity && !podeCapturarMidia()) ? "" : "none";
   }
 
   // Lista sempre visível: salas públicas + da call (se houver instância).
@@ -3781,12 +3782,11 @@ function gumLegado(constraints) {
 
 async function capturarMidiaTransmissao(querAudio) {
   var video = await opcoesCapturaVideo();
-  var ua = navigator.userAgent || "";
-  var chromeAndroid = /Chrome/i.test(ua) && /Android/i.test(ua);
   var semDisplay = !suportaCapturaTela();
 
-  // 1) Chrome desktop / browsers com Screen Capture API.
-  if (!chromeAndroid && suportaCapturaTela()) {
+  // 1) Tenta Screen Capture API em qualquer dispositivo (desktop e mobile).
+  // No Chrome Android/iOS o picker pode não existir → cai no fallback câmera.
+  if (suportaCapturaTela()) {
     try {
       var opcoes = {
         video: video,
@@ -3813,8 +3813,13 @@ async function capturarMidiaTransmissao(querAudio) {
       } catch (eSt) { /* settings é best-effort */ }
       return streamDisplay;
     } catch (e) {
-      if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) throw e;
-      logRelayDiag("displaymedia_falhou", { msg: e && e.message });
+      if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) {
+        // Mobile: sem picker de tela → tenta câmera em vez de abortar.
+        if (!ehMobile()) throw e;
+        logRelayDiag("displaymedia_negado_mobile", { msg: e && e.message });
+      } else {
+        logRelayDiag("displaymedia_falhou", { msg: e && e.message });
+      }
     }
   }
 
@@ -3825,8 +3830,8 @@ async function capturarMidiaTransmissao(querAudio) {
     throw new Error("SEU_NAVEGADOR_SEM_CAPTURE");
   }
 
-  // 2) Firefox — screen via getUserMedia legado (Chrome Android não tem).
-  if (!chromeAndroid && telaFonte !== "camera") {
+  // 2) Firefox — screen via getUserMedia legado.
+  if (telaFonte !== "camera") {
     try {
       telaFonte = "tela_legado";
       return await gumLegado({
@@ -3838,15 +3843,15 @@ async function capturarMidiaTransmissao(querAudio) {
         } : false,
       });
     } catch (e) {
-      if (e && e.name === "NotAllowedError") throw e;
+      if (e && e.name === "NotAllowedError" && !ehMobile()) throw e;
       logRelayDiag("screen_legado_falhou", { msg: e && e.message });
     }
   }
 
-  // 3) Celular (Chrome Android não tem getDisplayMedia) → câmera.
+  // 3) Tela indisponível/negada → câmera (frente/verso).
   telaFonte = "camera";
-  if (chromeAndroid || semDisplay) {
-    logRelayDiag("fallback_camera_mobile", { chromeAndroid: chromeAndroid, semDisplay: semDisplay });
+  if (semDisplay || ehMobile()) {
+    logRelayDiag("fallback_camera_mobile", { semDisplay: semDisplay });
   }
   try {
     return await gumLegado({
@@ -3945,10 +3950,9 @@ async function iniciarTransmissaoTela() {
     return;
   }
 
-  // Chrome no celular: só câmera — avisa o usuário.
-  var uaNow = navigator.userAgent || "";
-  if (telaFonte === "camera" && /Chrome/i.test(uaNow) && /Android/i.test(uaNow)) {
-    avisoTela("Chrome no celular não compartilha a tela — transmitindo pela câmera.", "");
+  // Tela indisponível/negada → câmera: avisa o usuário (pós-falha).
+  if (telaFonte === "camera" && ehMobile()) {
+    avisoTela("Seu navegador não permitiu capturar a tela — transmitindo pela câmera (frente/verso).", "");
   }
 
   // Prefer fluidez sobre nitidez (menos delay no relay/multi).
