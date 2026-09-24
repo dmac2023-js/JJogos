@@ -2389,9 +2389,21 @@ async function conectarAoDiscord() {
   conexaoDiscordPromise = (async function () {
     try {
       var respostaConfiguracao = await fetch("./config");
-      if (!respostaConfiguracao.ok) return;
+      if (!respostaConfiguracao.ok) {
+        if (dentroDaActivity()) {
+          elementoStatus.textContent = "Erro ao ler config (" + respostaConfiguracao.status + ")";
+          elementoStatus.classList.remove("conectado");
+        }
+        return;
+      }
       var configuracao = await respostaConfiguracao.json();
-      if (!configuracao.application_id) return;
+      if (!configuracao.application_id) {
+        if (dentroDaActivity()) {
+          elementoStatus.textContent = "application_id não configurado no servidor";
+          elementoStatus.classList.remove("conectado");
+        }
+        return;
+      }
 
       var mod;
       try {
@@ -2461,6 +2473,10 @@ async function conectarAoDiscord() {
         console.log("Discord user identified:", user.username);
       } catch (e) {
         console.warn("Não foi possível autenticar:", e);
+        if (dentroDaActivity()) {
+          elementoStatus.textContent = "Falha no login: " + String((e && e.message) || e).slice(0, 60);
+          elementoStatus.classList.remove("conectado");
+        }
         // limpa a promise para permitir retry (garantirIdentidade chama de novo)
         conexaoDiscordPromise = null;
       }
@@ -2468,7 +2484,7 @@ async function conectarAoDiscord() {
       if (autenticou) {
         elementoStatus.textContent = "Conectado ao Discord";
         elementoStatus.classList.add("conectado");
-      } else {
+      } else if (!dentroDaActivity()) {
         elementoStatus.textContent = "Discord (sem login)";
         elementoStatus.classList.remove("conectado");
       }
@@ -2476,7 +2492,7 @@ async function conectarAoDiscord() {
     } catch (erro) {
       console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
       if (dentroDaActivity()) {
-        elementoStatus.textContent = "Erro ao conectar com o Discord";
+        elementoStatus.textContent = "Erro: " + String((erro && erro.message) || erro).slice(0, 60);
         elementoStatus.classList.remove("conectado");
       }
       conexaoDiscordPromise = null;
