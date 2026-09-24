@@ -6205,7 +6205,11 @@ async function restaurarSessaoDiscord() {
 
 document.querySelector("#btn-login-discord").addEventListener("click", iniciarLoginDiscord);
 document.querySelector("#btn-logout-discord").addEventListener("click", limparSessaoDiscord);
-document.querySelector("#btn-perfil").addEventListener("click", abrirPerfil);
+document.querySelector("#btn-ver-perfil").addEventListener("click", abrirPerfil);
+document.querySelector("#status-discord").addEventListener("click", abrirPerfil);
+document.querySelector("#status-discord").addEventListener("keydown", function (e) {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirPerfil(); }
+});
 
 // ---------------------------------------------------------------------------
 // Inicialização

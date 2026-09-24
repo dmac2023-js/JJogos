@@ -19,13 +19,17 @@
       h2 { margin-bottom: 8px; font-size: 22px; }
       .subtitulo, .titulo-tela p { margin-bottom: 0; color: #aeb2c7; }
       .status, .etiqueta { border: 1px solid #2d4470; border-radius: 999px; padding: 8px 12px; color: #9dc2ff; font-size: 12px; white-space: nowrap; }
+      .status { cursor: pointer; }
+      .status:hover { border-color: #3b82f6; color: #f4f6ff; }
       .status.conectado { border-color: #3d9d6b; color: #85e0ae; }
+      .perfil-trigger { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1px solid transparent; border-radius: 999px; background: transparent; cursor: pointer; }
+      .perfil-trigger:hover { border-color: #3b82f6; background: #16233d; }
       .tela { display: none; margin-top: 34px; padding: 26px; border: 1px solid #20293f; border-radius: 20px; background: rgba(25, 28, 43, .94); box-shadow: 0 20px 60px rgba(0, 0, 0, .28); }
       .tela.ativa { display: block; }
       .titulo-tela { margin-bottom: 24px; }
       .cartao-jogo, .botao-dificuldade { width: 100%; display: flex; align-items: center; gap: 16px; border: 1px solid #26314f; border-radius: 14px; padding: 18px; color: #f4f6ff; background: #111a2e; text-align: left; cursor: pointer; }
       .cartao-jogo:hover, .botao-dificuldade:hover { border-color: #3b82f6; background: #16233d; }
-      .icone-jogo { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 12px; color: #9dc2ff; background: #1c2c4a; font-weight: bold; }
+      .icone-jogo { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 12px; color: #f4f6ff; background: #1c2c4a; font-weight: bold; }
       .cartao-jogo strong, .botao-dificuldade strong { display: block; margin-bottom: 6px; font-size: 18px; }
       .cartao-jogo small, .botao-dificuldade small { display: block; color: #aeb2c7; }
       .seta { margin-left: auto; color: #5b9dff; font-size: 24px; }
@@ -398,12 +402,13 @@
           <p class="subtitulo">Uma coleção simples de jogos para jogar com seus amigos.</p>
         </div>
         <div class="cabecalho-acoes">
-          <span id="status-discord" class="status">Modo navegador</span>
-          <button id="btn-perfil" class="botao botao-login" title="Ver perfil e recordes">👤 Perfil</button>
+          <span id="status-discord" class="status" title="Ver perfil" role="button" tabindex="0">Modo navegador</span>
           <button id="btn-login-discord" class="botao botao-login">Entrar com Discord</button>
           <div id="auth-usuario" style="display:none;">
-            <img id="auth-avatar" alt="" />
-            <span id="auth-nome"></span>
+            <button id="btn-ver-perfil" class="perfil-trigger" title="Ver perfil e recordes">
+              <img id="auth-avatar" alt="" />
+              <span id="auth-nome"></span>
+            </button>
             <button id="btn-logout-discord" class="botao-copiar">Sair</button>
           </div>
         </div>
@@ -416,7 +421,23 @@
           <p>Escolha uma opção para começar.</p>
         </div>
         <button id="jogo-sudoku" class="cartao-jogo">
-          <span class="icone-jogo">9x9</span>
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="20" rx="1" stroke="currentColor" stroke-width="1.6"/>
+              <g stroke="currentColor" stroke-width="0.6" opacity="0.55">
+                <line x1="4.22" y1="2" x2="4.22" y2="22"/><line x1="6.44" y1="2" x2="6.44" y2="22"/>
+                <line x1="10.89" y1="2" x2="10.89" y2="22"/><line x1="13.11" y1="2" x2="13.11" y2="22"/>
+                <line x1="17.56" y1="2" x2="17.56" y2="22"/><line x1="19.78" y1="2" x2="19.78" y2="22"/>
+                <line x1="2" y1="4.22" x2="22" y2="4.22"/><line x1="2" y1="6.44" x2="22" y2="6.44"/>
+                <line x1="2" y1="10.89" x2="22" y2="10.89"/><line x1="2" y1="13.11" x2="22" y2="13.11"/>
+                <line x1="2" y1="17.56" x2="22" y2="17.56"/><line x1="2" y1="19.78" x2="22" y2="19.78"/>
+              </g>
+              <g stroke="currentColor" stroke-width="1.3">
+                <line x1="8.67" y1="2" x2="8.67" y2="22"/><line x1="15.33" y1="2" x2="15.33" y2="22"/>
+                <line x1="2" y1="8.67" x2="22" y2="8.67"/><line x1="2" y1="15.33" x2="22" y2="15.33"/>
+              </g>
+            </svg>
+          </span>
           <span>
             <strong>Sudoku</strong>
             <small>Complete a grade com números de 1 a 9.</small>
@@ -424,7 +445,22 @@
           <span class="seta">&rarr;</span>
         </button>
         <button id="jogo-velha" class="cartao-jogo" style="margin-top: 12px;">
-          <span class="icone-jogo">O X</span>
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" aria-hidden="true">
+              <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <line x1="8.67" y1="2" x2="8.67" y2="22"/><line x1="15.33" y1="2" x2="15.33" y2="22"/>
+                <line x1="2" y1="8.67" x2="22" y2="8.67"/><line x1="2" y1="15.33" x2="22" y2="15.33"/>
+              </g>
+              <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <line x1="3.4" y1="3.4" x2="7.3" y2="7.3"/><line x1="7.3" y1="3.4" x2="3.4" y2="7.3"/>
+                <line x1="10" y1="10" x2="14" y2="14"/><line x1="14" y1="10" x2="10" y2="14"/>
+                <line x1="16.7" y1="16.7" x2="20.6" y2="20.6"/><line x1="20.6" y1="16.7" x2="16.7" y2="20.6"/>
+              </g>
+              <g stroke="currentColor" stroke-width="1.5">
+                <circle cx="18.67" cy="5.33" r="2.4"/><circle cx="5.33" cy="18.67" r="2.4"/>
+              </g>
+            </svg>
+          </span>
           <span>
             <strong>Jogo da Velha</strong>
             <small>Contra a máquina ou outros jogadores.</small>
@@ -432,7 +468,13 @@
           <span class="seta">&rarr;</span>
         </button>
         <button id="jogo-ludo" class="cartao-jogo" style="margin-top: 12px;">
-          <span class="icone-jogo">&#127922;</span>
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="6" r="2.6"/>
+              <path d="M9.6 9.4h4.8a1 1 0 011 1v.4c2 1 3.3 2.9 3.3 5.1v.6a1 1 0 01-1 1H6.3a1 1 0 01-1-1v-.6c0-2.2 1.3-4.1 3.3-5.1v-.4a1 1 0 011-1z"/>
+              <rect x="4.8" y="18.6" width="14.4" height="2.4" rx="1.2"/>
+            </svg>
+          </span>
           <span>
             <strong>Ludo</strong>
             <small>Clássico com até 4 jogadores online.</small>
@@ -440,7 +482,12 @@
           <span class="seta">&rarr;</span>
         </button>
         <button id="jogo-campo" class="cartao-jogo" style="margin-top: 12px;">
-          <span class="icone-jogo">&#128163;</span>
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+              <line x1="6" y1="3" x2="6" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M6 4 L19 7.5 L6 11 Z" fill="#ff5c5c"/>
+            </svg>
+          </span>
           <span>
             <strong>Campo Minado</strong>
             <small>Solo contra o tempo ou 1x1 online.</small>
@@ -448,7 +495,13 @@
           <span class="seta">&rarr;</span>
         </button>
         <button id="jogo-tela" class="cartao-jogo" style="margin-top: 12px;">
-          <span class="icone-jogo">&#128247;</span>
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" aria-hidden="true">
+              <rect x="2.5" y="4" width="19" height="13" rx="1.6" stroke="currentColor" stroke-width="1.7"/>
+              <line x1="12" y1="17" x2="12" y2="20" stroke="currentColor" stroke-width="1.7"/>
+              <line x1="8" y1="20.5" x2="16" y2="20.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </span>
           <span>
             <strong>Compartilhar Tela</strong>
             <small>Transmita sua tela para até 9 espectadores.</small>
