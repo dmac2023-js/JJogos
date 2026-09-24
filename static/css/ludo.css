@@ -1,0 +1,123 @@
+/* Ludo — tabuleiro 15x15, peões, dado, placar de 4 jogadores. */
+
+.ludo-jogadores { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.ludo-jogador { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #111a2e; border: 2px solid #26314f; font-size: 13px; max-width: 200px; }
+.ludo-jogador.ativo { box-shadow: 0 0 0 2px rgba(255,255,255,.15); border-color: #9dc2ff; }
+.ludo-jogador img, .ludo-jogador .ini { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 1px solid #2d4470; display: grid; place-items: center; font-weight: bold; font-size: 12px; color: #9dc2ff; flex-shrink: 0; }
+.ludo-jogador strong { color: #f4f6ff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ludo-jogador.cor-vermelho strong { color: #ff8a8a; }
+.ludo-jogador.cor-verde strong { color: #7ddea3; }
+.ludo-jogador.cor-amarelo strong { color: #ffd36a; }
+.ludo-jogador.cor-azul strong { color: #7eb6ff; }
+.ludo-jogador .cor-bolinha { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.ludo-jogador .cor-bolinha.vermelho { background: #e03b3b; }
+.ludo-jogador .cor-bolinha.verde { background: #3b9e57; }
+.ludo-jogador .cor-bolinha.amarelo { background: #e8b021; }
+.ludo-jogador .cor-bolinha.azul { background: #2f7fd0; }
+
+.ludo-layout { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+.ludo-tabuleiro {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  grid-template-rows: repeat(15, 1fr);
+  width: min(460px, 92vw);
+  aspect-ratio: 1;
+  gap: 1px;
+  background: #0d0f18;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  padding: 2px;
+  flex-shrink: 0;
+  position: relative;
+}
+.ludo-celula { position: relative; background: #111a2e; border-radius: 2px; min-width: 0; min-height: 0; }
+.ludo-celula.base-vermelho { background: #5a1f1f; }
+.ludo-celula.base-verde { background: #1f4a2c; }
+.ludo-celula.base-amarelo { background: #5a4a1a; }
+.ludo-celula.base-azul { background: #1a3a5a; }
+.ludo-celula.trilha { background: #e8e6df; }
+.ludo-celula.trilha.segura::after { content: "★"; position: absolute; inset: 0; display: grid; place-items: center; color: #666; font-size: 10px; }
+.ludo-celula.casa-vermelho { background: #f0a0a0; }
+.ludo-celula.casa-verde { background: #a0d8b0; }
+.ludo-celula.casa-amarelo { background: #f0d890; }
+.ludo-celula.casa-azul { background: #a0c8f0; }
+.ludo-celula.centro { background: #fff; }
+.ludo-celula.centro::after { content: ""; position: absolute; left: 50%; top: 50%; width: 60%; height: 60%; transform: translate(-50%,-50%); background: conic-gradient(#e03b3b 0 90deg, #3b9e57 90deg 180deg, #e8b021 180deg 270deg, #2f7fd0 270deg); border-radius: 4px; opacity: .85; }
+.ludo-celula .inicio-marcador { position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; opacity: .5; }
+
+.ludo-pecas { position: absolute; inset: 0; pointer-events: none; }
+.ludo-pecas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.ludo-peao {
+  position: absolute;
+  width: calc(100% / 15 * 0.72);
+  height: calc(100% / 15 * 0.72);
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.45); box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  transform: none; pointer-events: auto; cursor: default;
+  z-index: 2;
+  transition: left 0.1s linear, top 0.1s linear;
+  box-sizing: border-box;
+}
+.ludo-peao.vermelho { background: radial-gradient(circle at 35% 30%, #ff8a8a, #e03b3b); }
+.ludo-peao.verde { background: radial-gradient(circle at 35% 30%, #7ddea3, #3b9e57); }
+.ludo-peao.amarelo { background: radial-gradient(circle at 35% 30%, #ffe08a, #e8b021); }
+.ludo-peao.azul { background: radial-gradient(circle at 35% 30%, #9ec9ff, #2f7fd0); }
+.ludo-peao.opcao { cursor: pointer; animation: ludoPisca 0.8s ease-in-out infinite; z-index: 5; outline: 3px solid #fff; }
+.ludo-peao.opcao:hover { transform: scale(1.12); }
+@keyframes ludoPisca { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+.ludo-peao.pilha-offset1 { transform: translate(14%, -10%); }
+.ludo-peao.pilha-offset2 { transform: translate(-10%, 14%); }
+.ludo-peao.pilha-offset3 { transform: translate(14%, 14%); }
+.ludo-peao.opcao.pilha-offset1 { transform: translate(14%, -10%) scale(1.12); }
+.ludo-peao.opcao.pilha-offset2 { transform: translate(-10%, 14%) scale(1.12); }
+.ludo-peao.opcao.pilha-offset3 { transform: translate(14%, 14%) scale(1.12); }
+.ludo-peao.animando { transition: left 0.1s linear, top 0.1s linear; z-index: 6; }
+
+.ludo-lado { display: flex; flex-direction: column; gap: 12px; width: 180px; flex-shrink: 0; }
+.ludo-lado .painel-recordes { width: 100%; box-sizing: border-box; }
+.ludo-painel { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.ludo-dado {
+  width: 72px; height: 72px; border-radius: 16px; background: #f4f6ff; color: #0a0e1a;
+  display: grid; place-items: center; font-size: 36px; font-weight: bold;
+  border: 3px solid #3b82f6; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.ludo-dado.vazio { background: #141c30; color: #555e7a; }
+.ludo-dica { margin: 0; color: #aeb2c7; font-size: 13px; text-align: center; }
+
+/* Placar de 4 jogadores (variante compacta do placar universal) */
+.placar-ludo { max-width: min(520px, 94vw); gap: 10px; padding: 8px 10px; margin-bottom: 10px; }
+.placar-ludo .placar-lado { min-width: 56px; }
+.placar-ludo .placar-avatar { width: 34px; height: 34px; font-size: 14px; }
+.placar-ludo .placar-gol { font-size: 20px; }
+.placar-ludo .placar-nick { font-size: 11px; max-width: 72px; }
+
+@media (max-width: 700px) {
+  .ludo-layout { flex-direction: column; align-items: center; }
+  .ludo-lado { flex-direction: row; flex-wrap: wrap; width: auto; justify-content: center; align-items: flex-start; }
+  .ludo-painel { flex-direction: row; width: auto; flex-wrap: wrap; justify-content: center; }
+  .ludo-lado .painel-recordes { width: min(280px, 92vw); }
+}
+
+@media (max-height: 800px) {
+  #tela-ludo .cabecalho-jogo { margin-bottom: 4px; }
+  #tela-ludo .voltar { margin-bottom: 8px; }
+  #tela-ludo .mensagem { margin: 6px 0; }
+  #tela-ludo .ludo-jogadores { margin-bottom: 8px; }
+  #tela-ludo .ludo-tabuleiro { width: min(400px, 52vh, 88vw); }
+  #tela-ludo .ludo-dado { width: 56px; height: 56px; font-size: 28px; border-radius: 12px; }
+  #tela-ludo .ludo-painel { gap: 8px; width: 150px; }
+  #tela-ludo .ludo-lado { width: 150px; gap: 8px; }
+  #tela-ludo .painel-recordes { padding: 10px; }
+  #tela-ludo .painel-recordes h2 { font-size: 13px; margin-bottom: 6px; }
+  #tela-ludo .registro-recorde { padding: 5px 7px; font-size: 11px; }
+  #tela-ludo .recorde-avatar { width: 22px; height: 22px; }
+  #tela-ludo .placar-ludo .placar-avatar { width: 28px; height: 28px; font-size: 12px; }
+  #tela-ludo .placar-ludo .placar-gol { font-size: 16px; }
+  #tela-ludo .placar-ludo { margin-bottom: 8px; padding: 6px 8px; }
+  #tela-ludo .ludo-dica { font-size: 12px; }
+}

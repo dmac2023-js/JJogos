@@ -1,0 +1,25 @@
+/* Jogo da Velha — tabuleiro 3x3, indicador de vez, convite de participantes. */
+
+.tabuleiro-velha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 320px; margin: 0 auto; }
+.casa-velha { width: 100%; aspect-ratio: 1; border: 2px solid #26314f; border-radius: 10px; background: #111a2e; color: #fff; font-size: clamp(32px, 8vw, 56px); font-weight: bold; cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
+.casa-velha:hover:not(.preenchida):not(.desabilitada) { border-color: #3b82f6; background: #16233d; }
+.casa-velha.preenchida { cursor: not-allowed; }
+.casa-velha.x { color: #9dc2ff; background: #16233d; }
+.casa-velha.o { color: #85e0ae; background: #1a3328; }
+.casa-velha.venceu { border-color: #ffd700; background: #3d3520; box-shadow: 0 0 12px rgba(255, 215, 0, .3); }
+.casa-velha.desabilitada { cursor: not-allowed; opacity: .7; }
+
+.indicador-vez { display: inline-block; padding: 4px 14px; border-radius: 999px; font-weight: bold; font-size: 14px; }
+.indicador-vez.x { color: #9dc2ff; border: 1px solid #3a5a8a; }
+.indicador-vez.o { color: #85e0ae; border: 1px solid #3d9d6b; }
+
+.lobby-participantes { margin-top: 12px; }
+.participante { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px; border-radius: 8px; background: #141c30; font-size: 14px; }
+.participante-avatar { width: 32px; height: 32px; border-radius: 50%; background: #1c2c4a; display: grid; place-items: center; font-weight: bold; font-size: 14px; color: #9dc2ff; flex-shrink: 0; }
+.participante-info { flex: 1; }
+.participante-info strong { display: block; font-size: 14px; }
+.participante-info small { color: #aeb2c7; font-size: 12px; }
+.participante-status { font-size: 12px; color: #aeb2c7; }
+.participante-status.disponivel { color: #85e0ae; }
+.botao-convidar { padding: 6px 12px; border: 1px solid #3d9d6b; border-radius: 8px; background: transparent; color: #85e0ae; font-size: 12px; cursor: pointer; }
+.botao-convidar:hover { background: #1a3328; }
