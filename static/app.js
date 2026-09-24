@@ -220,6 +220,18 @@ function salvarHistorico() {
   });
   localStorage.setItem("historico-sudoku", JSON.stringify(historico.slice(0, 20)));
   carregarHistorico();
+  registrarHistoricoGeral("Sudoku", nomesDificuldade[dificuldadeAtual] + " · " + formatarTempo(tempoAtual()));
+}
+
+// ---------------------------------------------------------------------------
+// Perfil — histórico recente unificado (todos os jogos)
+// ---------------------------------------------------------------------------
+function registrarHistoricoGeral(jogo, detalhe) {
+  try {
+    const lista = JSON.parse(localStorage.getItem("jj-historico-geral") || "[]");
+    lista.unshift({ jogo: jogo, detalhe: detalhe, data: new Date().toLocaleDateString("pt-BR") });
+    localStorage.setItem("jj-historico-geral", JSON.stringify(lista.slice(0, 20)));
+  } catch (e) { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +688,7 @@ async function salvarRecordVelha() {
       body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar }),
     });
     carregarRankingVelha();
+    registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
   } catch (e) { /* ignore */ }
 }
 
@@ -5880,6 +5893,151 @@ function receberAudioTile(tile, dados) {
   } catch (e) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------
+// Perfil — identidade, recordes agregados e histórico recente
+// ---------------------------------------------------------------------------
+async function abrirPerfil() {
+  mostrarTela(document.querySelector("#tela-perfil"));
+  await garantirIdentidade();
+  renderPerfilIdentidade();
+  renderPerfilHistorico();
+  await renderPerfilRecordes();
+}
+
+function renderPerfilIdentidade() {
+  var alvo = document.querySelector("#perfil-identidade");
+  if (!alvo) return;
+  var nick = nomeExibicao();
+  var logado = !!usuarioDiscord;
+  var avatarHtml = logado
+    ? '<img src="' + escapeHtml(avatarAtual()) + '" alt="" />'
+    : escapeHtml((nick || "?").charAt(0).toUpperCase());
+  alvo.innerHTML =
+    '<span class="perfil-avatar">' + avatarHtml + "</span>" +
+    "<span><span class=\"perfil-nome\">" + escapeHtml(nick) + "</span>" +
+    '<div class="perfil-sub">' +
+    (logado
+      ? "Conectado com Discord"
+      : "Modo navegador — entre com Discord para registrar recordes") +
+    "</div></span>";
+}
+
+function renderPerfilHistorico() {
+  var alvo = document.querySelector("#perfil-historico");
+  if (!alvo) return;
+  var lista = [];
+  try { lista = JSON.parse(localStorage.getItem("jj-historico-geral") || "[]"); } catch (e) { /* ignore */ }
+  if (lista.length === 0) {
+    alvo.innerHTML = '<p class="vazio">Nenhuma partida concluída ainda neste navegador.</p>';
+    return;
+  }
+  alvo.innerHTML = "";
+  lista.forEach(function (item) {
+    var linha = document.createElement("div");
+    linha.className = "registro";
+    linha.innerHTML =
+      "<span>" + escapeHtml(item.jogo) + " &middot; " + escapeHtml(item.data) + "</span>" +
+      "<strong>" + escapeHtml(item.detalhe) + "</strong>";
+    alvo.appendChild(linha);
+  });
+}
+
+async function renderPerfilRecordes() {
+  var alvo = document.querySelector("#perfil-recordes");
+  if (!alvo) return;
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para ver seus recordes registrados no ranking de cada jogo.</p>';
+    return;
+  }
+  alvo.innerHTML = '<p class="perfil-vazio">Carregando recordes...</p>';
+  try {
+    var params = "nome=" + encodeURIComponent(nomeUsuario()) + "&nick=" + encodeURIComponent(nomeExibicao());
+    var resposta = await fetch("./perfil/recordes?" + params);
+    var dados = await resposta.json();
+    alvo.innerHTML = "";
+    alvo.appendChild(cartaoPerfilSudoku(dados.sudoku || {}));
+    alvo.appendChild(cartaoPerfilVitorias("Jogo da Velha", dados.velha || {}));
+    alvo.appendChild(cartaoPerfilCampoMinado(dados.campo_minado || {}));
+    alvo.appendChild(cartaoPerfilLudo(dados.ludo));
+  } catch (e) {
+    alvo.innerHTML = '<p class="perfil-vazio">Não foi possível carregar os recordes agora.</p>';
+  }
+}
+
+function criarCartaoPerfil(titulo) {
+  var card = document.createElement("div");
+  card.className = "perfil-jogo-card";
+  card.innerHTML = "<h3>" + escapeHtml(titulo) + "</h3>";
+  return card;
+}
+
+function adicionarLinhaPerfil(card, rotulo, valor) {
+  var linha = document.createElement("div");
+  linha.className = "perfil-linha";
+  linha.innerHTML = "<span>" + escapeHtml(rotulo) + "</span><strong>" + escapeHtml(valor) + "</strong>";
+  card.appendChild(linha);
+}
+
+function cartaoPerfilSudoku(porDificuldade) {
+  var card = criarCartaoPerfil("Sudoku");
+  var chaves = Object.keys(porDificuldade);
+  if (chaves.length === 0) {
+    card.innerHTML += '<p class="perfil-vazio">Ainda sem recorde salvo.</p>';
+    return card;
+  }
+  ["facil", "medio", "dificil"].forEach(function (dif) {
+    var r = porDificuldade[dif];
+    if (r) adicionarLinhaPerfil(card, nomesDificuldade[dif], formatarTempo(r.tempo_segundos));
+  });
+  return card;
+}
+
+function cartaoPerfilVitorias(titulo, porDificuldade) {
+  var card = criarCartaoPerfil(titulo);
+  var chaves = Object.keys(porDificuldade);
+  if (chaves.length === 0) {
+    card.innerHTML += '<p class="perfil-vazio">Ainda sem vitórias registradas.</p>';
+    return card;
+  }
+  ["facil", "medio", "dificil", "geral"].forEach(function (dif) {
+    var r = porDificuldade[dif];
+    if (!r) return;
+    var rotulo = nomesDificuldade[dif] || "Geral";
+    var valor = r.vitorias + " vitória" + (r.vitorias === 1 ? "" : "s");
+    if (r.melhor_tempo) valor += " · " + formatarTempo(r.melhor_tempo);
+    adicionarLinhaPerfil(card, rotulo, valor);
+  });
+  return card;
+}
+
+function cartaoPerfilCampoMinado(dados) {
+  var card = criarCartaoPerfil("Campo Minado");
+  var tempos = dados.tempos || {};
+  var vitorias = dados.vitorias || {};
+  var temAlgo = false;
+  ["facil", "medio", "dificil"].forEach(function (dif) {
+    var partes = [];
+    if (vitorias[dif]) partes.push(vitorias[dif].vitorias + " vitória" + (vitorias[dif].vitorias === 1 ? "" : "s"));
+    if (tempos[dif]) partes.push("melhor " + formatarTempo(tempos[dif].tempo_segundos));
+    if (partes.length) {
+      temAlgo = true;
+      adicionarLinhaPerfil(card, nomesDificuldade[dif], partes.join(" · "));
+    }
+  });
+  if (!temAlgo) card.innerHTML += '<p class="perfil-vazio">Ainda sem recorde salvo.</p>';
+  return card;
+}
+
+function cartaoPerfilLudo(ludo) {
+  var card = criarCartaoPerfil("Ludo");
+  if (!ludo) {
+    card.innerHTML += '<p class="perfil-vazio">Ainda sem vitórias registradas.</p>';
+    return card;
+  }
+  adicionarLinhaPerfil(card, "Vitórias", String(ludo.vitorias));
+  return card;
+}
+
 function irParaMulti() {
   if (!multiNaTela || !multiSala) return;
   mostrarTela(document.querySelector("#tela-multitela"));
@@ -6047,6 +6205,7 @@ async function restaurarSessaoDiscord() {
 
 document.querySelector("#btn-login-discord").addEventListener("click", iniciarLoginDiscord);
 document.querySelector("#btn-logout-discord").addEventListener("click", limparSessaoDiscord);
+document.querySelector("#btn-perfil").addEventListener("click", abrirPerfil);
 
 // ---------------------------------------------------------------------------
 // Inicialização
@@ -6353,6 +6512,7 @@ async function campoVitoriaSolo() {
       }),
     });
     carregarRankingCampo();
+    registrarHistoricoGeral("Campo Minado", "Vitória · " + formatarTempo(campoTempoFinal));
   } catch (e) { /* ignore */ }
 }
 
