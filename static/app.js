@@ -2634,8 +2634,14 @@ function appOrigin() {
 }
 
 // True dentro da Activity (mesmo se o SDK falhar ao carregar).
+// O hostname .discordsays.com é o sinal mais confiável: nem sempre o Discord
+// injeta frame_id/instance_id na query string, e sem isso o botão de login
+// do site (navegação de página inteira) ficava visível dentro da Activity —
+// clicar nele tenta navegar o iframe restrito para discord.com e trava em
+// branco (a Activity só pode navegar via SDK, não por location.href).
 function dentroDaActivity() {
   if (discordSdkGlobal) return true;
+  if (/\.discordsays\.com$/i.test(location.hostname)) return true;
   var params = new URLSearchParams(location.search);
   return params.has("frame_id") || params.has("instance_id");
 }
@@ -6112,6 +6118,12 @@ function renderAuth() {
 }
 
 async function iniciarLoginDiscord() {
+  // Dentro da Activity o iframe não pode navegar a página inteira para
+  // discord.com (fica em branco) — o login lá é automático via SDK.
+  if (dentroDaActivity()) {
+    conectarAoDiscord();
+    return;
+  }
   try {
     var res = await fetch("./config");
     var config = await res.json();
