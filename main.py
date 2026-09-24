@@ -1091,7 +1091,24 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
             motivo = resposta.text[:200]
         raise HTTPException(status_code=400, detail="Discord recusou o login: " + str(motivo))
 
-    return resposta.json()
+    token_data = resposta.json()
+
+    # Busca o perfil (@me) aqui no servidor. Dentro da Activity, o iframe é
+    # restrito às URLs mapeadas no portal (Root Mapping / URL Mappings) — um
+    # fetch do cliente direto para discord.com trava sem erro visível e a
+    # tela nunca sai de "Modo navegador". Fazendo aqui não há esse limite.
+    try:
+        resposta_me = requests.get(
+            "https://discord.com/api/users/@me",
+            headers={"Authorization": "Bearer " + token_data["access_token"]},
+            timeout=15,
+        )
+        resposta_me.raise_for_status()
+        token_data["user"] = resposta_me.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Não foi possível obter o perfil do Discord.")
+
+    return token_data
 
 
 @app.post("/token/refresh")

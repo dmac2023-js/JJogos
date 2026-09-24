@@ -2398,12 +2398,23 @@ async function conectarAoDiscord() {
         mod = await import("/sdk/npm/@discord/embedded-app-sdk/+esm");
       } catch (importErr) {
         console.warn("SDK import failed (likely not in Discord iframe):", importErr);
+        if (dentroDaActivity()) {
+          elementoStatus.textContent = "Erro ao carregar SDK do Discord";
+          elementoStatus.classList.remove("conectado");
+        }
         return;
       }
 
       var DiscordSDK = mod.DiscordSDK;
       discordSdkGlobal = new DiscordSDK(configuracao.application_id);
-      await discordSdkGlobal.ready();
+      try {
+        await discordSdkGlobal.ready();
+      } catch (readyErr) {
+        console.warn("discordSdkGlobal.ready() falhou:", readyErr);
+        elementoStatus.textContent = "Erro ao conectar com o Discord";
+        elementoStatus.classList.remove("conectado");
+        return;
+      }
 
       var autenticou = false;
       try {
@@ -2428,11 +2439,10 @@ async function conectarAoDiscord() {
         var token = await resTroca.json();
         if (!resTroca.ok) throw new Error(token.detail || "Falha ao trocar o code.");
 
-        var me = await fetch("https://discord.com/api/users/@me", {
-          headers: { Authorization: "Bearer " + token.access_token },
-        });
-        if (!me.ok) throw new Error("Falha ao obter o perfil (@me).");
-        var user = await me.json();
+        // O @me já vem pronto do backend (buscado lá) — dentro da Activity um
+        // fetch do cliente direto para discord.com fica preso pelo sandbox do
+        // iframe (mapeamento de URLs do portal) e nunca resolve.
+        var user = token.user;
         if (!user || !user.id) throw new Error("@me sem user.");
 
         usuarioDiscord = user;
@@ -2465,6 +2475,10 @@ async function conectarAoDiscord() {
       renderAuth();
     } catch (erro) {
       console.warn("A conex\u00e3o com o Discord n\u00e3o foi conclu\u00edda:", erro);
+      if (dentroDaActivity()) {
+        elementoStatus.textContent = "Erro ao conectar com o Discord";
+        elementoStatus.classList.remove("conectado");
+      }
       conexaoDiscordPromise = null;
     }
   })();
@@ -6156,11 +6170,8 @@ async function processarCallbackOAuth() {
     var token = await res.json();
     if (!res.ok) throw new Error(token.detail || "Falha ao trocar o código.");
 
-    var me = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: "Bearer " + token.access_token },
-    });
-    if (!me.ok) throw new Error("Falha ao obter o perfil.");
-    var user = await me.json();
+    var user = token.user;
+    if (!user || !user.id) throw new Error("Falha ao obter o perfil.");
 
     salvarSessaoDiscord({
       user: user,
