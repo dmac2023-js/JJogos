@@ -419,3 +419,41 @@ footer a:hover { color: #9dc2ff; }
 .perfil-linha strong { color: #85e0ae; font-variant-numeric: tabular-nums; }
 .perfil-vazio { color: #aeb2c7; font-size: 13px; }
 #perfil-historico .registro { display: flex; justify-content: space-between; }
+
+/* Termo */
+.termo-icone-jogo { display: flex; gap: 2px; }
+.termo-icone-jogo span { width: 10px; height: 15px; background: #2e8659; color: #fff; font-weight: bold; font-size: 8px; display: grid; place-items: center; border-radius: 2px; line-height: 1; }
+
+.termo-lobby-dificuldade { border-color: #26314f; }
+.termo-lobby-dificuldade.selecionada { border-color: #3b82f6; background: #16233d; }
+
+.termo-tabuleiros { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; }
+.termo-tabuleiro { display: flex; flex-direction: column; gap: 4px; }
+.termo-linha { display: flex; gap: 4px; }
+.termo-celula {
+  width: 42px; height: 42px; border: 2px solid #26314f; border-radius: 6px;
+  display: grid; place-items: center; font-weight: bold; font-size: 20px;
+  color: #f4f6ff; text-transform: uppercase; background: #0d1424;
+}
+.termo-celula.atual { border-color: #3b82f6; }
+.termo-celula.certo { background: #2e8659; border-color: #2e8659; color: #fff; }
+.termo-celula.presente { background: #b8952e; border-color: #b8952e; color: #fff; }
+.termo-celula.ausente { background: #141c30; border-color: #141c30; color: #5f6884; }
+
+.termo-teclado { display: flex; flex-direction: column; gap: 6px; margin-top: 22px; align-items: center; }
+.termo-teclado-linha { display: flex; gap: 5px; }
+.termo-tecla {
+  min-width: 30px; height: 44px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: #22263a; color: #f4f6ff; font-weight: bold; font-size: 13px; cursor: pointer;
+}
+.termo-tecla:hover { background: #2a3050; }
+.termo-tecla.enter, .termo-tecla.back { min-width: 50px; font-size: 11px; }
+.termo-tecla.certo { background: #2e8659; color: #fff; }
+.termo-tecla.presente { background: #b8952e; color: #fff; }
+.termo-tecla.ausente { background: #0d1424; color: #4a5170; }
+
+@media (max-width: 560px) {
+  .termo-celula { width: 34px; height: 34px; font-size: 16px; }
+  .termo-tecla { min-width: 24px; height: 38px; font-size: 12px; padding: 0 5px; }
+  .termo-tecla.enter, .termo-tecla.back { min-width: 40px; font-size: 10px; }
+}

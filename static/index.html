@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./style.css?v=20260924-20" />
+    <link rel="stylesheet" href="./style.css?v=20260924-22" />
     <style>
       :root { color: #f4f6ff; background: #0a0e1a; font-family: Arial, sans-serif; }
       * { box-sizing: border-box; }
@@ -494,6 +494,18 @@
           </span>
           <span class="seta">&rarr;</span>
         </button>
+        <button id="jogo-termo" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">
+            <span class="termo-icone-jogo" aria-hidden="true">
+              <span>T</span><span>E</span><span>R</span><span>M</span><span>O</span>
+            </span>
+          </span>
+          <span>
+            <strong>Termo</strong>
+            <small>Adivinhe a palavra de 5 letras — solo ou contra jogador.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
         <button id="jogo-tela" class="cartao-jogo" style="margin-top: 12px;">
           <span class="icone-jogo">
             <svg viewBox="0 0 24 24" width="28" height="28" fill="none" aria-hidden="true">
@@ -970,6 +982,112 @@
         </div>
       </section>
 
+      <!-- Tela: Modo Termo -->
+      <section id="tela-modo-termo" class="tela">
+        <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
+        <div class="titulo-tela">
+          <h2>Termo</h2>
+          <p>Escolha como deseja jogar.</p>
+        </div>
+        <div class="modo-selecao">
+          <button class="botao-modo" data-modo="termo-solo">
+            <span class="icone">&#9997;&#65039;</span>
+            <strong>Solo</strong>
+            <small>Jogue no seu ritmo</small>
+          </button>
+          <button class="botao-modo" data-modo="termo-multiplayer">
+            <span class="icone">&#128101;</span>
+            <strong>Contra Jogador</strong>
+            <small>Dispute com quem está na Activity</small>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tela: Dificuldade Termo (solo) -->
+      <section id="tela-dificuldade-termo" class="tela">
+        <button class="voltar" data-tela="tela-modo-termo">&larr; Voltar</button>
+        <div class="titulo-tela">
+          <h2>Escolha a dificuldade</h2>
+          <p>Mais palavras ao mesmo tempo, mais tentativas você ganha.</p>
+        </div>
+        <div class="dificuldades">
+          <button class="botao-dificuldade" data-dificuldade="facil"><strong>Fácil — Termo</strong><small>1 palavra · 6 tentativas</small></button>
+          <button class="botao-dificuldade" data-dificuldade="medio"><strong>Médio — Dueto</strong><small>2 palavras · 7 tentativas</small></button>
+          <button class="botao-dificuldade" data-dificuldade="dificil"><strong>Difícil — Quarteto</strong><small>4 palavras · 9 tentativas</small></button>
+        </div>
+      </section>
+
+      <!-- Tela: Lobby Termo (multiplayer) -->
+      <section id="tela-lobby-termo" class="tela">
+        <button class="voltar" data-tela="tela-modo-termo">&larr; Voltar</button>
+        <div class="titulo-tela">
+          <h2>Contra Jogador</h2>
+          <p>Cada um joga a mesma palavra em privado — ninguém vê o tabuleiro do outro. Se os dois acertarem, os dois vencem.</p>
+        </div>
+        <div class="dificuldades" style="margin-bottom: 18px;">
+          <button class="botao-dificuldade termo-lobby-dificuldade" data-dificuldade="facil"><strong>Fácil — Termo</strong><small>1 palavra · 6 tentativas</small></button>
+          <button class="botao-dificuldade termo-lobby-dificuldade selecionada" data-dificuldade="medio"><strong>Médio — Dueto</strong><small>2 palavras · 7 tentativas</small></button>
+          <button class="botao-dificuldade termo-lobby-dificuldade" data-dificuldade="dificil"><strong>Difícil — Quarteto</strong><small>4 palavras · 9 tentativas</small></button>
+        </div>
+        <div class="sala-container">
+          <div class="sala-input">
+            <input type="text" id="termo-codigo-sala" placeholder="Código da sala (opcional)" maxlength="16" />
+            <button id="criar-sala-termo" class="botao principal">Criar sala</button>
+            <button id="entrar-sala-termo" class="botao">Entrar</button>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:#c9ccda;">
+            <input type="checkbox" id="termo-sala-publica" checked style="width:16px; height:16px; accent-color:#2f6fe0;" />
+            Sala pública (aparece na lista)
+          </label>
+        </div>
+        <div class="sala-lista" id="lista-salas-termo-ativas">
+          <h2 style="font-size:16px; margin-top:18px;">Salas públicas</h2>
+          <div id="salas-termo-ativas-conteudo"><p class="vazio">Nenhuma sala pública.</p></div>
+        </div>
+      </section>
+
+      <!-- Tela: Jogo Termo -->
+      <section id="tela-termo" class="tela">
+        <div class="cabecalho-jogo">
+          <button class="voltar" id="voltar-termo" data-tela="tela-dificuldade-termo">&larr; Voltar</button>
+          <div class="informacoes-jogo">
+            <span id="termo-dificuldade-atual" class="etiqueta">Termo</span>
+            <span id="termo-tentativas-label" class="etiqueta">0/6</span>
+          </div>
+        </div>
+
+        <div id="mensagem-termo" class="mensagem">Digite uma palavra de 5 letras.</div>
+
+        <div id="termo-sala-bar" class="sala-codigo-display" style="display:none;">
+          <span class="sala-codigo-label">Sala:</span>
+          <span id="termo-sala-codigo" class="sala-codigo-valor"></span>
+          <button id="copiar-codigo-termo" class="botao-copiar" title="Copiar código">Copiar</button>
+        </div>
+
+        <div id="termo-oponente-status" class="espectadores-bar" style="display:none;"></div>
+
+        <div class="jogo-conteudo">
+          <div class="jogo-grade-area">
+            <div id="termo-tabuleiros" class="termo-tabuleiros"></div>
+            <div id="termo-teclado" class="termo-teclado"></div>
+            <div id="termo-solo-acoes" class="acoes" style="display:none;">
+              <button id="termo-jogar-de-novo" class="botao principal">Jogar de novo</button>
+            </div>
+            <div id="termo-online-acoes" class="acoes" style="display:none;">
+              <button id="termo-pedir-revanche" class="botao" style="display:none;">Jogar de novo</button>
+              <button id="termo-responder-sim" class="botao principal" style="display:none;">Aceitar</button>
+              <button id="termo-responder-nao" class="botao" style="display:none;">Recusar</button>
+              <button id="termo-parar" class="botao" style="display:none;">Sair da sala</button>
+            </div>
+          </div>
+
+          <aside class="painel-recordes">
+            <h2>Top vitórias</h2>
+            <div id="lista-ranking-termo"><p class="vazio">Carregando...</p></div>
+          </aside>
+        </div>
+      </section>
+
       <!-- Tela: Compartilhar Tela (hub) -->
       <section id="tela-compartilhar" class="tela">
         <button class="voltar" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
@@ -1197,6 +1315,6 @@
       </footer>
     </main>
 
-    <script src="./app.js?v=20260924-20"></script>
+    <script src="./app.js?v=20260924-22"></script>
   </body>
 </html>
