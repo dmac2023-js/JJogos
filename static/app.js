@@ -3632,15 +3632,15 @@ function abrirTelaCompartilhar() {
   mostrarTela(telaCompartilhar);
   mensagemTela("");
   var naActivity = dentroDaActivity();
-  document.querySelector("#tela-aviso-navegador").style.display = naActivity ? "" : "none";
+  var celular = ehMobile();
+  // Celular não transmite: nenhum browser mobile tem getDisplayMedia.
+  document.querySelector("#tela-aviso-navegador").style.display = (naActivity && !celular) ? "" : "none";
   var painel = document.querySelector("#painel-criar");
-  if (painel) painel.style.display = naActivity ? "none" : "";
+  if (painel) painel.style.display = (naActivity || celular) ? "none" : "";
   document.querySelector("#abrir-navegador-tela").style.display = "";
   var avisoMobile = document.querySelector("#tela-aviso-mobile");
   if (avisoMobile) {
-    // Só avisa se nem câmera nem tela existirem; fallback de tela→câmera
-    // é avisado após a captura (iniciarTransmissaoTela).
-    avisoMobile.style.display = (!naActivity && !podeCapturarMidia()) ? "" : "none";
+    avisoMobile.style.display = celular ? "" : "none";
   }
 
   // Lista sempre visível: salas públicas + da call (se houver instância).
@@ -3884,6 +3884,11 @@ function rotuloFonteCaptura() {
 }
 
 async function iniciarTransmissaoTela() {
+  // Celular não tem captura de tela em navegador → bloqueia transmissão.
+  if (ehMobile()) {
+    mensagemTela("Celulares não conseguem transmitir — use o computador. No celular você ainda pode assistir às transmissões.", "erro");
+    return;
+  }
   // Painel em modo multi sem sala ainda → cria a sala e depois compartilha.
   if (formModoTela === "multi" && !multiSala) {
     await iniciarCriacaoMultiPainel();
