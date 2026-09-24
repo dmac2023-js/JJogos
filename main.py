@@ -27,6 +27,7 @@ load_dotenv()
 PASTA_BASE = Path(__file__).parent
 PASTA_STATIC = PASTA_BASE / "static"
 ARQUIVO_RECORDES = PASTA_BASE / "recordes.json"
+ARQUIVO_TERMO_PALAVRAS_VALIDAS = PASTA_BASE / "termo_palavras_validas.txt"
 DISCORD_APPLICATION_ID = os.getenv("DISCORD_APPLICATION_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY", "")
@@ -294,6 +295,23 @@ TERMO_PALAVRAS = [
     "SORTE", "RAIVA", "OMBRO", "PEITO", "COSTA", "AULAS", "TESTE", "PROVA", "CHEFE",
 ]
 TERMO_PALAVRAS_SET = set(TERMO_PALAVRAS)
+
+
+def termo_carregar_palavras_validas() -> set:
+    """Vocabulário aceito nos palpites — bem mais amplo que o pool de palavras-secreto."""
+    validas = set(TERMO_PALAVRAS_SET)
+    try:
+        with open(ARQUIVO_TERMO_PALAVRAS_VALIDAS, encoding="utf-8") as arquivo:
+            for linha in arquivo:
+                palavra = linha.strip().upper()
+                if len(palavra) == TERMO_TAMANHO and palavra.isalpha():
+                    validas.add(palavra)
+    except FileNotFoundError:
+        pass
+    return validas
+
+
+TERMO_PALAVRAS_VALIDAS = termo_carregar_palavras_validas()
 
 
 def termo_normalizar(palavra: str) -> str:
@@ -2104,7 +2122,7 @@ def tentar_termo(dados: TentativaTermo):
     palpite = termo_normalizar(dados.palpite)
     if len(palpite) != TERMO_TAMANHO:
         raise HTTPException(status_code=400, detail="A palavra deve ter 5 letras.")
-    if palpite not in TERMO_PALAVRAS_SET:
+    if palpite not in TERMO_PALAVRAS_VALIDAS:
         raise HTTPException(status_code=400, detail="Palavra não reconhecida.")
 
     resultados = [termo_avaliar(palpite, secreta) for secreta in jogo["secretas"]]
@@ -4590,7 +4608,7 @@ async def ws_termo(websocket: WebSocket, sala: str):
                 if len(palpite) != TERMO_TAMANHO:
                     await websocket.send_json({"tipo": "erro_palpite", "mensagem": "A palavra deve ter 5 letras."})
                     continue
-                if palpite not in TERMO_PALAVRAS_SET:
+                if palpite not in TERMO_PALAVRAS_VALIDAS:
                     await websocket.send_json({"tipo": "erro_palpite", "mensagem": "Palavra não reconhecida."})
                     continue
 
