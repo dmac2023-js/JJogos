@@ -152,15 +152,25 @@ function bitrateEfetivo() {
 }
 
 // Relay: prefere fluidez (pouco fps/delay) sobre bitrate máximo — o proxy do
-// Discord engasga com ~8 Mbps de JSON base64 e aí o vídeo "trava".
+// Discord historicamente engasgava perto de ~8 Mbps de JSON base64 e aí o
+// vídeo "trava". Mantemos uma margem de segurança abaixo disso mesmo com o
+// teto mais alto e o pequeno bônus de 60fps abaixo.
+var TELA_RELAY_TETO_SEGURANCA = 7500000;
+
 function bitrateRelay() {
-  if (multiSala) return 5000000; // multi-tela 720p30: um pouco mais de bits p/ fps estável
+  // 60fps ganha um pouco mais de bits (antes usava o mesmo budget do 30fps,
+  // o que deixava a imagem mais "borrada" em 60fps por dividir o mesmo
+  // orçamento entre o dobro de quadros) — sem chegar perto do ponto onde o
+  // proxy engasgava.
+  var fatorFps = telaFps === 60 ? 1.15 : 1;
+  if (multiSala) {
+    return Math.min(Math.round(5500000 * fatorFps), TELA_RELAY_TETO_SEGURANCA);
+  }
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  var teto = telaResolucao === "1080p" ? 6000000
-    : telaResolucao === "720p" ? 4500000 : 2500000;
+  var teto = telaResolucao === "1080p" ? 7000000
+    : telaResolucao === "720p" ? 5500000 : 3000000;
   var b = Math.min(base, teto);
-  // 60fps usa o MESMO budget (não multiplica) — mais bits = mais fila/delay.
-  return b;
+  return Math.min(Math.round(b * fatorFps), TELA_RELAY_TETO_SEGURANCA);
 }
 
 function atualizarAvisoUpload() {
@@ -1019,7 +1029,11 @@ async function iniciarEncoderRelay() {
       ticksSemVideo = 0;
       // Fila maior = menos frames descartados em picos (qualidade/fps).
       // Multi: fila > 6 começa a atrasar — descarta antes (menos delay).
-      var maxFila = multiSala ? 6 : 4;
+      // 60fps single: fila um pouco maior (o dobro de quadros por segundo
+      // enche a fila mais rápido; sem isso muitos quadros eram descartados
+      // mesmo com CPU sobrando) — ainda baixa o bastante pra não acumular
+      // atraso perceptível.
+      var maxFila = multiSala ? 6 : (telaFps === 60 ? 5 : 4);
       if (relayEncoder.encodeQueueSize > maxFila) {
         agendarDraw();
         return;
