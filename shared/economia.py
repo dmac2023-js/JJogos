@@ -112,13 +112,16 @@ def salvar_economia(dados: dict) -> None:
     salvar_json(CHAVE_ECONOMIA, dados, ARQUIVO_ECONOMIA)
 
 
-def obter_carteira(dados: dict, nome: str) -> dict:
+def obter_carteira(dados: dict, nome: str, nick: str = None) -> dict:
     carteira = dados["carteiras"].setdefault(nome, {})
     carteira.setdefault("saldo", 0)
     carteira.setdefault("ultimo_bonus", 0)
     carteira.setdefault("decoracoes", [])
     carteira.setdefault("cores_nick", [])
     carteira.setdefault("equipado", {"decoracao": None, "cor_nick": None})
+    carteira.setdefault("segundos_jogados", 0)
+    if nick:
+        carteira["nick"] = nick
     return carteira
 
 
@@ -149,6 +152,42 @@ def cosmeticos_equipados(nome: str) -> dict:
     decoracao_sku = equipado.get("decoracao")
     imagem = _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem") if decoracao_sku else None
     return {"decoracao": imagem, "cor_nick": equipado.get("cor_nick")}
+
+
+def registrar_tempo_jogo(nome: str, nick: str, segundos: int) -> None:
+    """Acumula segundos jogados na carteira do jogador (para o ranking de horas)."""
+    if eh_anonimo(nome) or not nome or segundos <= 0:
+        return
+    dados = carregar_economia()
+    carteira = obter_carteira(dados, nome, nick=nick)
+    carteira["segundos_jogados"] = carteira.get("segundos_jogados", 0) + segundos
+    salvar_economia(dados)
+
+
+def top_ranking(limit: int = 10) -> dict:
+    """Retorna os top jogadores por moedas e por horas jogadas."""
+    dados = carregar_economia()
+    carteiras = dados.get("carteiras", {})
+
+    top_moedas = []
+    top_horas = []
+
+    for nome, carteira in carteiras.items():
+        nick = carteira.get("nick") or nome
+        cor_nick = carteira.get("equipado", {}).get("cor_nick")
+        saldo = carteira.get("saldo", 0)
+        segundos = carteira.get("segundos_jogados", 0)
+        entrada = {"nome": nome, "nick": nick, "cor_nick": cor_nick}
+        top_moedas.append({**entrada, "saldo": saldo})
+        top_horas.append({**entrada, "segundos": segundos})
+
+    top_moedas.sort(key=lambda x: x["saldo"], reverse=True)
+    top_horas.sort(key=lambda x: x["segundos"], reverse=True)
+
+    return {
+        "top_moedas": top_moedas[:limit],
+        "top_horas": top_horas[:limit],
+    }
 
 
 def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:

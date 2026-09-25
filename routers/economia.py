@@ -17,8 +17,10 @@ from shared.economia import (
     decoracao_existe,
     girar_roleta,
     obter_carteira,
+    registrar_tempo_jogo,
     salvar_economia,
     tentar_reclamar_bonus,
+    top_ranking,
 )
 from shared.recordes import eh_anonimo
 
@@ -55,6 +57,12 @@ class GirarRoleta(BaseModel):
     aposta: int
 
 
+class TempoJogo(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    segundos: int
+
+
 def _carteira_vazia() -> dict:
     return {"saldo": 0, "decoracoes": [], "cores_nick": [], "equipado": {"decoracao": None, "cor_nick": None}}
 
@@ -64,7 +72,7 @@ def obter_minha_carteira(nome: str = "", nick: str = ""):
     if not nome or eh_anonimo(nick):
         return _carteira_vazia()
     dados = carregar_economia()
-    return carteira_publica(obter_carteira(dados, nome))
+    return carteira_publica(obter_carteira(dados, nome, nick=nick))
 
 
 @router.get("/economia/loja")
@@ -93,7 +101,7 @@ def comprar_decoracao(dados: CompraDecoracao):
         raise HTTPException(status_code=404, detail="Decoração não encontrada.")
 
     economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome)
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
     if dados.sku_id in carteira["decoracoes"]:
         raise HTTPException(status_code=409, detail="Você já tem essa decoração.")
     if carteira["saldo"] < PRECO_DECORACAO:
@@ -113,7 +121,7 @@ def comprar_cor(dados: CompraCor):
         raise HTTPException(status_code=400, detail="Cor inválida.")
 
     economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome)
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
     if dados.cor in carteira["cores_nick"]:
         raise HTTPException(status_code=409, detail="Você já tem essa cor.")
     if carteira["saldo"] < PRECO_COR_NICK:
@@ -133,7 +141,7 @@ def equipar(dados: EquiparRequest):
         raise HTTPException(status_code=400, detail="Tipo inválido.")
 
     economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome)
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
     lista = carteira["decoracoes"] if dados.tipo == "decoracao" else carteira["cores_nick"]
     if dados.valor is not None and dados.valor not in lista:
         raise HTTPException(status_code=403, detail="Você não tem esse item.")
@@ -162,3 +170,17 @@ def girar(dados: GirarRoleta):
         detalhe = str(erro)
         status = 402 if "insuficientes" in detalhe else 400
         raise HTTPException(status_code=status, detail=detalhe)
+
+
+@router.post("/economia/tempo")
+def registrar_tempo(dados: TempoJogo):
+    if eh_anonimo(dados.nick) or not dados.nome or dados.segundos <= 0:
+        return {"ok": False}
+    registrar_tempo_jogo(dados.nome, dados.nick, dados.segundos)
+    return {"ok": True}
+
+
+@router.get("/economia/ranking")
+def obter_ranking(limit: int = 10):
+    limit = max(1, min(limit, 50))
+    return top_ranking(limit)

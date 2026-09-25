@@ -211,6 +211,7 @@ function renderizarSalasEspectacao(salas) {
 // ---------------------------------------------------------------------------
 async function iniciarVelhaMaquina(dificuldade) {
   await garantirIdentidade();
+  jogoIniciarTimer();
   velhaModo = "maquina";
   velhaDificuldade = dificuldade;
   carregarRankingVelha();
@@ -313,6 +314,7 @@ async function salvarRecordVelha() {
       body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar, modo: velhaModo }),
     });
     carregarRankingVelha();
+    jogoRegistrarTempo();
     atualizarMoedasHeader();
     registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
   } catch (e) { /* ignore */ }
@@ -466,6 +468,7 @@ function processarMensagemVelha(dados) {
 
     case "inicio":
       velhaRecordSalvo = false;
+      jogoIniciarTimer();
       esconderCodigoSala();
       var comeca = dados.quem_comeca === velhaMinhaPeca ? "você" : dados.quem_comeca;
       atualizarVelhaMensagem(

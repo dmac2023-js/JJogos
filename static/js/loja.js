@@ -1,5 +1,31 @@
 // Loja — moedas, decorações de perfil (avatar decoration) e cor do nick (nametag).
 
+// ---------------------------------------------------------------------------
+// Cronômetro de sessão — rastreia horas jogadas para o ranking global.
+// jogoIniciarTimer() é chamado quando uma partida começa.
+// jogoRegistrarTempo() é chamado quando termina (vitória, derrota ou saída).
+// ---------------------------------------------------------------------------
+var _jogoTempoInicioMs = null;
+
+function jogoIniciarTimer() {
+  _jogoTempoInicioMs = Date.now();
+}
+
+function jogoRegistrarTempo() {
+  if (!_jogoTempoInicioMs || !usuarioDiscord || !nomeUsuario()) {
+    _jogoTempoInicioMs = null;
+    return;
+  }
+  var seg = Math.round((Date.now() - _jogoTempoInicioMs) / 1000);
+  _jogoTempoInicioMs = null;
+  if (seg < 10) return;
+  fetch("./economia/tempo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), segundos: seg }),
+  }).catch(function () {});
+}
+
 let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], equipado: { decoracao: null, cor_nick: null } };
 let lojaPaginaDecoracoes = 0;

@@ -220,6 +220,7 @@ async function iniciarTermoSolo(dificuldade) {
   termoModo = "solo";
   termoOnlineAtivo = false;
   termoDificuldade = dificuldade;
+  jogoIniciarTimer();
   document.querySelector("#voltar-termo").dataset.tela = "tela-dificuldade-termo";
   document.querySelector("#termo-sala-bar").style.display = "none";
   document.querySelector("#termo-oponente-status").style.display = "none";
@@ -353,6 +354,8 @@ async function termoRegistrarVitoria() {
       }),
     });
     carregarRankingTermo();
+    jogoRegistrarTempo();
+    atualizarMoedasHeader();
   } catch (e) { /* ignore */ }
 }
 
@@ -581,6 +584,7 @@ function processarMensagemTermo(dados) {
       break;
     case "inicio_termo":
       termoFase = "jogando";
+      jogoIniciarTimer();
       termoTamanho = dados.tamanho;
       termoTabuleirosQtd = dados.tabuleiros;
       termoMaxTentativas = dados.max_tentativas;
@@ -633,6 +637,8 @@ function processarMensagemTermo(dados) {
       } else {
         termoMsg("Suas tentativas acabaram. Palavra(s): " + palavrasTexto, "erro");
       }
+      jogoRegistrarTempo();
+      atualizarMoedasHeader();
       termoMostrarBotao("#termo-pedir-revanche", true);
       break;
     }

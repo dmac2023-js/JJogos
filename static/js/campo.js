@@ -293,6 +293,8 @@ async function campoVitoriaSolo() {
       }),
     });
     carregarRankingCampo();
+    jogoRegistrarTempo();
+    atualizarMoedasHeader();
     registrarHistoricoGeral("Campo Minado", "Vitória · " + formatarTempo(campoTempoFinal));
   } catch (e) { /* ignore */ }
 }
@@ -342,6 +344,7 @@ function iniciarCampoSolo(dificuldade) {
   var cron = document.querySelector("#campo-cronometro");
   if (cron) cron.textContent = "00:00";
   campoMsg("Toque nas células. Botão direito / pressão longa = bandeira.", "");
+  jogoIniciarTimer();
   mostrarTela(document.querySelector("#tela-campo"));
   carregarRankingCampo();
 }
@@ -461,6 +464,7 @@ function prepararTelaCampoOnline(sala) {
   campoMontarTabuleiro();
   var cron = document.querySelector("#campo-cronometro");
   if (cron) cron.textContent = "00:00";
+  jogoIniciarTimer();
   mostrarTela(document.querySelector("#tela-campo"));
   carregarRankingCampo();
 }
@@ -713,6 +717,8 @@ function processarMensagemCampo(dados) {
       campoMostrarBotao("#campo-pedir-revanche", true);
       campoMostrarBotao("#campo-reiniciar", false);
       carregarRankingCampo();
+      jogoRegistrarTempo();
+      atualizarMoedasHeader();
       break;
     case "ambos_perderam":
       campoAcabou = true;

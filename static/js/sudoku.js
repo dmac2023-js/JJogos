@@ -89,6 +89,7 @@ function desenharGrade(grade) {
 
 async function iniciarSudoku(dificuldade) {
   dificuldadeAtual = dificuldade;
+  jogoIniciarTimer();
   document.querySelector("#dificuldade-atual").textContent = nomesDificuldade[dificuldade];
   mostrarTela(telaJogo);
   mostrarMensagem("Carregando Sudoku...");
@@ -197,6 +198,7 @@ async function salvarRecorde() {
       }),
     });
     carregarRecordes(dificuldadeAtual);
+    jogoRegistrarTempo();
     if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
   } catch (erro) {
     console.warn("Erro ao salvar recorde:", erro);

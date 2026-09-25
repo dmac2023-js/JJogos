@@ -552,7 +552,11 @@ function processarMensagemLudo(d) {
       if (d.fase === "esperando" || d.fase === "contagem" || d.fase === "jogando" || d.fase === "fim") {
         if (telaLudo && !telaLudo.classList.contains("ativa")) mostrarTela(telaLudo);
       }
-      if (d.fase === "fim") carregarRankingLudo();
+      if (d.fase === "fim") {
+        carregarRankingLudo();
+        jogoRegistrarTempo();
+        atualizarMoedasHeader();
+      }
       // Só 1 movimento possível e já rolou o dado → move sozinho.
       if (d.fase === "jogando" && d.vez === ludoSlot && d.dado_ja_rolado &&
           (d.opcoes || []).length === 1 && ludoWs && ludoWs.readyState === WebSocket.OPEN) {
@@ -595,6 +599,7 @@ function conectarLudoWs(sala) {
     "&nick=" + encodeURIComponent(nick) +
     (avatar ? "&avatar=" + encodeURIComponent(avatar) : "");
 
+  jogoIniciarTimer();
   var ws = new WebSocket(url);
   ludoWs = ws;
   ludoSala = sala;
