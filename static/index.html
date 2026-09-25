@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260924-23" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260924-23" />
+    <link rel="stylesheet" href="./css/base.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260924-26" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260924-26" />
   </head>
   <body>
     <main class="aplicacao">
@@ -29,6 +30,9 @@
             <button id="btn-ver-perfil" class="perfil-trigger" title="Ver perfil e recordes">
               <img id="auth-avatar" alt="" />
               <span id="auth-nome"></span>
+            </button>
+            <button id="btn-abrir-loja" class="botao-copiar" title="Loja de decorações e cores" style="display:none;">
+              <span class="loja-moeda-icone">🪙</span> <span id="moedas-valor">0</span> Loja
             </button>
             <button id="btn-logout-discord" class="botao-copiar">Sair</button>
           </div>
@@ -930,19 +934,38 @@
         </div>
       </section>
 
+      <section id="tela-loja" class="tela">
+        <button class="voltar" data-tela="tela-jogos">&larr; Voltar</button>
+        <div class="titulo-tela">
+          <h2>Loja</h2>
+          <p>Troque suas moedas por decorações de perfil e cores de nick. Saldo: <strong id="loja-saldo">0</strong> moedas.</p>
+        </div>
+
+        <div class="loja-secao">
+          <h3>Decorações de perfil (<span id="loja-preco-decoracao">70</span> moedas)</h3>
+          <div id="loja-decoracoes" class="loja-grade"></div>
+        </div>
+
+        <div class="loja-secao">
+          <h3>Cor do nick (<span id="loja-preco-cor">30</span> moedas)</h3>
+          <div id="loja-cores" class="loja-grade"></div>
+        </div>
+      </section>
+
       <footer>
         <p>Mais jogos serão adicionados em breve.</p>
         <p style="margin-top: 6px;"><a href="/politica.html">Política de Privacidade</a> &middot; <a href="/termos.html">Termos de Serviço</a></p>
       </footer>
     </main>
 
-    <script src="./js/perfil.js?v=20260924-25"></script>
-    <script src="./js/core.js?v=20260924-25"></script>
-    <script src="./js/sudoku.js?v=20260924-25"></script>
-    <script src="./js/velha.js?v=20260924-25"></script>
-    <script src="./js/ludo.js?v=20260924-25"></script>
-    <script src="./js/campo.js?v=20260924-25"></script>
-    <script src="./js/termo.js?v=20260924-25"></script>
-    <script src="./js/tela.js?v=20260924-25"></script>
+    <script src="./js/perfil.js?v=20260924-26"></script>
+    <script src="./js/loja.js?v=20260924-26"></script>
+    <script src="./js/core.js?v=20260924-26"></script>
+    <script src="./js/sudoku.js?v=20260924-26"></script>
+    <script src="./js/velha.js?v=20260924-26"></script>
+    <script src="./js/ludo.js?v=20260924-26"></script>
+    <script src="./js/campo.js?v=20260924-26"></script>
+    <script src="./js/termo.js?v=20260924-26"></script>
+    <script src="./js/tela.js?v=20260924-26"></script>
   </body>
 </html>

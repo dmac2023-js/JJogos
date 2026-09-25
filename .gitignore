@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .env
+.discord-profile/
+.vscode/
+economia.json

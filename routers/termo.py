@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from shared.config import ARQUIVO_TERMO_PALAVRAS_VALIDAS
+from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 from shared.recordes import (
@@ -210,6 +211,7 @@ def salvar_record_termo(dados: NovoRecordTermo):
         raise HTTPException(status_code=400, detail="Dificuldade inválida.")
     registrar_vitoria_termo(dados.nick, dados.nome, dados.avatar,
                             dados.tentativas, dados.dificuldade)
+    creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
     recordes = carregar_recordes()
     ranking = ranking_vitorias(recordes.get("termo_vitorias", []),
                                dificuldade=dados.dificuldade, limite=10)
@@ -581,6 +583,7 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p["venceu"] = venceu_agora
                     if venceu_agora:
                         s["placar"][slot] = s.get("placar", {}).get(slot, 0) + 1
+                        creditar_moedas(p.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                     outro = "p2" if slot == "p1" else "p1"
                     p_outro = s["slots"].get(outro)
                     if p_outro and p_outro.get("ws"):
@@ -653,6 +656,7 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p_outro["completou"] = True
                     p_outro["venceu"] = True
                     s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                    creditar_moedas(p_outro.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                     s["fase"] = "parcial"
                     try:
                         await p_outro["ws"].send_json({
@@ -693,6 +697,7 @@ async def ws_termo(websocket: WebSocket, sala: str):
                 p_outro["completou"] = True
                 p_outro["venceu"] = True
                 s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                creditar_moedas(p_outro.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                 s["fase"] = "parcial"
                 try:
                     await p_outro["ws"].send_json({
@@ -713,6 +718,7 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p_outro["completou"] = True
                     p_outro["venceu"] = True
                     s["placar"][outro] = s["placar"].get(outro, 0) + 1
+                    creditar_moedas(p_outro.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                     s["fase"] = "parcial"
                     try:
                         await p_outro["ws"].send_json({

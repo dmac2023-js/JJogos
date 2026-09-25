@@ -18,8 +18,15 @@ load_dotenv()
 PASTA_BASE = Path(__file__).resolve().parent.parent
 PASTA_STATIC = PASTA_BASE / "static"
 ARQUIVO_RECORDES = PASTA_BASE / "recordes.json"
+ARQUIVO_ECONOMIA = PASTA_BASE / "economia.json"
 ARQUIVO_TERMO_PALAVRAS_VALIDAS = PASTA_BASE / "termo_palavras_validas.txt"
 DISCORD_APPLICATION_ID = os.getenv("DISCORD_APPLICATION_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY", "")
 OAUTH_REDIRECT_PADRAO = "https://jogos7.onrender.com/auth/callback"
+
+# Upstash Redis (REST) — guarda recordes.json e economia.json fora do disco
+# do Render, que é efêmero e reseta a cada deploy. Sem essas duas variáveis
+# configuradas, cai pro arquivo local (bom pra rodar em dev).
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL", "").strip() or None
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "").strip() or None

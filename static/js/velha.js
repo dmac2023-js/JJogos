@@ -308,9 +308,10 @@ async function salvarRecordVelha() {
     await fetch("./velha/recordes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar }),
+      body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar, modo: velhaModo }),
     });
     carregarRankingVelha();
+    atualizarMoedasHeader();
     registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
   } catch (e) { /* ignore */ }
 }

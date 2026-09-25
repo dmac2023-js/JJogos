@@ -422,9 +422,12 @@ function renderAuth() {
       usuarioDiscord.global_name || usuarioDiscord.username;
     // Na Activity a identidade vem do SDK — logout local não faria sentido.
     document.querySelector("#btn-logout-discord").style.display = dentroDaActivity() ? "none" : "";
+    if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
   } else {
     caixa.style.display = "none";
     botaoLogin.style.display = dentroDaActivity() ? "none" : "";
+    var botaoLoja = document.querySelector("#btn-abrir-loja");
+    if (botaoLoja) botaoLoja.style.display = "none";
   }
 }
 

@@ -1,19 +1,15 @@
 """Persistência e ranking de recordes — compartilhado por todos os jogos."""
-import json
 from typing import Optional
 
 from shared.config import ARQUIVO_RECORDES
+from shared.db import carregar_json, salvar_json
 
 # ---------------------------------------------------------------------------
 # Recordes — persistência
 # ---------------------------------------------------------------------------
 
 def carregar_recordes() -> dict:
-    if ARQUIVO_RECORDES.exists():
-        with open(ARQUIVO_RECORDES, "r", encoding="utf-8") as f:
-            dados = json.load(f)
-    else:
-        dados = {}
+    dados = carregar_json("jjogos:recordes", ARQUIVO_RECORDES)
     dados.setdefault("sudoku", {"facil": [], "medio": [], "dificil": []})
     dados.setdefault("velha", {"facil": [], "medio": [], "dificil": []})
     dados.setdefault("velha_vitorias", [])
@@ -25,8 +21,7 @@ def carregar_recordes() -> dict:
 
 
 def salvar_recordes(recordes: dict) -> None:
-    with open(ARQUIVO_RECORDES, "w", encoding="utf-8") as f:
-        json.dump(recordes, f, ensure_ascii=False, indent=2)
+    salvar_json("jjogos:recordes", recordes, ARQUIVO_RECORDES)
 
 
 def eh_anonimo(nick: str) -> bool:

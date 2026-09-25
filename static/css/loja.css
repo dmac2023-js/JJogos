@@ -1,0 +1,32 @@
+/* Loja — moedas, decorações de avatar e cor do nick. */
+
+#btn-abrir-loja { display: flex; align-items: center; gap: 6px; }
+.loja-moeda-icone { font-size: 15px; }
+
+.loja-secao { margin-bottom: 28px; }
+.loja-secao h3 { color: #9dc2ff; font-size: 15px; margin-bottom: 12px; }
+.loja-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+
+.loja-item {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  border: 1px solid #20293f; border-radius: 14px; padding: 14px;
+  background: #111a2e; text-align: center;
+}
+.loja-item.equipado { border-color: #4c8cff; box-shadow: 0 0 0 1px #4c8cff inset; }
+.loja-item-img { width: 64px; height: 64px; object-fit: contain; }
+.loja-item-nome { font-size: 12px; color: #c9ccda; }
+.loja-cor-amostra { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2d4470; display: inline-block; }
+
+/* Cor de nick animada — cicla o matiz continuamente. */
+.nick-arco-iris {
+  background-image: linear-gradient(90deg, #ff5b5b, #ffd36a, #7ddea3, #5b9dff, #c9a6ff, #ff5b5b);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: loja-arco-iris 4s linear infinite;
+}
+@keyframes loja-arco-iris {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}

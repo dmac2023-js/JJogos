@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, creditar_moedas
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 from shared.recordes import carregar_recordes, eh_anonimo, ranking_top, salvar_recordes
@@ -68,9 +69,11 @@ LUDO_BASES = {
 
 
 def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
-    """Vitória global no Ludo (permanente; anônimo não conta)."""
+    """Vitória global no Ludo (permanente; anônimo não conta). Ludo só existe
+    online (não tem modo solo), então toda vitória vale moeda de multiplayer."""
     if eh_anonimo(nick):
         return
+    creditar_moedas(nome, MOEDAS_VITORIA_MULTIPLAYER)
     recordes = carregar_recordes()
     vitorias = recordes.setdefault("ludo_vitorias", [])
     for v in vitorias:

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
 from shared.game_store import jogos
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
@@ -391,6 +392,7 @@ def salvar_novo_record(dados: NovoRecord):
     recordes["sudoku"][dados.dificuldade].sort(key=lambda r: r["tempo_segundos"])
     recordes["sudoku"][dados.dificuldade] = recordes["sudoku"][dados.dificuldade][:50]
     salvar_recordes(recordes)
+    creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
 
     top3 = ranking_top(recordes["sudoku"][dados.dificuldade], "tempo_segundos", reverse=False)
     return {"dificuldade": dados.dificuldade, "recordes": top3}
@@ -618,6 +620,7 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                     s["vencedor_rodada"] = slot
                     s["placar"][slot] = s["placar"].get(slot, 0) + 1
                     s["fase"] = "parcial"
+                    creditar_moedas(p.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                     await broadcast_sudoku(sala, {
                         "tipo": "vencedor_rodada",
                         "slot": slot,

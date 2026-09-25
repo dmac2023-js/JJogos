@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
 from shared.game_store import jogos
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
@@ -438,6 +439,7 @@ def salvar_record_campo(dados: NovoRecordCampo):
         salvar_recordes(recordes)
         registrar_vitoria_campo(dados.nick, dados.nome, dados.avatar,
                                 dados.tempo_segundos, dados.dificuldade)
+        creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
 
     recordes = carregar_recordes()
     top3 = ranking_top(recordes["campo_minado"].get(dados.dificuldade, []),
@@ -597,6 +599,7 @@ async def ws_campo(websocket: WebSocket, sala: str):
                             p_outro.get("nick", "—"), p_outro.get("nome", ""),
                             p_outro.get("avatar"), tempo_outro,
                             s.get("dificuldade", "facil"))
+                        creditar_moedas(p_outro.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": outro,
@@ -639,6 +642,7 @@ async def ws_campo(websocket: WebSocket, sala: str):
                             p.get("nick", "—"), p.get("nome", ""),
                             p.get("avatar"), tempo_s,
                             s.get("dificuldade", "facil"))
+                        creditar_moedas(p.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": slot,
