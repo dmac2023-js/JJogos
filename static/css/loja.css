@@ -1,31 +1,52 @@
-/* Loja — moedas, decorações de avatar e cor do nick. */
+/* Loja — moedas, decorações de avatar e cor do nick (nametag). */
 
-#btn-abrir-loja { display: flex; align-items: center; gap: 6px; }
+.loja-moeda-botao { display: flex; align-items: center; gap: 6px; }
 .loja-moeda-icone { font-size: 15px; }
 
 .loja-secao { margin-bottom: 28px; }
 .loja-secao h3 { color: #9dc2ff; font-size: 15px; margin-bottom: 12px; }
-.loja-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
-
-/* Loja de decorações: 12 por página, 4x3 no desktop e 2 colunas no mobile. */
-#loja-decoracoes .loja-grade { grid-template-columns: repeat(4, 1fr); }
+.loja-grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 @media (max-width: 720px) {
-  #loja-decoracoes .loja-grade { grid-template-columns: repeat(3, 1fr); }
+  .loja-grade { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 480px) {
-  #loja-decoracoes .loja-grade { grid-template-columns: repeat(2, 1fr); }
+  .loja-grade { grid-template-columns: repeat(2, 1fr); }
 }
 
-.loja-paginacao { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
-.loja-paginacao-info { color: #aeb2c7; font-size: 13px; }
-.loja-paginacao button:disabled { opacity: 0.4; cursor: default; }
+/* Menu principal da loja: Nametags / Decorações de perfil. */
+.loja-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 8px; }
+@media (max-width: 480px) {
+  .loja-menu { grid-template-columns: 1fr; }
+}
 
+.loja-sub-voltar { margin-bottom: 18px; border: 0; padding: 0; color: #7db4ff; background: transparent; cursor: pointer; font-size: 13px; }
+.loja-sub-voltar:hover { text-decoration: underline; }
+
+/* Pré-visualização (nametag ou decoração sobre o avatar). */
+.loja-preview {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  border: 1px solid #20293f; border-radius: 14px; padding: 20px;
+  background: #0d1526; margin-bottom: 20px;
+}
+.loja-preview-titulo { color: #7d859c; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.loja-preview-cor-texto,
+#loja-preview-cor-texto { font-size: 22px; font-weight: bold; }
+.loja-preview-avatar-box { position: relative; width: 96px; height: 96px; display: inline-block; }
+.loja-preview-avatar-img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: #1c2c4a; }
+.loja-preview-decoracao-img { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: contain; pointer-events: none; }
+.loja-preview-nome { color: #c9ccda; font-size: 13px; }
+
+/* Cards de item (cor ou decoração). */
 .loja-item {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   border: 1px solid #20293f; border-radius: 14px; padding: 14px;
-  background: #111a2e; text-align: center;
+  background: #111a2e; text-align: center; cursor: pointer;
 }
+.loja-item:hover { border-color: #3b82f6; }
 .loja-item.equipado { border-color: #4c8cff; box-shadow: 0 0 0 1px #4c8cff inset; }
+
+.loja-preco-botao { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+.loja-preco-botao:disabled { opacity: 0.45; cursor: default; }
 
 /* Decoração fica parada por padrão; anima só com o mouse em cima (o CDN da
    Discord só anima em .png/APNG — trocamos por opacidade pra não recarregar
@@ -38,6 +59,10 @@
 .loja-item:hover .loja-item-img-animada { opacity: 1; }
 .loja-item-nome { font-size: 12px; color: #c9ccda; }
 .loja-cor-amostra { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2d4470; display: inline-block; }
+
+.loja-paginacao { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+.loja-paginacao-info { color: #aeb2c7; font-size: 13px; }
+.loja-paginacao button:disabled { opacity: 0.4; cursor: default; }
 
 /* Cor de nick animada — cicla o matiz continuamente. */
 .nick-arco-iris {

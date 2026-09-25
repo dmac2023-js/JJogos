@@ -1,8 +1,10 @@
-// Loja — moedas, decorações de perfil (avatar decoration) e cor do nick.
+// Loja — moedas, decorações de perfil (avatar decoration) e cor do nick (nametag).
 
 let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], equipado: { decoracao: null, cor_nick: null } };
 let lojaPaginaDecoracoes = 0;
+let lojaCorSelecionada = null;
+let lojaDecoracaoSelecionadaSku = null;
 const LOJA_DECORACOES_POR_PAGINA = 12;
 const LOJA_CORES_HEX = {
   azul: "#5b9dff", verde: "#7ddea3", vermelho: "#ff8a8a", amarelo: "#ffd36a",
@@ -26,17 +28,20 @@ async function atualizarMoedasHeader() {
   } catch (e) { /* ignore */ }
 }
 
+function aplicarCorEmElemento(el, cor) {
+  el.classList.remove("nick-arco-iris");
+  el.style.color = "";
+  if (cor === "arco-iris") {
+    el.classList.add("nick-arco-iris");
+  } else if (cor && LOJA_CORES_HEX[cor]) {
+    el.style.color = LOJA_CORES_HEX[cor];
+  }
+}
+
 function aplicarCosmeticosHeader() {
   var nomeEl = document.querySelector("#auth-nome");
   if (!nomeEl) return;
-  nomeEl.classList.remove("nick-arco-iris");
-  nomeEl.style.color = "";
-  var cor = minhaCarteira.equipado && minhaCarteira.equipado.cor_nick;
-  if (cor === "arco-iris") {
-    nomeEl.classList.add("nick-arco-iris");
-  } else if (cor && LOJA_CORES_HEX[cor]) {
-    nomeEl.style.color = LOJA_CORES_HEX[cor];
-  }
+  aplicarCorEmElemento(nomeEl, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
 }
 
 async function carregarCatalogoLoja() {
@@ -45,66 +50,194 @@ async function carregarCatalogoLoja() {
   return lojaCatalogo;
 }
 
+function ordenarPossuidosPrimeiro(lista, chaveDe, possuidos) {
+  return lista
+    .map(function (item, indice) { return { item: item, indice: indice }; })
+    .sort(function (a, b) {
+      var pa = possuidos.indexOf(chaveDe(a.item)) !== -1 ? 0 : 1;
+      var pb = possuidos.indexOf(chaveDe(b.item)) !== -1 ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return a.indice - b.indice;
+    })
+    .map(function (par) { return par.item; });
+}
+
+// ---------------------------------------------------------------------------
+// Navegação: menu principal <-> nametags / decorações
+// ---------------------------------------------------------------------------
+function lojaMostrarMenu() {
+  document.querySelector("#loja-menu").style.display = "";
+  document.querySelector("#loja-secao-cores").style.display = "none";
+  document.querySelector("#loja-secao-decoracoes").style.display = "none";
+}
+
+function lojaMostrarSecaoCores() {
+  document.querySelector("#loja-menu").style.display = "none";
+  document.querySelector("#loja-secao-cores").style.display = "";
+  document.querySelector("#loja-secao-decoracoes").style.display = "none";
+  renderLojaCores();
+}
+
+function lojaMostrarSecaoDecoracoes() {
+  document.querySelector("#loja-menu").style.display = "none";
+  document.querySelector("#loja-secao-cores").style.display = "none";
+  document.querySelector("#loja-secao-decoracoes").style.display = "";
+  renderLojaDecoracoes();
+}
+
 async function abrirLoja() {
   mostrarTela(document.querySelector("#tela-loja"));
   await garantirIdentidade();
   await atualizarMoedasHeader();
   await carregarCatalogoLoja();
   lojaPaginaDecoracoes = 0;
-  renderLoja();
-}
-
-function renderLoja() {
-  if (!lojaCatalogo) return;
+  lojaCorSelecionada = null;
+  lojaDecoracaoSelecionadaSku = null;
   document.querySelector("#loja-saldo").textContent = minhaCarteira.saldo;
   document.querySelector("#loja-preco-decoracao").textContent = lojaCatalogo.preco_decoracao;
   document.querySelector("#loja-preco-cor").textContent = lojaCatalogo.preco_cor_nick;
-  renderLojaDecoracoes();
-  renderLojaCores();
+  lojaMostrarMenu();
 }
 
-function lojaBotaoAcao(possui, equipado, preco, aoComprar, aoEquipar) {
-  var botao = document.createElement("button");
-  botao.className = "botao";
-  if (equipado) {
-    botao.textContent = "Equipada";
-    botao.disabled = true;
-  } else if (possui) {
-    botao.textContent = "Equipar";
-    botao.addEventListener("click", aoEquipar);
+function lojaAtualizarSaldoTelas() {
+  var saldoEl = document.querySelector("#loja-saldo");
+  if (saldoEl) saldoEl.textContent = minhaCarteira.saldo;
+  var badge = document.querySelector("#moedas-valor");
+  if (badge) badge.textContent = minhaCarteira.saldo;
+}
+
+// ---------------------------------------------------------------------------
+// Nametags (cor do nick)
+// ---------------------------------------------------------------------------
+function lojaPreviewCor(cor) {
+  lojaCorSelecionada = cor;
+  var caixa = document.querySelector("#loja-preview-cor");
+  var texto = document.querySelector("#loja-preview-cor-texto");
+  texto.textContent = nomeExibicao();
+  aplicarCorEmElemento(texto, cor);
+  caixa.style.display = "";
+}
+
+async function lojaCliqueCor(cor) {
+  var possui = minhaCarteira.cores_nick.indexOf(cor) !== -1;
+  var equipada = minhaCarteira.equipado.cor_nick === cor;
+  if (equipada) return;
+  if (!possui) {
+    await comprarCor(cor);
   } else {
-    botao.textContent = "Comprar (" + preco + ")";
-    botao.disabled = minhaCarteira.saldo < preco;
-    botao.addEventListener("click", aoComprar);
+    await equiparItem("cor_nick", cor);
   }
+}
+
+function renderLojaCores() {
+  var alvo = document.querySelector("#loja-cores");
+  if (!alvo) return;
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar cores.</p>';
+    return;
+  }
+  alvo.innerHTML = "";
+  var cores = lojaCatalogo.cores_nick.slice();
+  if (lojaCatalogo.tem_arco_iris) cores.push("arco-iris");
+  cores = ordenarPossuidosPrimeiro(cores, function (c) { return c; }, minhaCarteira.cores_nick);
+
+  cores.forEach(function (cor) {
+    var possui = minhaCarteira.cores_nick.indexOf(cor) !== -1;
+    var equipada = minhaCarteira.equipado.cor_nick === cor;
+    var card = document.createElement("div");
+    card.className = "loja-item" + (equipada ? " equipado" : "");
+    card.addEventListener("click", function () { lojaPreviewCor(cor); });
+
+    var amostra = document.createElement("span");
+    amostra.className = "loja-cor-amostra" + (cor === "arco-iris" ? " nick-arco-iris" : "");
+    if (cor !== "arco-iris") amostra.style.background = LOJA_CORES_HEX[cor] || "#fff";
+    card.appendChild(amostra);
+
+    var label = document.createElement("span");
+    label.className = "loja-item-nome";
+    label.textContent = cor === "arco-iris" ? "Arco-íris" : cor.charAt(0).toUpperCase() + cor.slice(1);
+    card.appendChild(label);
+
+    card.appendChild(lojaBotaoPreco(lojaCatalogo.preco_cor_nick, possui, equipada, function (ev) {
+      ev.stopPropagation();
+      lojaPreviewCor(cor);
+      lojaCliqueCor(cor);
+    }));
+    alvo.appendChild(card);
+  });
+
+  if (minhaCarteira.equipado.cor_nick) {
+    var limpar = document.createElement("button");
+    limpar.className = "botao-copiar";
+    limpar.textContent = "Remover cor";
+    limpar.addEventListener("click", function () { equiparItem("cor_nick", null); });
+    alvo.appendChild(limpar);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Decorações de perfil
+// ---------------------------------------------------------------------------
+function lojaPreviewDecoracao(item) {
+  lojaDecoracaoSelecionadaSku = item.sku_id;
+  var avatarImg = document.querySelector("#loja-preview-avatar-img");
+  var decoImg = document.querySelector("#loja-preview-decoracao-img");
+  var nomeEl = document.querySelector("#loja-preview-decoracao-nome");
+  avatarImg.src = avatarAtual() || "https://cdn.discordapp.com/embed/avatars/0.png";
+  decoImg.src = item.imagem_animada || item.imagem;
+  decoImg.style.display = "";
+  nomeEl.textContent = item.nome;
+}
+
+async function lojaCliqueDecoracao(item) {
+  var possui = minhaCarteira.decoracoes.indexOf(item.sku_id) !== -1;
+  var equipada = minhaCarteira.equipado.decoracao === item.sku_id;
+  if (equipada) return;
+  if (!possui) {
+    await comprarDecoracao(item.sku_id);
+  } else {
+    await equiparItem("decoracao", item.sku_id);
+  }
+}
+
+function lojaBotaoPreco(preco, possui, equipada, aoClicar) {
+  var botao = document.createElement("button");
+  botao.className = "botao loja-preco-botao";
+  botao.innerHTML = '<span class="loja-moeda-icone">🪙</span> ' + preco;
+  botao.disabled = equipada || (!possui && minhaCarteira.saldo < preco);
+  botao.addEventListener("click", aoClicar);
   return botao;
 }
 
 function renderLojaDecoracoes() {
   var alvo = document.querySelector("#loja-decoracoes");
+  var paginacaoAlvo = document.querySelector("#loja-decoracoes-paginacao");
   if (!alvo) return;
   if (!usuarioDiscord) {
     alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar decorações.</p>';
+    paginacaoAlvo.innerHTML = "";
     return;
   }
   if (!lojaCatalogo.decoracoes.length) {
     alvo.innerHTML = '<p class="perfil-vazio">Nenhuma decoração disponível no momento.</p>';
+    paginacaoAlvo.innerHTML = "";
     return;
   }
-  alvo.innerHTML = "";
 
-  var totalPaginas = Math.max(1, Math.ceil(lojaCatalogo.decoracoes.length / LOJA_DECORACOES_POR_PAGINA));
+  var lista = ordenarPossuidosPrimeiro(lojaCatalogo.decoracoes, function (d) { return d.sku_id; }, minhaCarteira.decoracoes);
+  var totalPaginas = Math.max(1, Math.ceil(lista.length / LOJA_DECORACOES_POR_PAGINA));
   if (lojaPaginaDecoracoes >= totalPaginas) lojaPaginaDecoracoes = totalPaginas - 1;
   var inicio = lojaPaginaDecoracoes * LOJA_DECORACOES_POR_PAGINA;
-  var pagina = lojaCatalogo.decoracoes.slice(inicio, inicio + LOJA_DECORACOES_POR_PAGINA);
+  var pagina = lista.slice(inicio, inicio + LOJA_DECORACOES_POR_PAGINA);
 
-  var grade = document.createElement("div");
-  grade.className = "loja-grade";
+  alvo.innerHTML = "";
   pagina.forEach(function (item) {
     var possui = minhaCarteira.decoracoes.indexOf(item.sku_id) !== -1;
     var equipada = minhaCarteira.equipado.decoracao === item.sku_id;
     var card = document.createElement("div");
     card.className = "loja-item" + (equipada ? " equipado" : "");
+    card.addEventListener("click", function () { lojaPreviewDecoracao(item); });
+
     var moldura = document.createElement("span");
     moldura.className = "loja-item-imgbox";
     var imgParada = document.createElement("img");
@@ -122,21 +255,22 @@ function renderLojaDecoracoes() {
       moldura.appendChild(imgAnimada);
     }
     card.appendChild(moldura);
+
     var nome = document.createElement("span");
     nome.className = "loja-item-nome";
     nome.textContent = item.nome;
     card.appendChild(nome);
-    card.appendChild(lojaBotaoAcao(possui, equipada, lojaCatalogo.preco_decoracao,
-      function () { comprarDecoracao(item.sku_id); },
-      function () { equiparItem("decoracao", item.sku_id); }));
-    grade.appendChild(card);
+
+    card.appendChild(lojaBotaoPreco(lojaCatalogo.preco_decoracao, possui, equipada, function (ev) {
+      ev.stopPropagation();
+      lojaPreviewDecoracao(item);
+      lojaCliqueDecoracao(item);
+    }));
+    alvo.appendChild(card);
   });
-  alvo.appendChild(grade);
 
+  paginacaoAlvo.innerHTML = "";
   if (totalPaginas > 1) {
-    var paginacao = document.createElement("div");
-    paginacao.className = "loja-paginacao";
-
     var botaoAnterior = document.createElement("button");
     botaoAnterior.className = "botao-copiar";
     botaoAnterior.textContent = "← Anterior";
@@ -145,12 +279,12 @@ function renderLojaDecoracoes() {
       lojaPaginaDecoracoes--;
       renderLojaDecoracoes();
     });
-    paginacao.appendChild(botaoAnterior);
+    paginacaoAlvo.appendChild(botaoAnterior);
 
     var info = document.createElement("span");
     info.className = "loja-paginacao-info";
     info.textContent = "Página " + (lojaPaginaDecoracoes + 1) + " de " + totalPaginas;
-    paginacao.appendChild(info);
+    paginacaoAlvo.appendChild(info);
 
     var botaoProxima = document.createElement("button");
     botaoProxima.className = "botao-copiar";
@@ -160,9 +294,7 @@ function renderLojaDecoracoes() {
       lojaPaginaDecoracoes++;
       renderLojaDecoracoes();
     });
-    paginacao.appendChild(botaoProxima);
-
-    alvo.appendChild(paginacao);
+    paginacaoAlvo.appendChild(botaoProxima);
   }
 
   if (minhaCarteira.equipado.decoracao) {
@@ -174,43 +306,9 @@ function renderLojaDecoracoes() {
   }
 }
 
-function renderLojaCores() {
-  var alvo = document.querySelector("#loja-cores");
-  if (!alvo) return;
-  if (!usuarioDiscord) {
-    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar cores.</p>';
-    return;
-  }
-  alvo.innerHTML = "";
-  var cores = lojaCatalogo.cores_nick.slice();
-  if (lojaCatalogo.tem_arco_iris) cores.push("arco-iris");
-  cores.forEach(function (cor) {
-    var possui = minhaCarteira.cores_nick.indexOf(cor) !== -1;
-    var equipada = minhaCarteira.equipado.cor_nick === cor;
-    var card = document.createElement("div");
-    card.className = "loja-item" + (equipada ? " equipado" : "");
-    var amostra = document.createElement("span");
-    amostra.className = "loja-cor-amostra" + (cor === "arco-iris" ? " nick-arco-iris" : "");
-    if (cor !== "arco-iris") amostra.style.background = LOJA_CORES_HEX[cor] || "#fff";
-    card.appendChild(amostra);
-    var label = document.createElement("span");
-    label.className = "loja-item-nome";
-    label.textContent = cor === "arco-iris" ? "Arco-íris" : cor.charAt(0).toUpperCase() + cor.slice(1);
-    card.appendChild(label);
-    card.appendChild(lojaBotaoAcao(possui, equipada, lojaCatalogo.preco_cor_nick,
-      function () { comprarCor(cor); },
-      function () { equiparItem("cor_nick", cor); }));
-    alvo.appendChild(card);
-  });
-  if (minhaCarteira.equipado.cor_nick) {
-    var limpar = document.createElement("button");
-    limpar.className = "botao-copiar";
-    limpar.textContent = "Remover cor";
-    limpar.addEventListener("click", function () { equiparItem("cor_nick", null); });
-    alvo.appendChild(limpar);
-  }
-}
-
+// ---------------------------------------------------------------------------
+// Compra / equipar
+// ---------------------------------------------------------------------------
 async function comprarDecoracao(skuId) {
   try {
     var resp = await fetch("./economia/comprar/decoracao", {
@@ -225,8 +323,9 @@ async function comprarDecoracao(skuId) {
     }
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
-    document.querySelector("#moedas-valor").textContent = minhaCarteira.saldo;
-    renderLoja();
+    lojaAtualizarSaldoTelas();
+    lojaPaginaDecoracoes = 0;
+    renderLojaDecoracoes();
   } catch (e) { alert("Não foi possível comprar agora."); }
 }
 
@@ -244,8 +343,8 @@ async function comprarCor(cor) {
     }
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
-    document.querySelector("#moedas-valor").textContent = minhaCarteira.saldo;
-    renderLoja();
+    lojaAtualizarSaldoTelas();
+    renderLojaCores();
   } catch (e) { alert("Não foi possível comprar agora."); }
 }
 
@@ -259,7 +358,12 @@ async function equiparItem(tipo, valor) {
     if (!resp.ok) return;
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
-    renderLoja();
+    if (tipo === "decoracao") {
+      lojaPaginaDecoracoes = 0;
+      renderLojaDecoracoes();
+    } else {
+      renderLojaCores();
+    }
   } catch (e) { /* ignore */ }
 }
 
@@ -275,12 +379,16 @@ async function tentarBonusAtividade() {
     var dados = await resp.json();
     if (dados.creditado) {
       minhaCarteira.saldo = dados.saldo;
-      var badge = document.querySelector("#moedas-valor");
-      if (badge) badge.textContent = dados.saldo;
+      lojaAtualizarSaldoTelas();
     }
   } catch (e) { /* ignore */ }
 }
 
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
+document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);
+document.querySelector("#loja-btn-decoracoes").addEventListener("click", lojaMostrarSecaoDecoracoes);
+document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
+  botao.addEventListener("click", lojaMostrarMenu);
+});
 setInterval(tentarBonusAtividade, 60 * 1000);
 setTimeout(tentarBonusAtividade, 5000);

@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260925-02" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260925-02" />
+    <link rel="stylesheet" href="./css/base.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260925-03" />
   </head>
   <body>
     <main class="aplicacao">
@@ -31,8 +31,8 @@
               <img id="auth-avatar" alt="" />
               <span id="auth-nome"></span>
             </button>
-            <button id="btn-abrir-loja" class="botao-copiar" title="Loja de decorações e cores" style="display:none;">
-              <span class="loja-moeda-icone">🪙</span> <span id="moedas-valor">0</span> Loja
+            <button id="btn-abrir-loja" class="botao-copiar loja-moeda-botao" title="Loja de decorações e cores" style="display:none;">
+              <span class="loja-moeda-icone">🪙</span> <span id="moedas-valor">0</span>
             </button>
             <button id="btn-logout-discord" class="botao-copiar">Sair</button>
           </div>
@@ -941,14 +941,49 @@
           <p>Troque suas moedas por decorações de perfil e cores de nick. Saldo: <strong id="loja-saldo">0</strong> moedas.</p>
         </div>
 
-        <div class="loja-secao">
-          <h3>Decorações de perfil (<span id="loja-preco-decoracao">70</span> moedas)</h3>
-          <div id="loja-decoracoes" class="loja-grade"></div>
+        <!-- Menu principal: escolher entre nametags (cor do nick) e decorações -->
+        <div id="loja-menu" class="loja-menu">
+          <button id="loja-btn-nametags" class="botao-modo">
+            <span class="icone">🏷️</span>
+            <strong>Nametags</strong>
+            <small>Cor do nick, pra você e pra todo mundo</small>
+          </button>
+          <button id="loja-btn-decoracoes" class="botao-modo">
+            <span class="icone">🖼️</span>
+            <strong>Decorações de perfil</strong>
+            <small>Decore ao redor da sua foto</small>
+          </button>
         </div>
 
-        <div class="loja-secao">
+        <!-- Seção Nametags -->
+        <div id="loja-secao-cores" class="loja-secao loja-subsecao" style="display:none;">
+          <button class="loja-sub-voltar" data-alvo="loja-menu">&larr; Voltar à loja</button>
           <h3>Cor do nick (<span id="loja-preco-cor">30</span> moedas)</h3>
+
+          <div id="loja-preview-cor" class="loja-preview loja-preview-cor" style="display:none;">
+            <span class="loja-preview-titulo">Prévia</span>
+            <span id="loja-preview-cor-texto" class="perfil-nome"></span>
+          </div>
+
           <div id="loja-cores" class="loja-grade"></div>
+        </div>
+
+        <!-- Seção Decorações de perfil -->
+        <div id="loja-secao-decoracoes" class="loja-secao loja-subsecao" style="display:none;">
+          <button class="loja-sub-voltar" data-alvo="loja-menu">&larr; Voltar à loja</button>
+          <h3>Decorações de perfil (<span id="loja-preco-decoracao">70</span> moedas)</h3>
+
+          <div id="loja-preview-decoracao" class="loja-preview loja-preview-decoracao">
+            <span class="loja-preview-titulo">Prévia</span>
+            <span class="loja-preview-avatar-box">
+              <img id="loja-preview-avatar-img" class="loja-preview-avatar-img" alt="" />
+              <img id="loja-preview-decoracao-img" class="loja-preview-decoracao-img" alt="" style="display:none;" />
+            </span>
+            <span id="loja-preview-decoracao-nome" class="loja-preview-nome"></span>
+          </div>
+
+          <div id="loja-decoracoes" class="loja-grade"></div>
+          <div id="loja-decoracoes-paginacao" class="loja-paginacao"></div>
         </div>
       </section>
 
@@ -958,14 +993,14 @@
       </footer>
     </main>
 
-    <script src="./js/perfil.js?v=20260925-02"></script>
-    <script src="./js/loja.js?v=20260925-02"></script>
-    <script src="./js/core.js?v=20260925-02"></script>
-    <script src="./js/sudoku.js?v=20260925-02"></script>
-    <script src="./js/velha.js?v=20260925-02"></script>
-    <script src="./js/ludo.js?v=20260925-02"></script>
-    <script src="./js/campo.js?v=20260925-02"></script>
-    <script src="./js/termo.js?v=20260925-02"></script>
-    <script src="./js/tela.js?v=20260925-02"></script>
+    <script src="./js/perfil.js?v=20260925-03"></script>
+    <script src="./js/loja.js?v=20260925-03"></script>
+    <script src="./js/core.js?v=20260925-03"></script>
+    <script src="./js/sudoku.js?v=20260925-03"></script>
+    <script src="./js/velha.js?v=20260925-03"></script>
+    <script src="./js/ludo.js?v=20260925-03"></script>
+    <script src="./js/campo.js?v=20260925-03"></script>
+    <script src="./js/termo.js?v=20260925-03"></script>
+    <script src="./js/tela.js?v=20260925-03"></script>
   </body>
 </html>
