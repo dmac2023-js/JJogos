@@ -13,8 +13,11 @@
   .loja-grade { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Menu principal da loja: Nametags / Decorações de perfil. */
-.loja-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 8px; }
+/* Menu principal da loja: Nametags / Decorações de perfil / Roleta. */
+.loja-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 8px; }
+@media (max-width: 720px) {
+  .loja-menu { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 480px) {
   .loja-menu { grid-template-columns: 1fr; }
 }
@@ -63,6 +66,52 @@
 .loja-paginacao { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
 .loja-paginacao-info { color: #aeb2c7; font-size: 13px; }
 .loja-paginacao button:disabled { opacity: 0.4; cursor: default; }
+
+/* Roleta da sorte. */
+.loja-roleta-area { position: relative; width: 260px; height: 260px; margin: 12px auto 20px; }
+.loja-roleta-ponteiro {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0; z-index: 2;
+  border-left: 12px solid transparent; border-right: 12px solid transparent;
+  border-top: 20px solid #f4f6ff; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
+}
+.loja-roleta-roda {
+  width: 260px; height: 260px; border-radius: 50%;
+  border: 4px solid #2d4470; box-shadow: 0 0 0 2px #0d1526 inset, 0 8px 24px rgba(0,0,0,0.4);
+  position: relative;
+  background: conic-gradient(from 0deg,
+    #ffd36a 0% 15%,
+    #7ddea3 15% 25%,
+    #ff8a8a 25% 45%,
+    #c9a6ff 45% 55%,
+    #ff8a8a 55% 75%,
+    #7ddea3 75% 85%,
+    #ffd36a 85% 100%
+  );
+  transform: rotate(0deg);
+}
+.loja-roleta-cubo {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #111a2e; border: 3px solid #2d4470;
+}
+.loja-roleta-label {
+  position: absolute; top: 50%; left: 50%;
+  font-size: 13px; font-weight: bold; color: #111a2e;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  pointer-events: none; white-space: nowrap;
+}
+
+.loja-roleta-legenda { list-style: none; padding: 0; margin: 0 0 20px; display: flex; flex-direction: column; gap: 6px; }
+.loja-roleta-legenda li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c9ccda; }
+.loja-roleta-cor { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
+
+.loja-roleta-aposta { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+.loja-roleta-valor { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: bold; min-width: 90px; justify-content: center; }
+.loja-roleta-girar-btn { display: block; width: 100%; max-width: 260px; margin: 0 auto; padding: 12px; font-size: 15px; }
+.loja-roleta-girar-btn:disabled { opacity: 0.5; cursor: default; }
+.loja-roleta-resultado { text-align: center; margin-top: 14px; font-size: 14px; min-height: 20px; color: #85e0ae; }
+.loja-roleta-resultado.perda { color: #ff8a8a; }
 
 /* Cor de nick animada — cicla o matiz continuamente. */
 .nick-arco-iris {

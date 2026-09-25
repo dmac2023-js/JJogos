@@ -6,6 +6,15 @@ let lojaPaginaDecoracoes = 0;
 let lojaCorSelecionada = null;
 let lojaDecoracaoSelecionadaSku = null;
 const LOJA_DECORACOES_POR_PAGINA = 12;
+
+// Roleta da sorte.
+let lojaRoletaFatias = null;
+let lojaRoletaAngulos = null;
+let lojaRoletaApostaMinima = 10;
+let lojaRoletaApostaMultiplo = 10;
+let lojaRoletaAposta = 10;
+let lojaRoletaRotacaoAtual = 0;
+let lojaRoletaGirando = false;
 const LOJA_CORES_HEX = {
   azul: "#5b9dff", verde: "#7ddea3", vermelho: "#ff8a8a", amarelo: "#ffd36a",
   roxo: "#c9a6ff", rosa: "#ff9ecf", laranja: "#ffab66", ciano: "#7ef0e0",
@@ -69,6 +78,7 @@ function lojaMostrarMenu() {
   document.querySelector("#loja-menu").style.display = "";
   document.querySelector("#loja-secao-cores").style.display = "none";
   document.querySelector("#loja-secao-decoracoes").style.display = "none";
+  document.querySelector("#loja-secao-roleta").style.display = "none";
 }
 
 function lojaMostrarSecaoCores() {
@@ -83,6 +93,15 @@ function lojaMostrarSecaoDecoracoes() {
   document.querySelector("#loja-secao-cores").style.display = "none";
   document.querySelector("#loja-secao-decoracoes").style.display = "";
   renderLojaDecoracoes();
+}
+
+async function lojaMostrarSecaoRoleta() {
+  document.querySelector("#loja-menu").style.display = "none";
+  document.querySelector("#loja-secao-cores").style.display = "none";
+  document.querySelector("#loja-secao-decoracoes").style.display = "none";
+  document.querySelector("#loja-secao-roleta").style.display = "";
+  await carregarRoleta();
+  lojaRoletaAtualizarValor();
 }
 
 async function abrirLoja() {
@@ -367,6 +386,128 @@ async function equiparItem(tipo, valor) {
   } catch (e) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------
+// Roleta da sorte
+// ---------------------------------------------------------------------------
+async function carregarRoleta() {
+  if (lojaRoletaFatias) return;
+  var resp = await fetch("./economia/roleta");
+  var dados = await resp.json();
+  lojaRoletaFatias = dados.fatias;
+  lojaRoletaApostaMinima = dados.aposta_minima;
+  lojaRoletaApostaMultiplo = dados.aposta_multiplo;
+  lojaRoletaAposta = lojaRoletaApostaMinima;
+
+  var acumulado = 0;
+  lojaRoletaAngulos = lojaRoletaFatias.map(function (fatia) {
+    var inicio = acumulado;
+    var tamanho = (fatia.peso / 100) * 360;
+    var fim = acumulado + tamanho;
+    acumulado = fim;
+    return { inicio: inicio, fim: fim, meio: (inicio + fim) / 2 };
+  });
+
+  lojaRoletaRenderLabels();
+}
+
+function lojaRoletaRenderLabels() {
+  var roda = document.querySelector("#loja-roleta-roda");
+  roda.querySelectorAll(".loja-roleta-label").forEach(function (el) { el.remove(); });
+  var raio = 88;
+  lojaRoletaFatias.forEach(function (fatia, indice) {
+    var meio = lojaRoletaAngulos[indice].meio;
+    var rad = (meio * Math.PI) / 180;
+    var x = raio * Math.sin(rad);
+    var y = -raio * Math.cos(rad);
+    var label = document.createElement("span");
+    label.className = "loja-roleta-label";
+    label.style.left = "calc(50% + " + x + "px)";
+    label.style.top = "calc(50% + " + y + "px)";
+    label.textContent = fatia.tipo === "decoracao" ? "🎁" : fatia.label;
+    roda.appendChild(label);
+  });
+}
+
+function lojaRoletaAtualizarValor() {
+  document.querySelector("#loja-roleta-aposta-valor").textContent = lojaRoletaAposta;
+  var botaoMenos = document.querySelector("#loja-roleta-menos");
+  var botaoMais = document.querySelector("#loja-roleta-mais");
+  var botaoGirar = document.querySelector("#loja-roleta-girar");
+  botaoMenos.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
+  botaoMais.disabled = lojaRoletaAposta + lojaRoletaApostaMultiplo > minhaCarteira.saldo || lojaRoletaGirando;
+  botaoGirar.textContent = lojaRoletaGirando ? "Girando..." : "Girar";
+  botaoGirar.disabled = lojaRoletaGirando || lojaRoletaAposta > minhaCarteira.saldo || lojaRoletaAposta < lojaRoletaApostaMinima;
+}
+
+function lojaRoletaGirarPara(indice) {
+  var roda = document.querySelector("#loja-roleta-roda");
+  var meio = lojaRoletaAngulos[indice].meio;
+  var voltasExtras = 6;
+  var offsetNecessario = (360 - meio) % 360;
+  var baseAtual = lojaRoletaRotacaoAtual - (lojaRoletaRotacaoAtual % 360);
+  var alvo = baseAtual + voltasExtras * 360 + offsetNecessario;
+  if (alvo <= lojaRoletaRotacaoAtual) alvo += 360;
+  lojaRoletaRotacaoAtual = alvo;
+  roda.style.transition = "transform 4.2s cubic-bezier(0.22, 0.61, 0.36, 1)";
+  roda.style.transform = "rotate(" + alvo + "deg)";
+}
+
+function lojaRoletaMensagemResultado(dados) {
+  var resultado = dados.resultado;
+  if (resultado.tipo === "multiplicador") {
+    if (resultado.valor > 1) {
+      return { texto: "🎉 Caiu " + resultado.label + "! Você ganhou " + dados.premio_moedas + " moedas.", perda: false };
+    }
+    return { texto: "😬 Caiu " + resultado.label + ". Você recebeu " + dados.premio_moedas + " moedas de volta.", perda: true };
+  }
+  if (dados.decoracao) {
+    return { texto: "🎁 Você ganhou a decoração \"" + dados.decoracao.nome + "\" de graça!", perda: false };
+  }
+  return { texto: "🎁 Você já tem todas as decorações! Recebeu " + dados.premio_moedas + " moedas.", perda: false };
+}
+
+async function girarRoleta() {
+  if (lojaRoletaGirando) return;
+  if (lojaRoletaAposta < lojaRoletaApostaMinima || lojaRoletaAposta > minhaCarteira.saldo) return;
+
+  lojaRoletaGirando = true;
+  lojaRoletaAtualizarValor();
+  var resultadoEl = document.querySelector("#loja-roleta-resultado");
+  resultadoEl.textContent = "";
+  resultadoEl.className = "loja-roleta-resultado";
+
+  try {
+    var resp = await fetch("./economia/roleta/girar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), aposta: lojaRoletaAposta }),
+    });
+    if (!resp.ok) {
+      var erro = await resp.json().catch(function () { return {}; });
+      alert(erro.detail || "Não foi possível girar agora.");
+      lojaRoletaGirando = false;
+      lojaRoletaAtualizarValor();
+      return;
+    }
+    var dados = await resp.json();
+    lojaRoletaGirarPara(dados.fatia_indice);
+
+    setTimeout(function () {
+      minhaCarteira = dados.carteira;
+      lojaAtualizarSaldoTelas();
+      var msg = lojaRoletaMensagemResultado(dados);
+      resultadoEl.textContent = msg.texto;
+      resultadoEl.className = "loja-roleta-resultado" + (msg.perda ? " perda" : "");
+      lojaRoletaGirando = false;
+      lojaRoletaAtualizarValor();
+    }, 4300);
+  } catch (e) {
+    alert("Não foi possível girar agora.");
+    lojaRoletaGirando = false;
+    lojaRoletaAtualizarValor();
+  }
+}
+
 // Bônus de atividade — 5 moedas a cada 15 min; o servidor decide quando pode.
 async function tentarBonusAtividade() {
   if (!usuarioDiscord) return;
@@ -387,8 +528,22 @@ async function tentarBonusAtividade() {
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
 document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);
 document.querySelector("#loja-btn-decoracoes").addEventListener("click", lojaMostrarSecaoDecoracoes);
+document.querySelector("#loja-btn-roleta").addEventListener("click", lojaMostrarSecaoRoleta);
 document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
   botao.addEventListener("click", lojaMostrarMenu);
 });
+document.querySelector("#loja-roleta-menos").addEventListener("click", function () {
+  if (lojaRoletaAposta - lojaRoletaApostaMultiplo >= lojaRoletaApostaMinima) {
+    lojaRoletaAposta -= lojaRoletaApostaMultiplo;
+    lojaRoletaAtualizarValor();
+  }
+});
+document.querySelector("#loja-roleta-mais").addEventListener("click", function () {
+  if (lojaRoletaAposta + lojaRoletaApostaMultiplo <= minhaCarteira.saldo) {
+    lojaRoletaAposta += lojaRoletaApostaMultiplo;
+    lojaRoletaAtualizarValor();
+  }
+});
+document.querySelector("#loja-roleta-girar").addEventListener("click", girarRoleta);
 setInterval(tentarBonusAtividade, 60 * 1000);
 setTimeout(tentarBonusAtividade, 5000);

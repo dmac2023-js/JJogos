@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260925-03" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260925-03" />
+    <link rel="stylesheet" href="./css/base.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260925-04" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260925-04" />
   </head>
   <body>
     <main class="aplicacao">
@@ -953,6 +953,11 @@
             <strong>Decorações de perfil</strong>
             <small>Decore ao redor da sua foto</small>
           </button>
+          <button id="loja-btn-roleta" class="botao-modo">
+            <span class="icone">🎡</span>
+            <strong>Roleta da sorte</strong>
+            <small>Aposte moedas e tente multiplicar</small>
+          </button>
         </div>
 
         <!-- Seção Nametags -->
@@ -985,6 +990,35 @@
           <div id="loja-decoracoes" class="loja-grade"></div>
           <div id="loja-decoracoes-paginacao" class="loja-paginacao"></div>
         </div>
+
+        <!-- Seção Roleta da sorte -->
+        <div id="loja-secao-roleta" class="loja-secao loja-subsecao" style="display:none;">
+          <button class="loja-sub-voltar" data-alvo="loja-menu">&larr; Voltar à loja</button>
+          <h3>Roleta da sorte</h3>
+
+          <div class="loja-roleta-area">
+            <div class="loja-roleta-ponteiro"></div>
+            <div id="loja-roleta-roda" class="loja-roleta-roda">
+              <div class="loja-roleta-cubo"></div>
+            </div>
+          </div>
+
+          <ul class="loja-roleta-legenda">
+            <li><span class="loja-roleta-cor" style="background:#ffd36a;"></span> 2x moedas — 15% (2 fatias)</li>
+            <li><span class="loja-roleta-cor" style="background:#7ddea3;"></span> 1.5x moedas — 10% (2 fatias)</li>
+            <li><span class="loja-roleta-cor" style="background:#ff8a8a;"></span> Metade da aposta — 20% (2 fatias)</li>
+            <li><span class="loja-roleta-cor" style="background:#c9a6ff;"></span> Decoração grátis — 10%</li>
+          </ul>
+
+          <div class="loja-roleta-aposta">
+            <button id="loja-roleta-menos" class="botao-copiar" type="button">−10</button>
+            <span class="loja-roleta-valor"><span class="loja-moeda-icone">🪙</span> <span id="loja-roleta-aposta-valor">10</span></span>
+            <button id="loja-roleta-mais" class="botao-copiar" type="button">+10</button>
+          </div>
+
+          <button id="loja-roleta-girar" class="botao principal loja-roleta-girar-btn" type="button">Girar</button>
+          <p id="loja-roleta-resultado" class="loja-roleta-resultado"></p>
+        </div>
       </section>
 
       <footer>
@@ -993,14 +1027,14 @@
       </footer>
     </main>
 
-    <script src="./js/perfil.js?v=20260925-03"></script>
-    <script src="./js/loja.js?v=20260925-03"></script>
-    <script src="./js/core.js?v=20260925-03"></script>
-    <script src="./js/sudoku.js?v=20260925-03"></script>
-    <script src="./js/velha.js?v=20260925-03"></script>
-    <script src="./js/ludo.js?v=20260925-03"></script>
-    <script src="./js/campo.js?v=20260925-03"></script>
-    <script src="./js/termo.js?v=20260925-03"></script>
-    <script src="./js/tela.js?v=20260925-03"></script>
+    <script src="./js/perfil.js?v=20260925-04"></script>
+    <script src="./js/loja.js?v=20260925-04"></script>
+    <script src="./js/core.js?v=20260925-04"></script>
+    <script src="./js/sudoku.js?v=20260925-04"></script>
+    <script src="./js/velha.js?v=20260925-04"></script>
+    <script src="./js/ludo.js?v=20260925-04"></script>
+    <script src="./js/campo.js?v=20260925-04"></script>
+    <script src="./js/termo.js?v=20260925-04"></script>
+    <script src="./js/tela.js?v=20260925-04"></script>
   </body>
 </html>

@@ -5,6 +5,7 @@ Carteira é indexada por "nome" (o username do Discord, já usado como chave
 Discord (anônimo) não ganha nem gasta moeda nenhuma.
 """
 import json
+import secrets
 import time
 from pathlib import Path
 from typing import Optional
@@ -36,6 +37,21 @@ CORES_NICK = {
 }
 
 ARQUIVO_LOJA_DECORACOES = PASTA_BASE / "loja_decoracoes.json"
+
+# Roleta da sorte — 7 fatias intercaladas (mesma categoria nunca é vizinha),
+# peso = tamanho da fatia em % (soma sempre 100). "indice" é preenchido em
+# sortear_fatia_roleta() e usado pelo front pra girar até a fatia certa.
+ROLETA_APOSTA_MINIMA = 10
+ROLETA_APOSTA_MULTIPLO = 10
+ROLETA_FATIAS = [
+    {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
+    {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
+    {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
+    {"tipo": "decoracao", "peso": 10, "label": "Decoração grátis"},
+    {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
+    {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
+    {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
+]
 
 
 def _carregar_catalogo_decoracoes() -> list:
@@ -147,4 +163,62 @@ def tentar_reclamar_bonus(nome: str) -> dict:
         "creditado": False,
         "saldo": carteira["saldo"],
         "proximo_em_segundos": int(BONUS_INTERVALO_SEGUNDOS - passado),
+    }
+
+
+def sortear_fatia_roleta() -> dict:
+    """Sorteia uma fatia respeitando os pesos (%) de cada uma."""
+    pesos = [fatia["peso"] for fatia in ROLETA_FATIAS]
+    indice = secrets.SystemRandom().choices(range(len(ROLETA_FATIAS)), weights=pesos, k=1)[0]
+    fatia = dict(ROLETA_FATIAS[indice])
+    fatia["indice"] = indice
+    return fatia
+
+
+def sortear_decoracao_nao_possuida(carteira: dict) -> Optional[dict]:
+    possuidas = set(carteira.get("decoracoes", []))
+    candidatas = [item for item in CATALOGO_DECORACOES if item["sku_id"] not in possuidas]
+    if not candidatas:
+        return None
+    return secrets.SystemRandom().choice(candidatas)
+
+
+def girar_roleta(nome: str, aposta: int) -> dict:
+    """Aposta na roleta: debita a aposta, sorteia a fatia e aplica o prêmio
+    (moedas ou decoração). Levanta ValueError se a aposta for inválida ou o
+    saldo for insuficiente — o router traduz isso pra HTTPException."""
+    if aposta < ROLETA_APOSTA_MINIMA or aposta % ROLETA_APOSTA_MULTIPLO != 0:
+        raise ValueError(
+            f"Aposta mínima é {ROLETA_APOSTA_MINIMA} moedas, sempre em múltiplos de {ROLETA_APOSTA_MULTIPLO}."
+        )
+
+    dados = carregar_economia()
+    carteira = obter_carteira(dados, nome)
+    if carteira["saldo"] < aposta:
+        raise ValueError("Moedas insuficientes.")
+
+    carteira["saldo"] -= aposta
+    fatia = sortear_fatia_roleta()
+    premio_moedas = 0
+    decoracao_ganha = None
+
+    if fatia["tipo"] == "multiplicador":
+        premio_moedas = int(aposta * fatia["valor"])
+        carteira["saldo"] += premio_moedas
+    elif fatia["tipo"] == "decoracao":
+        decoracao_ganha = sortear_decoracao_nao_possuida(carteira)
+        if decoracao_ganha:
+            carteira["decoracoes"].append(decoracao_ganha["sku_id"])
+        else:
+            # já tem todas as decorações — credita o preço de uma em moedas.
+            premio_moedas = PRECO_DECORACAO
+            carteira["saldo"] += premio_moedas
+
+    salvar_economia(dados)
+    return {
+        "fatia_indice": fatia["indice"],
+        "resultado": fatia,
+        "premio_moedas": premio_moedas,
+        "decoracao": decoracao_ganha,
+        "carteira": carteira_publica(carteira),
     }

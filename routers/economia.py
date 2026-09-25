@@ -9,9 +9,13 @@ from shared.economia import (
     CORES_NICK,
     PRECO_COR_NICK,
     PRECO_DECORACAO,
+    ROLETA_APOSTA_MINIMA,
+    ROLETA_APOSTA_MULTIPLO,
+    ROLETA_FATIAS,
     carregar_economia,
     carteira_publica,
     decoracao_existe,
+    girar_roleta,
     obter_carteira,
     salvar_economia,
     tentar_reclamar_bonus,
@@ -43,6 +47,12 @@ class EquiparRequest(BaseModel):
     nick: str = "Anônimo"
     tipo: str  # "decoracao" | "cor_nick"
     valor: Optional[str] = None
+
+
+class GirarRoleta(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    aposta: int
 
 
 def _carteira_vazia() -> dict:
@@ -131,3 +141,24 @@ def equipar(dados: EquiparRequest):
     carteira["equipado"][dados.tipo] = dados.valor
     salvar_economia(economia)
     return carteira_publica(carteira)
+
+
+@router.get("/economia/roleta")
+def obter_roleta():
+    return {
+        "fatias": ROLETA_FATIAS,
+        "aposta_minima": ROLETA_APOSTA_MINIMA,
+        "aposta_multiplo": ROLETA_APOSTA_MULTIPLO,
+    }
+
+
+@router.post("/economia/roleta/girar")
+def girar(dados: GirarRoleta):
+    if eh_anonimo(dados.nick) or not dados.nome:
+        raise HTTPException(status_code=400, detail="Entre com Discord pra jogar na roleta.")
+    try:
+        return girar_roleta(dados.nome, dados.aposta)
+    except ValueError as erro:
+        detalhe = str(erro)
+        status = 402 if "insuficientes" in detalhe else 400
+        raise HTTPException(status_code=status, detail=detalhe)
