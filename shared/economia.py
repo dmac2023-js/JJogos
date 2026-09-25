@@ -52,7 +52,10 @@ def _carregar_catalogo_decoracoes() -> list:
         catalogo.append({
             "sku_id": sku_id,
             "nome": item.get("name") or sku_id,
-            "imagem": f"https://cdn.discordapp.com/avatar-decoration-presets/{asset}.png",
+            # .webp = quadro parado (usado em repouso); .png = APNG animado
+            # (o CDN da Discord só anima nesse formato) — trocado no hover.
+            "imagem": f"https://cdn.discordapp.com/avatar-decoration-presets/{asset}.webp?size=96",
+            "imagem_animada": f"https://cdn.discordapp.com/avatar-decoration-presets/{asset}.png?size=96",
         })
     return catalogo
 

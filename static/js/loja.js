@@ -94,11 +94,23 @@ function renderLojaDecoracoes() {
     var equipada = minhaCarteira.equipado.decoracao === item.sku_id;
     var card = document.createElement("div");
     card.className = "loja-item" + (equipada ? " equipado" : "");
-    var img = document.createElement("img");
-    img.className = "loja-item-img";
-    img.src = item.imagem;
-    img.alt = "";
-    card.appendChild(img);
+    var moldura = document.createElement("span");
+    moldura.className = "loja-item-imgbox";
+    var imgParada = document.createElement("img");
+    imgParada.className = "loja-item-img loja-item-img-parada";
+    imgParada.src = item.imagem;
+    imgParada.alt = "";
+    imgParada.loading = "lazy";
+    moldura.appendChild(imgParada);
+    if (item.imagem_animada) {
+      var imgAnimada = document.createElement("img");
+      imgAnimada.className = "loja-item-img loja-item-img-animada";
+      imgAnimada.src = item.imagem_animada;
+      imgAnimada.alt = "";
+      imgAnimada.loading = "lazy";
+      moldura.appendChild(imgAnimada);
+    }
+    card.appendChild(moldura);
     var nome = document.createElement("span");
     nome.className = "loja-item-nome";
     nome.textContent = item.nome;

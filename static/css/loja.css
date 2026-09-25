@@ -13,7 +13,16 @@
   background: #111a2e; text-align: center;
 }
 .loja-item.equipado { border-color: #4c8cff; box-shadow: 0 0 0 1px #4c8cff inset; }
-.loja-item-img { width: 64px; height: 64px; object-fit: contain; }
+
+/* Decoração fica parada por padrão; anima só com o mouse em cima (o CDN da
+   Discord só anima em .png/APNG — trocamos por opacidade pra não recarregar
+   a imagem toda vez, evitando piscar). */
+.loja-item-imgbox { position: relative; width: 64px; height: 64px; display: inline-block; }
+.loja-item-img { position: absolute; inset: 0; width: 64px; height: 64px; object-fit: contain; }
+.loja-item-img-parada { opacity: 1; transition: opacity 0.15s ease; }
+.loja-item-img-animada { opacity: 0; transition: opacity 0.15s ease; }
+.loja-item:hover .loja-item-img-parada { opacity: 0; }
+.loja-item:hover .loja-item-img-animada { opacity: 1; }
 .loja-item-nome { font-size: 12px; color: #c9ccda; }
 .loja-cor-amostra { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2d4470; display: inline-block; }
 
