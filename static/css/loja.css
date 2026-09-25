@@ -61,7 +61,16 @@
 .loja-item:hover .loja-item-img-parada { opacity: 0; }
 .loja-item:hover .loja-item-img-animada { opacity: 1; }
 .loja-item-nome { font-size: 12px; color: #c9ccda; }
+.loja-cor-amostra-box { position: relative; display: inline-block; width: 32px; height: 32px; }
 .loja-cor-amostra { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2d4470; display: inline-block; }
+
+/* Selo "Em uso" sobre a miniatura de quem está equipado no momento. */
+.loja-badge-equipado {
+  position: absolute; top: -8px; right: -10px; z-index: 1;
+  background: #2f6fe0; color: #f4f6ff; font-size: 9px; font-weight: bold;
+  padding: 2px 6px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+}
 
 .loja-paginacao { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
 .loja-paginacao-info { color: #aeb2c7; font-size: 13px; }
