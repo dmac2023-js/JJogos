@@ -11,7 +11,12 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from shared.config import ARQUIVO_TERMO_PALAVRAS_VALIDAS
-from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
+from shared.economia import (
+    MOEDAS_VITORIA_MULTIPLAYER,
+    MOEDAS_VITORIA_SOLO,
+    cosmeticos_equipados,
+    creditar_moedas,
+)
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 from shared.recordes import (
@@ -253,6 +258,20 @@ def info_jogador_termo(s: dict, slot: str) -> dict:
         "completou": p.get("completou", False),
         "venceu": p.get("venceu", False),
         "tentativas_usadas": len(p.get("tentativas", [])),
+        "cosmeticos": cosmeticos_equipados(p.get("nome", "")),
+    }
+
+
+def _resumo_sala_termo(codigo: str, s: dict) -> dict:
+    lider = s.get("slots", {}).get(s.get("lider")) or {}
+    return {
+        "sala": codigo,
+        "dificuldade": s.get("dificuldade", "facil"),
+        "lider": lider.get("nick", "—"),
+        "lider_avatar": lider.get("avatar"),
+        "lider_cosmeticos": cosmeticos_equipados(lider.get("nome", "")),
+        "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
+        "fase": s.get("fase", "esperando"),
     }
 
 
@@ -312,13 +331,7 @@ async def _notificar_salas_termo_lobby():
     for codigo, s in salas_termo.items():
         if not s.get("publica"):
             continue
-        lista.append({
-            "sala": codigo,
-            "dificuldade": s.get("dificuldade", "facil"),
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_termo(codigo, s))
     msg = {"tipo": "salas_termo", "salas": lista}
     for ws in list(conexoes_lobby):
         try:
@@ -334,13 +347,7 @@ async def listar_salas_termo():
     for codigo, s in salas_termo.items():
         if not s.get("publica"):
             continue
-        lista.append({
-            "sala": codigo,
-            "dificuldade": s.get("dificuldade", "facil"),
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_termo(codigo, s))
     return {"salas": lista}
 
 

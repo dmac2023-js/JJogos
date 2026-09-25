@@ -482,9 +482,10 @@ async function carregarSalasCampo() {
       item.className = "sala-item";
       item.innerHTML =
         '<div class="sala-item-info">' +
-        "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
+        avatarSalaHtml(s.lider_avatar, s.lider, s.lider_cosmeticos) +
+        "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
         "<small>" + escapeHtml(s.sala) + " · " + (campoNomeDif[s.dificuldade] || s.dificuldade) +
-        " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></div>" +
+        " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></span></div>" +
         '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
       item.addEventListener("click", function () {
         entrarSalaCampo(s.sala);
@@ -509,8 +510,9 @@ function renderizarSalasCampo(salas) {
     item.className = "sala-item";
     item.innerHTML =
       '<div class="sala-item-info">' +
-      "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
-      "<small>" + escapeHtml(s.sala) + " · " + (campoNomeDif[s.dificuldade] || s.dificuldade) + "</small></div>" +
+      avatarSalaHtml(s.lider_avatar, s.lider, s.lider_cosmeticos) +
+      "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
+      "<small>" + escapeHtml(s.sala) + " · " + (campoNomeDif[s.dificuldade] || s.dificuldade) + "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
     item.addEventListener("click", function () { entrarSalaCampo(s.sala); });
     container.appendChild(item);

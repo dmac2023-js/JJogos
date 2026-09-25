@@ -7,7 +7,12 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
+from shared.economia import (
+    MOEDAS_VITORIA_MULTIPLAYER,
+    MOEDAS_VITORIA_SOLO,
+    cosmeticos_equipados,
+    creditar_moedas,
+)
 from shared.game_store import jogos
 from shared.lobby_state import conexoes_lobby
 from shared.recordes import (
@@ -184,6 +189,8 @@ def estado_para_cliente(jogo: dict, jogador: str = "X") -> dict:
         "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
         "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
         "avatar_o": (jogo["jogador_o"] or {}).get("avatar"),
+        "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
+        "cosmeticos_o": cosmeticos_equipados((jogo["jogador_o"] or {}).get("nome", "")),
         "placar": jogo.get("placar", {"X": 0, "O": 0}),
         "jogo_ativo": jogo["jogo_ativo"],
         "resultado": jogo["resultado"],
@@ -216,6 +223,8 @@ async def transmitir_salas_lobby():
             "sala": sala,
             "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
             "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
+            "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
+            "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
             "jogadores": jogadores,
             "espectadores": max(0, conns - jogadores),
             "em_andamento": jogo["jogo_ativo"] and jogo["jogador_o"] is not None,
@@ -355,6 +364,8 @@ def listar_salas():
             "sala": sala,
             "jogador_x": jogo["jogador_x"]["nick"] if jogo["jogador_x"] else None,
             "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
+            "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
+            "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
             "jogadores": jogadores,
             "espectadores": max(0, conns - jogadores),
             "em_andamento": jogo["jogo_ativo"] and jogo["jogador_o"] is not None,
@@ -570,6 +581,8 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "jogador_o": jogo["jogador_o"]["nick"],
                 "avatar_x": jogo["jogador_x"].get("avatar"),
                 "avatar_o": jogo["jogador_o"].get("avatar"),
+                "cosmeticos_x": cosmeticos_equipados(jogo["jogador_x"].get("nome", "")),
+                "cosmeticos_o": cosmeticos_equipados(jogo["jogador_o"].get("nome", "")),
                 "quem_comeca": jogo["jogador_atual"],
             })
             await websocket.send_json(estado_para_cliente(jogo, my_piece))
@@ -581,6 +594,8 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "jogador_o": jogo["jogador_o"]["nick"],
                 "avatar_x": jogo["jogador_x"].get("avatar"),
                 "avatar_o": jogo["jogador_o"].get("avatar"),
+                "cosmeticos_x": cosmeticos_equipados(jogo["jogador_x"].get("nome", "")),
+                "cosmeticos_o": cosmeticos_equipados(jogo["jogador_o"].get("nome", "")),
                 "quem_comeca": primeiro,
             })
             # Cada conexão recebe a própria peça; quem não é jogador mantém

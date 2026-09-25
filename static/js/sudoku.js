@@ -193,9 +193,11 @@ async function salvarRecorde() {
         nick: nick,
         avatar: avatar,
         tempo_segundos: tempoAtual(),
+        modo: sudokuOnlineAtivo ? "multiplayer" : "solo",
       }),
     });
     carregarRecordes(dificuldadeAtual);
+    if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
   } catch (erro) {
     console.warn("Erro ao salvar recorde:", erro);
   }
@@ -312,16 +314,16 @@ function atualizarPlacarTimesSudoku() {
   var js = sudokuUltimosJogadores || [];
   var p1 = js[0] || {};
   var p2 = js[1] || {};
-  var a = { nick: p1.nick || "Aguardando...", avatar: p1.avatar, gol: sudokuPlacar.p1 || 0 };
-  var b = { nick: p2.nick || "Aguardando...", avatar: p2.avatar, gol: sudokuPlacar.p2 || 0 };
-  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p1"), a.nick, a.avatar);
-  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p2"), b.nick, b.avatar);
+  var a = { nick: p1.nick || "Aguardando...", avatar: p1.avatar, cosmeticos: p1.cosmeticos, gol: sudokuPlacar.p1 || 0 };
+  var b = { nick: p2.nick || "Aguardando...", avatar: p2.avatar, cosmeticos: p2.cosmeticos, gol: sudokuPlacar.p2 || 0 };
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p1"), a.nick, a.avatar, a.cosmeticos);
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p2"), b.nick, b.avatar, b.cosmeticos);
   var n1 = document.querySelector("#placar-sudoku-nick-p1");
   var n2 = document.querySelector("#placar-sudoku-nick-p2");
   var g1 = document.querySelector("#placar-sudoku-gol-p1");
   var g2 = document.querySelector("#placar-sudoku-gol-p2");
-  if (n1) n1.textContent = a.nick;
-  if (n2) n2.textContent = b.nick;
+  if (n1) { n1.textContent = a.nick; aplicarCorNickEl(n1, a.cosmeticos); }
+  if (n2) { n2.textContent = b.nick; aplicarCorNickEl(n2, b.cosmeticos); }
   if (g1) g1.textContent = String(a.gol);
   if (g2) g2.textContent = String(b.gol);
 }
@@ -664,9 +666,10 @@ async function carregarSalasSudoku() {
       item.className = "sala-item";
       item.innerHTML =
         '<div class="sala-item-info">' +
-        "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
+        avatarSalaHtml(s.lider_avatar, s.lider, s.lider_cosmeticos) +
+        "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
         "<small>" + escapeHtml(s.sala) + " · " + (nomesDificuldade[s.dificuldade] || s.dificuldade) +
-        " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></div>" +
+        " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></span></div>" +
         '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
       item.addEventListener("click", function () {
         entrarSalaSudoku(s.sala);

@@ -211,13 +211,48 @@ document.querySelectorAll(".voltar").forEach(function (botao) {
   });
 });
 
-function preencherAvatarPlacar(el, nick, avatar) {
+function preencherAvatarPlacar(el, nick, avatar, cosmeticos) {
   if (!el) return;
-  if (avatar) {
-    el.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="" />';
-  } else {
-    el.textContent = (nick || "?").charAt(0).toUpperCase();
+  var decoracaoUrl = cosmeticos && cosmeticos.decoracao;
+  el.classList.toggle("tem-decoracao", !!decoracaoUrl);
+  var html = avatar
+    ? '<img src="' + escapeHtml(avatar) + '" alt="" />'
+    : escapeHtml((nick || "?").charAt(0).toUpperCase());
+  if (decoracaoUrl) {
+    html += '<img class="avatar-decoracao-img" src="' + escapeHtml(decoracaoUrl) + '" alt="" />';
   }
+  el.innerHTML = html;
+}
+
+/** Aplica a cor/arco-íris do nick equipado num elemento de texto qualquer
+ *  (placares, listas de sala) — usa a mesma lógica do cabeçalho. */
+function aplicarCorNickEl(el, cosmeticos) {
+  if (!el || typeof aplicarCorEmElemento !== "function") return;
+  aplicarCorEmElemento(el, cosmeticos && cosmeticos.cor_nick);
+}
+
+/** HTML de um avatar pequeno (listas de sala) com a decoração de perfil
+ *  equipada sobreposta, quando houver. */
+function avatarSalaHtml(avatar, nick, cosmeticos) {
+  var decoracaoUrl = cosmeticos && cosmeticos.decoracao;
+  var interno = avatar
+    ? '<img class="sala-item-avatar" src="' + escapeHtml(avatar) + '" alt="" />'
+    : '<span class="sala-item-avatar sala-item-avatar-inicial">' + escapeHtml((nick || "?").charAt(0).toUpperCase()) + "</span>";
+  if (decoracaoUrl) {
+    interno += '<img class="avatar-decoracao-img" src="' + escapeHtml(decoracaoUrl) + '" alt="" />';
+  }
+  return '<span class="sala-item-avatar-box">' + interno + "</span>";
+}
+
+/** Atributo style/class pra colorir um <strong>/<span> de nick em HTML
+ *  montado via string (listas de sala) — mesma cor/arco-íris da loja. */
+function corNickAtributoHtml(cosmeticos) {
+  var cor = cosmeticos && cosmeticos.cor_nick;
+  if (cor === "arco-iris") return ' class="nick-arco-iris"';
+  if (cor && typeof LOJA_CORES_HEX !== "undefined" && LOJA_CORES_HEX[cor]) {
+    return ' style="color:' + LOJA_CORES_HEX[cor] + '"';
+  }
+  return '';
 }
 
 

@@ -105,11 +105,16 @@ def obter_carteira(dados: dict, nome: str) -> dict:
 
 
 def carteira_publica(carteira: dict) -> dict:
+    equipado = carteira.get("equipado", {"decoracao": None, "cor_nick": None})
+    decoracao_sku = equipado.get("decoracao")
     return {
         "saldo": carteira.get("saldo", 0),
         "decoracoes": carteira.get("decoracoes", []),
         "cores_nick": carteira.get("cores_nick", []),
-        "equipado": carteira.get("equipado", {"decoracao": None, "cor_nick": None}),
+        "equipado": equipado,
+        # URL pronta da decoração equipada, pro front não precisar carregar o
+        # catálogo inteiro só pra desenhar o avatar do cabeçalho/perfil.
+        "decoracao_imagem": _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem_animada") if decoracao_sku else None,
     }
 
 

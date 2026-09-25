@@ -126,16 +126,16 @@ function atualizarPlacarVelha() {
   mostrarPlacarVelha(velhaModo !== null);
   preencherAvatarPlacar(
     document.querySelector("#placar-velha-avatar-x"),
-    velhaJogadores.X.nick, velhaJogadores.X.avatar);
+    velhaJogadores.X.nick, velhaJogadores.X.avatar, velhaJogadores.X.cosmeticos);
   preencherAvatarPlacar(
     document.querySelector("#placar-velha-avatar-o"),
-    velhaJogadores.O.nick, velhaJogadores.O.avatar);
+    velhaJogadores.O.nick, velhaJogadores.O.avatar, velhaJogadores.O.cosmeticos);
   var nx = document.querySelector("#placar-velha-nick-x");
   var no = document.querySelector("#placar-velha-nick-o");
   var gx = document.querySelector("#placar-velha-gol-x");
   var go = document.querySelector("#placar-velha-gol-o");
-  if (nx) nx.textContent = velhaJogadores.X.nick || "Aguardando...";
-  if (no) no.textContent = velhaJogadores.O.nick || "Aguardando...";
+  if (nx) { nx.textContent = velhaJogadores.X.nick || "Aguardando..."; aplicarCorNickEl(nx, velhaJogadores.X.cosmeticos); }
+  if (no) { no.textContent = velhaJogadores.O.nick || "Aguardando..."; aplicarCorNickEl(no, velhaJogadores.O.cosmeticos); }
   if (gx) gx.textContent = String(velhaPlacar.X || 0);
   if (go) go.textContent = String(velhaPlacar.O || 0);
 }
@@ -158,9 +158,10 @@ function renderizarSalasLobby(salas) {
     item.className = "sala-item";
     item.innerHTML =
       '<div class="sala-item-info">' +
-      "<strong>" + (sala.jogador_x || "?") + " vs " + (sala.jogador_o || "Aguardando") + "</strong>" +
-      "<small>" + sala.sala + " · " + (sala.em_andamento ? "Em andamento" : "Vaga disponível") + "</small>" +
-      "</div>" +
+      avatarSalaHtml(sala.avatar_x, sala.jogador_x, sala.cosmeticos_x) +
+      "<span><strong><span" + corNickAtributoHtml(sala.cosmeticos_x) + ">" + escapeHtml(sala.jogador_x || "?") + "</span> vs " + escapeHtml(sala.jogador_o || "Aguardando") + "</strong>" +
+      "<small>" + escapeHtml(sala.sala) + " · " + (sala.em_andamento ? "Em andamento" : "Vaga disponível") + "</small>" +
+      "</span></div>" +
       '<span class="sala-item-jogadores">' + sala.jogadores + "/2</span>";
     item.addEventListener("click", function () {
       entrarSalaVelha(sala.sala);
@@ -184,9 +185,10 @@ function renderizarSalasEspectacao(salas) {
     item.className = "sala-item";
     item.innerHTML =
       '<div class="sala-item-info">' +
-      "<strong>" + (sala.jogador_x || "?") + " vs " + (sala.jogador_o || "Aguardando") + "</strong>" +
+      avatarSalaHtml(sala.avatar_x, sala.jogador_x, sala.cosmeticos_x) +
+      "<span><strong><span" + corNickAtributoHtml(sala.cosmeticos_x) + ">" + escapeHtml(sala.jogador_x || "?") + "</span> vs " + escapeHtml(sala.jogador_o || "Aguardando") + "</strong>" +
       "<small>" + (sala.em_andamento ? "Em andamento" : "Aguardando jogador") + "</small>" +
-      "</div>" +
+      "</span></div>" +
       '<span class="sala-item-jogadores">Espectadores: ' + sala.espectadores + "</span>";
     item.addEventListener("click", function () {
       var nome = usuarioDiscord ? usuarioDiscord.username : "Anônimo";
@@ -447,10 +449,10 @@ function processarMensagemVelha(dados) {
       if (!velhaEspectador) velhaMinhaPeca = dados.minha_peca;
       if (dados.placar) velhaPlacar = dados.placar;
       if (dados.jogador_x || dados.avatar_x) {
-        velhaJogadores.X = { nick: dados.jogador_x || velhaJogadores.X.nick, avatar: dados.avatar_x || velhaJogadores.X.avatar };
+        velhaJogadores.X = { nick: dados.jogador_x || velhaJogadores.X.nick, avatar: dados.avatar_x || velhaJogadores.X.avatar, cosmeticos: dados.cosmeticos_x || velhaJogadores.X.cosmeticos };
       }
       if (dados.jogador_o || dados.avatar_o) {
-        velhaJogadores.O = { nick: dados.jogador_o || velhaJogadores.O.nick, avatar: dados.avatar_o || velhaJogadores.O.avatar };
+        velhaJogadores.O = { nick: dados.jogador_o || velhaJogadores.O.nick, avatar: dados.avatar_o || velhaJogadores.O.avatar, cosmeticos: dados.cosmeticos_o || velhaJogadores.O.cosmeticos };
       }
       if (velhaModo) atualizarPlacarVelha();
       desenharTabuleiro(velhaTabuleiro);
@@ -470,8 +472,8 @@ function processarMensagemVelha(dados) {
         dados.jogador_x + " (X) vs " + dados.jogador_o + " (O) — " + comeca + " começa!"
       );
       document.querySelector("#reiniciar-velha").style.display = "none";
-      if (dados.jogador_x) velhaJogadores.X = { nick: dados.jogador_x, avatar: dados.avatar_x || null };
-      if (dados.jogador_o) velhaJogadores.O = { nick: dados.jogador_o, avatar: dados.avatar_o || null };
+      if (dados.jogador_x) velhaJogadores.X = { nick: dados.jogador_x, avatar: dados.avatar_x || null, cosmeticos: dados.cosmeticos_x || null };
+      if (dados.jogador_o) velhaJogadores.O = { nick: dados.jogador_o, avatar: dados.avatar_o || null, cosmeticos: dados.cosmeticos_o || null };
       atualizarPlacarVelha();
       break;
 
@@ -481,9 +483,9 @@ function processarMensagemVelha(dados) {
       vezLabel.textContent = "Você é " + velhaMinhaPeca;
       vezLabel.className = "indicador-vez " + velhaMinhaPeca.toLowerCase();
       if (velhaMinhaPeca === "X" && velhaJogadores) {
-        velhaJogadores.X = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() };
+        velhaJogadores.X = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
       } else if (velhaMinhaPeca === "O") {
-        velhaJogadores.O = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() };
+        velhaJogadores.O = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
       }
       atualizarPlacarVelha();
       break;

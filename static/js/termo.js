@@ -13,9 +13,10 @@ function renderizarSalasTermo(salas) {
     item.className = "sala-item";
     item.innerHTML =
       '<div class="sala-item-info">' +
-      "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
+      avatarSalaHtml(s.lider_avatar, s.lider, s.lider_cosmeticos) +
+      "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
       "<small>" + escapeHtml(s.sala) + " · " + (NOMES_TERMO_DIFICULDADE[s.dificuldade] || s.dificuldade) +
-      " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></div>" +
+      " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
     item.addEventListener("click", function () { entrarSalaTermo(s.sala); });
     container.appendChild(item);

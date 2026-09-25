@@ -47,10 +47,26 @@ function aplicarCorEmElemento(el, cor) {
   }
 }
 
+/** Cosméticos do próprio usuário, pra usar em telas de espera antes do
+ *  servidor confirmar quem é quem (ex: sala "esperando oponente"). */
+function minhasCosmeticosAtuais() {
+  if (!minhaCarteira) return null;
+  return { decoracao: minhaCarteira.decoracao_imagem || null, cor_nick: (minhaCarteira.equipado || {}).cor_nick || null };
+}
+
 function aplicarCosmeticosHeader() {
   var nomeEl = document.querySelector("#auth-nome");
-  if (!nomeEl) return;
-  aplicarCorEmElemento(nomeEl, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
+  if (nomeEl) aplicarCorEmElemento(nomeEl, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
+
+  var decoImg = document.querySelector("#auth-avatar-decoracao");
+  if (decoImg) {
+    if (minhaCarteira.decoracao_imagem) {
+      decoImg.src = minhaCarteira.decoracao_imagem;
+      decoImg.style.display = "";
+    } else {
+      decoImg.style.display = "none";
+    }
+  }
 }
 
 async function carregarCatalogoLoja() {

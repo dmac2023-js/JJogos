@@ -700,10 +700,11 @@ function renderizarSalasLudo(salas) {
     item.className = "sala-item";
     item.innerHTML =
       '<div class="sala-item-info">' +
-      "<strong>" + escapeHtml(s.lider || "?") + "</strong>" +
+      avatarSalaHtml(s.lider_avatar, s.lider, s.lider_cosmeticos) +
+      "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
       "<small>" + escapeHtml(s.sala) + " · " +
       (s.fase === "esperando" ? "Aguardando" : s.fase === "fim" ? "Encerrado" : "Em jogo") +
-      "</small></div>" +
+      "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/4</span>";
     item.addEventListener("click", function () {
       entrarSalaLudo(s.sala);

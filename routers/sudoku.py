@@ -9,7 +9,12 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, MOEDAS_VITORIA_SOLO, creditar_moedas
+from shared.economia import (
+    MOEDAS_VITORIA_MULTIPLAYER,
+    MOEDAS_VITORIA_SOLO,
+    cosmeticos_equipados,
+    creditar_moedas,
+)
 from shared.game_store import jogos
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
@@ -36,6 +41,8 @@ class NovoRecord(BaseModel):
     nick: str
     tempo_segundos: int
     avatar: Optional[str] = None
+    modo: str = "solo"  # "solo" ou "multiplayer" — evita creditar moeda 2x (a
+    # vitória online já credita MOEDAS_VITORIA_MULTIPLAYER direto no WS)
 
 
 
@@ -83,6 +90,20 @@ def info_jogador_sudoku(s: dict, slot: str) -> dict:
         "conectado": bool(p.get("ws")),
         "tempo_fim": p.get("tempo_fim"),
         "completou": p.get("completou", False),
+        "cosmeticos": cosmeticos_equipados(p.get("nome", "")),
+    }
+
+
+def _resumo_sala_sudoku(codigo: str, s: dict) -> dict:
+    lider = s.get("slots", {}).get(s.get("lider")) or {}
+    return {
+        "sala": codigo,
+        "dificuldade": s.get("dificuldade", "facil"),
+        "lider": lider.get("nick", "—"),
+        "lider_avatar": lider.get("avatar"),
+        "lider_cosmeticos": cosmeticos_equipados(lider.get("nome", "")),
+        "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
+        "fase": s.get("fase", "esperando"),
     }
 
 
@@ -146,13 +167,7 @@ async def _notificar_salas_sudoku_lobby():
     for codigo, s in salas_sudoku.items():
         if not s.get("publica"):
             continue
-        lista.append({
-            "sala": codigo,
-            "dificuldade": s.get("dificuldade", "facil"),
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_sudoku(codigo, s))
     msg = {"tipo": "salas_sudoku", "salas": lista}
     for ws in list(conexoes_lobby):
         try:
@@ -392,7 +407,8 @@ def salvar_novo_record(dados: NovoRecord):
     recordes["sudoku"][dados.dificuldade].sort(key=lambda r: r["tempo_segundos"])
     recordes["sudoku"][dados.dificuldade] = recordes["sudoku"][dados.dificuldade][:50]
     salvar_recordes(recordes)
-    creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
+    if dados.modo != "multiplayer":
+        creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
 
     top3 = ranking_top(recordes["sudoku"][dados.dificuldade], "tempo_segundos", reverse=False)
     return {"dificuldade": dados.dificuldade, "recordes": top3}
@@ -414,13 +430,7 @@ async def listar_salas_sudoku():
     for codigo, s in salas_sudoku.items():
         if not s.get("publica"):
             continue
-        lista.append({
-            "sala": codigo,
-            "dificuldade": s.get("dificuldade", "facil"),
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_sudoku(codigo, s))
     return {"salas": lista}
 
 

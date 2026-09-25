@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, creditar_moedas
+from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, cosmeticos_equipados, creditar_moedas
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 from shared.recordes import carregar_recordes, eh_anonimo, ranking_top, salvar_recordes
@@ -124,6 +124,19 @@ def info_jogador_ludo(s: dict, slot: str) -> dict:
         "conectado": bool(p.get("ws")),
         "pecas": pecas,
         "venceu": bool(p.get("venceu")),
+        "cosmeticos": cosmeticos_equipados(p.get("nome", "")),
+    }
+
+
+def _resumo_sala_ludo(codigo: str, s: dict) -> dict:
+    lider = s.get("slots", {}).get(s.get("lider")) or {}
+    return {
+        "sala": codigo,
+        "lider": lider.get("nick", "—"),
+        "lider_avatar": lider.get("avatar"),
+        "lider_cosmeticos": cosmeticos_equipados(lider.get("nome", "")),
+        "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
+        "fase": s.get("fase", "esperando"),
     }
 
 
@@ -201,13 +214,7 @@ async def _notificar_salas_ludo_lobby():
     for codigo, s in salas_ludo.items():
         if not s.get("publica"):
             continue
-        vivos = sum(1 for p in s.get("slots", {}).values() if p and p.get("ws"))
-        lista.append({
-            "sala": codigo,
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": vivos,
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_ludo(codigo, s))
     msg = {"tipo": "salas_ludo", "salas": lista}
     for ws in list(conexoes_lobby):
         try:
@@ -344,12 +351,7 @@ async def listar_salas_ludo():
     for codigo, s in salas_ludo.items():
         if not s.get("publica"):
             continue
-        lista.append({
-            "sala": codigo,
-            "lider": (s.get("slots", {}).get(s.get("lider")) or {}).get("nick", "—"),
-            "jogadores": sum(1 for p in s.get("slots", {}).values() if p and p.get("ws")),
-            "fase": s.get("fase", "esperando"),
-        })
+        lista.append(_resumo_sala_ludo(codigo, s))
     return {"salas": lista}
 
 

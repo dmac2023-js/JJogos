@@ -91,6 +91,7 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .sala-item-jogadores { font-size: 12px; color: #9dc2ff; white-space: nowrap; }
 .sala-item-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 2px solid #2d4470; flex-shrink: 0; }
 .sala-item-avatar-inicial { display: grid; place-items: center; font-weight: bold; font-size: 14px; color: #9dc2ff; width: 32px; height: 32px; border-radius: 50%; background: #1c2c4a; border: 2px solid #2d4470; flex-shrink: 0; box-sizing: border-box; }
+.sala-item-avatar-box { position: relative; display: inline-flex; flex-shrink: 0; }
 .etiqueta-publica { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1e3d2a; color: #85e0ae; font-size: 10px; font-weight: normal; vertical-align: middle; }
 
 .popup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.6); display: none; place-items: center; z-index: 100; }
@@ -113,8 +114,10 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 /* Placar universal estilo times: foto em cima, gols ao lado — sudoku/velha/campo/ludo */
 .placar-times { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 0 auto 14px; padding: 12px 14px; border: 1px solid #20293f; border-radius: 14px; background: #111a2e; max-width: 420px; }
 .placar-lado { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; }
-.placar-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 2px solid #2d4470; display: grid; place-items: center; font-weight: bold; font-size: 18px; color: #9dc2ff; overflow: hidden; }
+.placar-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 2px solid #2d4470; display: grid; place-items: center; font-weight: bold; font-size: 18px; color: #9dc2ff; overflow: hidden; position: relative; }
 .placar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.placar-avatar.tem-decoracao { overflow: visible; }
+.placar-avatar .avatar-decoracao-img { position: absolute; inset: -30%; width: 160%; height: 160%; object-fit: contain; pointer-events: none; }
 .placar-nick { font-size: 12px; color: #aeb2c7; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 .placar-gol { font-size: 28px; font-weight: bold; color: #9dc2ff; font-variant-numeric: tabular-nums; line-height: 1; }
 .placar-x { color: #aeb2c7; font-size: 20px; font-weight: bold; }
@@ -124,6 +127,11 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .botao-login { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
 #auth-usuario { display: flex; align-items: center; gap: 8px; padding: 0; border: none; background: transparent; }
 #auth-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 2px solid #2d4470; }
+
+/* Moldura pra sobrepor a decoração de perfil equipada em cima do avatar
+   (cabeçalho, placares de sala etc) — mesma ideia em toda parte do site. */
+.avatar-decorado { position: relative; display: inline-flex; width: 28px; height: 28px; flex-shrink: 0; }
+.avatar-decoracao-img { position: absolute; inset: -30%; width: 160%; height: 160%; object-fit: contain; pointer-events: none; }
 #auth-nome { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #9dc2ff; }
 @media (max-width: 640px) { #status-discord { display: none; } }
 
