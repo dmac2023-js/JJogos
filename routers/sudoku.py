@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from shared.economia import (
-    MOEDAS_VITORIA_MULTIPLAYER,
-    MOEDAS_VITORIA_SOLO,
+    MOEDAS_SUDOKU_ONLINE,
+    MOEDAS_SUDOKU_SOLO,
     cosmeticos_equipados,
     creditar_moedas,
 )
@@ -42,7 +42,7 @@ class NovoRecord(BaseModel):
     tempo_segundos: int
     avatar: Optional[str] = None
     modo: str = "solo"  # "solo" ou "multiplayer" — evita creditar moeda 2x (a
-    # vitória online já credita MOEDAS_VITORIA_MULTIPLAYER direto no WS)
+    # vitória online já credita MOEDAS_SUDOKU_ONLINE direto no WS)
 
 
 
@@ -408,7 +408,7 @@ def salvar_novo_record(dados: NovoRecord):
     recordes["sudoku"][dados.dificuldade] = recordes["sudoku"][dados.dificuldade][:50]
     salvar_recordes(recordes)
     if dados.modo != "multiplayer":
-        creditar_moedas(dados.nome, MOEDAS_VITORIA_SOLO)
+        creditar_moedas(dados.nome, MOEDAS_SUDOKU_SOLO[dados.dificuldade])
 
     top3 = ranking_top(recordes["sudoku"][dados.dificuldade], "tempo_segundos", reverse=False)
     return {"dificuldade": dados.dificuldade, "recordes": top3}
@@ -630,7 +630,8 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                     s["vencedor_rodada"] = slot
                     s["placar"][slot] = s["placar"].get(slot, 0) + 1
                     s["fase"] = "parcial"
-                    creditar_moedas(p.get("nome", ""), MOEDAS_VITORIA_MULTIPLAYER)
+                    dif_sudoku = s.get("dificuldade", "facil")
+                    creditar_moedas(p.get("nome", ""), MOEDAS_SUDOKU_ONLINE.get(dif_sudoku, MOEDAS_SUDOKU_ONLINE["facil"]))
                     await broadcast_sudoku(sala, {
                         "tipo": "vencedor_rodada",
                         "slot": slot,

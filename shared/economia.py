@@ -18,10 +18,28 @@ CHAVE_ECONOMIA = "jjogos:economia"
 
 BONUS_INTERVALO_SEGUNDOS = 15 * 60
 BONUS_QUANTIDADE = 5
-MOEDAS_VITORIA_SOLO = 2
-MOEDAS_VITORIA_MULTIPLAYER = 5
 PRECO_DECORACAO = 70
 PRECO_COR_NICK = 30
+
+# Moedas por vitória — cada jogo tem sua própria tabela (por dificuldade,
+# quando aplicável). Online sempre paga mais que o modo solo/vs-máquina.
+MOEDAS_SUDOKU_SOLO = {"facil": 5, "medio": 10, "dificil": 15}
+MOEDAS_SUDOKU_ONLINE = {"facil": 10, "medio": 20, "dificil": 30}
+
+MOEDAS_VELHA_SOLO = 1
+MOEDAS_VELHA_ONLINE = 5
+
+MOEDAS_TERMO_SOLO = {"facil": 2, "medio": 5, "dificil": 10}
+MOEDAS_TERMO_ONLINE = {"facil": 5, "medio": 10, "dificil": 15}
+
+MOEDAS_CAMPO_SOLO = {"facil": 2, "medio": 5, "dificil": 10}
+MOEDAS_CAMPO_ONLINE = {"facil": 5, "medio": 10, "dificil": 15}
+
+# Ludo não tem modo solo nem dificuldade — todo mundo que participa até o
+# fim da partida ganha a moeda de participação; quem vence some MAIS a
+# moeda de vitória por cima.
+MOEDAS_LUDO_VITORIA = 20
+MOEDAS_LUDO_PARTICIPACAO = 5
 
 # label em português -> valor CSS (usado pelo front pra colorir o nick).
 CORES_NICK = {

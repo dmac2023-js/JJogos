@@ -9,7 +9,12 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from shared.economia import MOEDAS_VITORIA_MULTIPLAYER, cosmeticos_equipados, creditar_moedas
+from shared.economia import (
+    MOEDAS_LUDO_PARTICIPACAO,
+    MOEDAS_LUDO_VITORIA,
+    cosmeticos_equipados,
+    creditar_moedas,
+)
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 from shared.recordes import carregar_recordes, eh_anonimo, ranking_top, salvar_recordes
@@ -69,11 +74,11 @@ LUDO_BASES = {
 
 
 def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
-    """Vitória global no Ludo (permanente; anônimo não conta). Ludo só existe
-    online (não tem modo solo), então toda vitória vale moeda de multiplayer."""
+    """Vitória global no Ludo (permanente; anônimo não conta). Só atualiza o
+    placar de vitórias — moedas são pagas à parte (ver _pagar_moedas_fim_ludo),
+    porque no Ludo todo participante ganha moeda, não só quem venceu."""
     if eh_anonimo(nick):
         return
-    creditar_moedas(nome, MOEDAS_VITORIA_MULTIPLAYER)
     recordes = carregar_recordes()
     vitorias = recordes.setdefault("ludo_vitorias", [])
     for v in vitorias:
@@ -92,6 +97,19 @@ def registrar_vitoria_ludo(nick: str, nome: str, avatar: Optional[str]) -> None:
     recordes["ludo_vitorias"] = sorted(
         vitorias, key=lambda r: r.get("vitorias", 0), reverse=True)[:50]
     salvar_recordes(recordes)
+
+
+def _pagar_moedas_fim_ludo(s: dict, vencedor_slot: str) -> None:
+    """Fim de partida: cada participante ganha a moeda de participação; quem
+    venceu ganha também a moeda de vitória, por cima."""
+    for sl in ("p1", "p2", "p3", "p4"):
+        p = s["slots"].get(sl)
+        if not p or eh_anonimo(p.get("nick", "")):
+            continue
+        nome = p.get("nome", "")
+        creditar_moedas(nome, MOEDAS_LUDO_PARTICIPACAO)
+        if sl == vencedor_slot:
+            creditar_moedas(nome, MOEDAS_LUDO_VITORIA)
 
 
 
@@ -332,6 +350,7 @@ def _ludo_check_vitoria(s: dict) -> Optional[str]:
             s["placar"][sl] = s["placar"].get(sl, 0) + 1
             registrar_vitoria_ludo(p.get("nick", "Anônimo"),
                                    p.get("nome", ""), p.get("avatar"))
+            _pagar_moedas_fim_ludo(s, sl)
             return sl
     return None
 
@@ -726,6 +745,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                                 p_ficou.get("nick", "Anônimo"),
                                 p_ficou.get("nome", ""),
                                 p_ficou.get("avatar"))
+                            _pagar_moedas_fim_ludo(s, ficou)
                             s["ultimo_evento"] = {
                                 "texto": "Desistências. " +
                                 ((s["slots"][ficou] or {}).get("nick") or "—") + " venceu!",

@@ -8,8 +8,8 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from shared.economia import (
-    MOEDAS_VITORIA_MULTIPLAYER,
-    MOEDAS_VITORIA_SOLO,
+    MOEDAS_VELHA_ONLINE,
+    MOEDAS_VELHA_SOLO,
     cosmeticos_equipados,
     creditar_moedas,
 )
@@ -417,7 +417,7 @@ def salvar_record_velha(dados: NovoRecordVelha):
         recordes["velha_vitorias"] = _registrar_vitoria(
             vitorias, dados.nick, dados.nome, dados.avatar, dados.dificuldade)
         salvar_recordes(recordes)
-        moedas = MOEDAS_VITORIA_MULTIPLAYER if dados.modo == "multiplayer" else MOEDAS_VITORIA_SOLO
+        moedas = MOEDAS_VELHA_ONLINE if dados.modo == "multiplayer" else MOEDAS_VELHA_SOLO
         creditar_moedas(dados.nome, moedas)
 
     top3 = ranking_top(recordes["velha"].get(dados.dificuldade, [])[-10:],
