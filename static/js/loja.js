@@ -2,6 +2,8 @@
 
 let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], equipado: { decoracao: null, cor_nick: null } };
+let lojaPaginaDecoracoes = 0;
+const LOJA_DECORACOES_POR_PAGINA = 12;
 const LOJA_CORES_HEX = {
   azul: "#5b9dff", verde: "#7ddea3", vermelho: "#ff8a8a", amarelo: "#ffd36a",
   roxo: "#c9a6ff", rosa: "#ff9ecf", laranja: "#ffab66", ciano: "#7ef0e0",
@@ -48,6 +50,7 @@ async function abrirLoja() {
   await garantirIdentidade();
   await atualizarMoedasHeader();
   await carregarCatalogoLoja();
+  lojaPaginaDecoracoes = 0;
   renderLoja();
 }
 
@@ -89,7 +92,15 @@ function renderLojaDecoracoes() {
     return;
   }
   alvo.innerHTML = "";
-  lojaCatalogo.decoracoes.forEach(function (item) {
+
+  var totalPaginas = Math.max(1, Math.ceil(lojaCatalogo.decoracoes.length / LOJA_DECORACOES_POR_PAGINA));
+  if (lojaPaginaDecoracoes >= totalPaginas) lojaPaginaDecoracoes = totalPaginas - 1;
+  var inicio = lojaPaginaDecoracoes * LOJA_DECORACOES_POR_PAGINA;
+  var pagina = lojaCatalogo.decoracoes.slice(inicio, inicio + LOJA_DECORACOES_POR_PAGINA);
+
+  var grade = document.createElement("div");
+  grade.className = "loja-grade";
+  pagina.forEach(function (item) {
     var possui = minhaCarteira.decoracoes.indexOf(item.sku_id) !== -1;
     var equipada = minhaCarteira.equipado.decoracao === item.sku_id;
     var card = document.createElement("div");
@@ -118,8 +129,42 @@ function renderLojaDecoracoes() {
     card.appendChild(lojaBotaoAcao(possui, equipada, lojaCatalogo.preco_decoracao,
       function () { comprarDecoracao(item.sku_id); },
       function () { equiparItem("decoracao", item.sku_id); }));
-    alvo.appendChild(card);
+    grade.appendChild(card);
   });
+  alvo.appendChild(grade);
+
+  if (totalPaginas > 1) {
+    var paginacao = document.createElement("div");
+    paginacao.className = "loja-paginacao";
+
+    var botaoAnterior = document.createElement("button");
+    botaoAnterior.className = "botao-copiar";
+    botaoAnterior.textContent = "← Anterior";
+    botaoAnterior.disabled = lojaPaginaDecoracoes === 0;
+    botaoAnterior.addEventListener("click", function () {
+      lojaPaginaDecoracoes--;
+      renderLojaDecoracoes();
+    });
+    paginacao.appendChild(botaoAnterior);
+
+    var info = document.createElement("span");
+    info.className = "loja-paginacao-info";
+    info.textContent = "Página " + (lojaPaginaDecoracoes + 1) + " de " + totalPaginas;
+    paginacao.appendChild(info);
+
+    var botaoProxima = document.createElement("button");
+    botaoProxima.className = "botao-copiar";
+    botaoProxima.textContent = "Próxima →";
+    botaoProxima.disabled = lojaPaginaDecoracoes >= totalPaginas - 1;
+    botaoProxima.addEventListener("click", function () {
+      lojaPaginaDecoracoes++;
+      renderLojaDecoracoes();
+    });
+    paginacao.appendChild(botaoProxima);
+
+    alvo.appendChild(paginacao);
+  }
+
   if (minhaCarteira.equipado.decoracao) {
     var limpar = document.createElement("button");
     limpar.className = "botao-copiar";
