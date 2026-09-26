@@ -653,15 +653,16 @@ function cjRenderRespec() {
     return '<div class="cj-auto-card"><strong>🔒 Redistribuir skills</strong><small>Libera depois do ' +
       resp.rebirths_necessarios + "º rebirth (você tem " + (cjEu.rebirths || 0) + ").</small></div>";
   }
-  var total = cjCatalogo.skills.reduce(function (soma, s) { return soma + ((cjEu.equip["livro_" + s] || -1) + 1); }, 0);
-  var html = '<p class="cj-dica" style="margin-bottom:10px;">Você tem <strong>' + total +
-    '</strong> pontos investidos nos livros (soma dos níveis de cada um). Redistribua como quiser — a soma' +
-    " abaixo tem que continuar " + total + ". Custa " + cjMoedaHtml(resp.preco) + ".</p>" +
+  var total = cjEu.respec_total || 0;
+  var html = '<p class="cj-dica" style="margin-bottom:10px;">Derrete o bônus de skill de <strong>arma, as 4 armaduras e os 5 livros</strong> ' +
+    "numa pilha só de <strong>" + cjFmt(total) + "</strong> pontos e deixa redistribuir como quiser entre as 5 skills — não precisa mais " +
+    "seguir a skill \"normal\" de cada peça. <strong>Arma e armaduras somem</strong> nesse processo (compre de novo se quiser reequipar). " +
+    "Custa " + cjMoedaHtml(resp.preco) + ".</p>" +
     '<div id="cj-respec-linhas">';
   cjCatalogo.skills.forEach(function (s) {
-    var atual = (cjEu.equip["livro_" + s] || -1) + 1;
+    var atual = (cjEu.respec_atual || {})[s] || 0;
     html += '<div class="cj-respec-linha"><span>' + CJ_SKILL_ICONES[s] + " " + cjCatalogo.skill_nomes[s] + "</span>" +
-      '<input type="number" class="cj-respec-input" data-skill="' + s + '" min="0" max="' + cjCatalogo.materiais.length +
+      '<input type="number" class="cj-respec-input" data-skill="' + s + '" min="0" max="' + total +
       '" value="' + atual + '" /></div>';
   });
   html += "</div>" +
@@ -671,7 +672,7 @@ function cjRenderRespec() {
 }
 
 function cjAtualizarRespecRestante() {
-  var total = cjCatalogo.skills.reduce(function (soma, s) { return soma + ((cjEu.equip["livro_" + s] || -1) + 1); }, 0);
+  var total = cjEu.respec_total || 0;
   var soma = 0;
   document.querySelectorAll(".cj-respec-input").forEach(function (input) {
     soma += Math.max(0, parseInt(input.value, 10) || 0);
@@ -694,9 +695,12 @@ function cjCardAutoclicker() {
   }
   var html = '<div class="cj-auto-card"><strong>🤖 Autoclicker nível ' + cjEu.auto_nivel + "/" + maxAuto + "</strong>" +
     "<small>Clica " + cjFmt(auto.cps[cjEu.auto_nivel]) + " vezes por segundo enquanto você está no ClickJ.</small>";
+  if (cjEu.rebirths > 0) {
+    html += '<small style="color:#ff9a9a">Rebirth encareceu o autoclicker em ' + cjFmt(cjEu.auto_preco_mult) + "x.</small>";
+  }
   if (cjEu.auto_nivel < maxAuto) {
     var prox = cjEu.auto_nivel + 1;
-    var preco = auto.precos[prox];
+    var preco = auto.precos[prox] * cjEu.auto_preco_mult;
     html += cjBotaoComprar("data-auto", preco, "Melhorar para nível " + prox + " (" + cjFmt(auto.cps[prox]) + "/s)", cjJcoinsAtuais() < preco);
   } else {
     html += '<span class="cj-possui">✓ Nível máximo</span>';

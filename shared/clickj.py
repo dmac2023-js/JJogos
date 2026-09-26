@@ -262,6 +262,7 @@ def normalizar(j: dict) -> dict:
     j.setdefault("maestria_nivel", 0)
     j.setdefault("titulos", [])
     j.setdefault("titulo_equipado", None)
+    j.setdefault("respec_pontos", {})
     return j
 
 
@@ -382,6 +383,9 @@ def skills(j: dict, agora: float) -> dict:
     titulo_info = _titulo_equipado_info(j)
     if titulo_info:
         total[titulo_info[1]] += TITULO_SKILL_BONUS
+    for s, valor in (j.get("respec_pontos") or {}).items():
+        if s in total:
+            total[s] += valor
     return {"total": total, "pocao": pocao}
 
 
@@ -477,13 +481,26 @@ def usar_pocao_luta(j: dict, lutador: dict, pocao_id: str) -> Tuple[bool, str]:
     return True, "Usou: " + p["nome"] + "."
 
 
+def mult_preco_autoclicker(rebirths: int) -> int:
+    """Cada rebirth encarece MUITO o autoclicker (todos os níveis, não só o
+    10) — no 3º rebirth o nível 10 (base 5B) vira exatamente 100T; da 4ª
+    rebirth em diante continua multiplicando por 10x a cada uma."""
+    if rebirths <= 0:
+        return 1
+    if rebirths == 1:
+        return 10
+    if rebirths == 2:
+        return 100
+    return 20_000 * (10 ** (rebirths - 3))
+
+
 def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
     atual = j["auto_nivel"]
     if atual == 0:
         return False, "O autoclicker libera no nível %d." % NIVEL_AUTOCLICKER
     if atual >= max(AUTO_CPS):
         return False, "Seu autoclicker já está no nível máximo."
-    preco = AUTO_PRECO_UPGRADE[atual + 1]
+    preco = AUTO_PRECO_UPGRADE[atual + 1] * mult_preco_autoclicker(j.get("rebirths", 0))
     if j["jcoins"] < preco:
         return False, "Jcoins insuficientes."
     j["jcoins"] -= preco
@@ -522,33 +539,54 @@ def pode_respec(j: dict) -> bool:
     return j.get("rebirths", 0) >= NIVEL_REBIRTHS_RESPEC
 
 
-def total_pontos_livros(j: dict) -> int:
-    return sum(j["equip"].get("livro_" + s, -1) + 1 for s in SKILLS)
+def respec_distribuicao_atual(j: dict) -> dict:
+    """Como o total de pontos redistribuíveis está dividido HOJE entre as 5
+    skills: a última redistribuição guardada (se já usou respec antes) MAIS
+    o bônus de qualquer arma/armadura/livro comprado desde então (cada um na
+    sua skill normal) — assim um respec seguinte também derrete gear
+    reequipado depois do último."""
+    dist = dict(j.get("respec_pontos") or {})
+    for s in SKILLS:
+        dist.setdefault(s, 0)
+    dist[CLASSES[j["classe"]]["skill"]] += _bonus_slot(j, "arma")
+    for slot, info in SLOTS_ARMADURA.items():
+        dist[info["skill"]] += _bonus_slot(j, slot)
+    for slot, info in SLOTS_LIVRO.items():
+        dist[info["skill"]] += _bonus_slot(j, slot)
+    return dist
+
+
+def total_pontos_respec(j: dict) -> int:
+    return sum(respec_distribuicao_atual(j).values())
 
 
 def respec_livros(j: dict, distribuicao: dict) -> Tuple[bool, str]:
-    """Redistribui os pontos já investidos nos 5 livros (a soma continua a
-    mesma — só decide como ela se divide entre as skills)."""
+    """Derrete TUDO que dá bônus de skill via equipamento — arma, as 4
+    armaduras e os 5 livros — numa pilha só de pontos, e deixa redistribuir
+    como quiser entre as 5 skills (não precisa mais seguir a skill "normal"
+    de cada peça). Arma e armaduras somem do personagem nesse processo —
+    pra outro rebirth precisa comprá-las de novo."""
     if not pode_respec(j):
         return False, "Redistribuir skills libera depois do 2º rebirth."
     if j["jcoins"] < PRECO_RESPEC:
         return False, "Jcoins insuficientes."
-    total_atual = total_pontos_livros(j)
+    total_atual = total_pontos_respec(j)
     try:
         nova = {s: int(distribuicao.get(s, 0)) for s in SKILLS}
     except (TypeError, ValueError):
         return False, "Distribuição inválida."
-    if any(v < 0 or v > len(MATERIAIS) for v in nova.values()):
-        return False, "Cada skill pode ter de 0 a %d pontos." % len(MATERIAIS)
+    if any(v < 0 for v in nova.values()):
+        return False, "Cada skill precisa ter 0 ou mais pontos."
     if sum(nova.values()) != total_atual:
         return False, "A soma precisa ser igual ao total atual (%d)." % total_atual
     j["jcoins"] -= PRECO_RESPEC
-    for s in SKILLS:
-        if nova[s] > 0:
-            j["equip"]["livro_" + s] = nova[s] - 1
-        else:
-            j["equip"].pop("livro_" + s, None)
-    return True, "Skills redistribuídas!"
+    j["equip"].pop("arma", None)
+    for slot in SLOTS_ARMADURA:
+        j["equip"].pop(slot, None)
+    for slot in SLOTS_LIVRO:
+        j["equip"].pop(slot, None)
+    j["respec_pontos"] = nova
+    return True, "Skills redistribuídas! Arma, armaduras e livros foram derretidos — compre de novo se quiser reequipar."
 
 
 def nivel_requerido_rebirth(rebirths: int) -> int:
@@ -575,6 +613,7 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
         "jcoins": 0, "cliques": 0, "nivel": 1, "auto_nivel": 1,
         "equip": {}, "pocoes": {}, "efeitos": {},
         "maestria_skill": None, "maestria_nivel": 0,
+        "respec_pontos": {},
     })
     return True, "Rebirth %d feito! Agora cada clique conta %dx mais pro nível e você tem %d de vida." % (
         j["rebirths"], _mult_rebirth(j), hp_max(j))

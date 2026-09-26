@@ -148,6 +148,7 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "hp_max": regras.hp_max(j),
         "auto_nivel": j["auto_nivel"],
         "auto_cps": regras.AUTO_CPS.get(j["auto_nivel"], 0),
+        "auto_preco_mult": regras.mult_preco_autoclicker(j["rebirths"]),
         "equip": j["equip"],
         "pocoes": j["pocoes"],
         "efeitos": {k: {"valor": ef["valor"], "restante": max(0, int(ef["expira"] - agora))}
@@ -160,6 +161,8 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "maestria_nivel": j.get("maestria_nivel", 0),
         "titulos": j.get("titulos", []),
         "titulo_equipado": j.get("titulo_equipado"),
+        "respec_atual": regras.respec_distribuicao_atual(j),
+        "respec_total": regras.total_pontos_respec(j),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
