@@ -193,6 +193,15 @@
   text-align: center;
 }
 
+.rmodal-username {
+  font-size: 13px;
+  font-weight: 400;
+  color: #7a85a8;
+  text-align: center;
+  display: block;
+  margin-top: 2px;
+}
+
 .rmodal-stats {
   display: flex;
   flex-wrap: wrap;

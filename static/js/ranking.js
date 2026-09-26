@@ -47,9 +47,11 @@ function rankingAvatarHtml(jogador, tamanho) {
       "</span>"
     );
   }
+  // Para exibições grandes (modal), usa resolução maior mesmo se a URL armazenada tiver size=64.
+  var avatarSrc = tam >= 64 ? jogador.avatar.replace(/[?&]size=\d+/, "").replace(/\.png$/, ".png?size=128") : jogador.avatar;
   return (
     '<span class="ranking-avatar-box" style="width:' + tam + 'px;height:' + tam + 'px;">' +
-      '<img class="ranking-avatar-img" src="' + escapeHtml(jogador.avatar) + '" alt="" />' +
+      '<img class="ranking-avatar-img" src="' + escapeHtml(avatarSrc) + '" alt="" />' +
       decoHtml +
     "</span>"
   );
@@ -226,8 +228,12 @@ async function abrirPerfilRanking(jogador) {
 
   var nc = rankingCorNick(jogador);
   var avatarHtml = rankingAvatarHtml(jogador, 72);
+  var nickDisplay = escapeHtml(jogador.nick || jogador.nome || "?");
+  var usernameExtra = (jogador.nome && jogador.nome !== jogador.nick)
+    ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>"
+    : "";
   var nickHtml = '<span class="rmodal-nick' + nc.classe + '" ' + nc.estilo + ">" +
-    escapeHtml(jogador.nick || jogador.nome || "?") + "</span>";
+    nickDisplay + "</span>" + usernameExtra;
 
   card.innerHTML =
     '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +

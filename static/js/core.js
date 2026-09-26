@@ -434,7 +434,7 @@ function limparSessaoDiscord() {
 
 function avatarUrlDiscord(user) {
   if (user && user.avatar) {
-    return "https://cdn.discordapp.com/avatars/" + user.id + "/" + user.avatar + ".png?size=64";
+    return "https://cdn.discordapp.com/avatars/" + user.id + "/" + user.avatar + ".png?size=128";
   }
   return "https://cdn.discordapp.com/embed/avatars/" + ((user ? parseInt(user.discriminator || "0", 10) : 0) % 6) + ".png";
 }
