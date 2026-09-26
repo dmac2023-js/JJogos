@@ -86,6 +86,7 @@ function mostrarTela(tela) {
     multiNaTela = false;
     sairSalaMulti();
   }
+  if (typeof atualizarBotaoAssistirAlgo === "function") atualizarBotaoAssistirAlgo();
 }
 
 // ---------------------------------------------------------------------------

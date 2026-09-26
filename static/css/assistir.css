@@ -1,0 +1,94 @@
+/* Assistir Algo — painel lateral (site/Activity) ou inferior (celular) que
+   deixa acompanhar uma transmissão ou sala multi-tela enquanto se joga um
+   jogo offline. O jogo continua rodando do lado — nada aqui usa mostrarTela(). */
+
+#app-split { display: flex; flex-direction: row; align-items: stretch; min-height: 100vh; }
+#app-split > .aplicacao { flex: 1 1 auto; min-width: 0; }
+
+.botao-assistir-algo {
+  position: fixed; top: 50%; right: 0; transform: translateY(-50%);
+  z-index: 80; padding: 12px 16px 12px 20px; border: 1px solid #2d4470; border-right: 0;
+  border-radius: 999px 0 0 999px; background: #141c30; color: #9dc2ff;
+  font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: -4px 0 16px rgba(0, 0, 0, .35);
+}
+.botao-assistir-algo:hover { background: #1c2c4a; color: #fff; }
+
+.assistir-painel {
+  display: none; flex-direction: column; flex: 0 0 auto; width: 0;
+  border-left: 1px solid #20293f; background: #0b101d; overflow: hidden;
+}
+body.assistir-ativo .assistir-painel {
+  display: flex; width: min(46vw, 620px); position: sticky; top: 0; height: 100vh;
+}
+
+.assistir-topo {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid #20293f; flex-shrink: 0;
+}
+.assistir-topo strong { font-size: 16px; }
+
+.assistir-lista, .assistir-conteudo { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; }
+.assistir-lista h4 { margin: 18px 0 10px; font-size: 13px; color: #7a85a8; text-transform: uppercase; letter-spacing: .05em; }
+.assistir-lista h4:first-of-type { margin-top: 4px; }
+.assistir-codigo { display: flex; gap: 8px; }
+.assistir-codigo input {
+  flex: 1; padding: 9px 12px; border: 1px solid #26314f; border-radius: 10px;
+  background: #0d1424; color: #f4f6ff; font-size: 14px;
+}
+
+.assistir-voltar { margin-bottom: 12px; }
+
+.assistir-tiles { display: flex; flex-direction: column; gap: 12px; position: relative; }
+.assistir-tile {
+  border: 1px solid #20293f; border-radius: 12px; background: #0b101d;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.assistir-tile-media { position: relative; background: #000; aspect-ratio: 16/9; }
+.assistir-tile-media canvas, .assistir-tile-media video {
+  display: block; width: 100%; height: 100%; object-fit: contain; background: #000;
+}
+.assistir-tile-placeholder {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: #aeb2c7; font-size: 13px; text-align: center; padding: 12px;
+  background: repeating-linear-gradient(45deg, #111a2e, #111a2e 12px, #0d1424 12px, #0d1424 24px);
+}
+.assistir-tile-ctrls { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; z-index: 2; }
+.assistir-tile-ctrls button {
+  width: 30px; height: 30px; border: 0; border-radius: 8px;
+  background: rgba(10, 12, 24, .78); color: #9dc2ff; font-size: 14px; cursor: pointer;
+}
+.assistir-tile-ctrls button:hover { background: #1c2c4a; }
+.assistir-tile-volume {
+  width: 68px; height: 30px; accent-color: #2f6fe0; cursor: pointer;
+  background: rgba(10, 12, 24, .78); border: 0; border-radius: 8px; padding: 0 4px;
+}
+.assistir-tile-rodape {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: #111a2e; font-size: 13px; color: #c9ccda;
+}
+.assistir-tile-rodape .sala-item-avatar, .assistir-tile-rodape .sala-item-avatar-inicial {
+  width: 26px; height: 26px; border-width: 1px; font-size: 11px;
+}
+.assistir-tile-rodape strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistir-tile-sair {
+  margin-left: auto; flex-shrink: 0; padding: 6px 10px; border: 1px solid #b64a4a;
+  border-radius: 8px; background: transparent; color: #ff9a9a; font-size: 12px; cursor: pointer;
+}
+.assistir-tile-sair:hover { background: #3a1c1c; }
+
+/* Focar: essa transmissão ocupa todo o painel; as outras somem. */
+.assistir-tiles.tem-foco .assistir-tile:not(.focada) { display: none; }
+.assistir-tile.focada { position: absolute; inset: 0; z-index: 5; }
+.assistir-tile.focada .assistir-tile-media { flex: 1; aspect-ratio: auto; }
+
+@media (max-width: 760px) {
+  #app-split { flex-direction: column; }
+  .assistir-painel { border-left: 0; border-top: 1px solid #20293f; }
+  body.assistir-ativo .assistir-painel {
+    width: 100%; height: 48vh; position: static; flex-shrink: 0;
+  }
+  .botao-assistir-algo {
+    top: auto; bottom: 14px; right: 50%; transform: translateX(50%);
+    border-radius: 999px; border-right: 1px solid #2d4470;
+  }
+}

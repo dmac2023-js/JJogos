@@ -280,6 +280,7 @@ function cjMostrarView(nome) {
     v.classList.toggle("ativa", v.id === "cj-view-" + nome);
   });
   document.querySelector("#voltar-clickj").style.display = nome === "luta" ? "none" : "";
+  if (typeof atualizarBotaoAssistirAlgo === "function") atualizarBotaoAssistirAlgo();
 }
 
 // ---------------------------------------------------------------------------

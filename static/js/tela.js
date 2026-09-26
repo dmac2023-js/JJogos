@@ -3034,8 +3034,16 @@ function desligarViewerMulti(tile) {
   if (tile.atualizarVoltar) tile.atualizarVoltar();
 }
 
+// Um tile "independente" (usado pelo painel "Assistir Algo" enquanto se
+// joga) não pertence à sala multi-tela normal — por isso os dois pontos
+// abaixo que checavam multiNaTela/multiTiles também aceitam esse caso.
+function _tileValido(tile) {
+  if (tile.independente) return typeof assistirTiles !== "undefined" && assistirTiles[tile.sala] === tile;
+  return multiNaTela && multiTiles[tile.sala] === tile;
+}
+
 function ligarViewerMulti(tile) {
-  if (tile.eu || tile.assistindo || !multiNaTela) return;
+  if (tile.eu || tile.assistindo || !_tileValido(tile)) return;
   // Eco: o host nunca abre viewer da própria live.
   if (tile.sala === multiHostSala || tile.sala === telaSala) return;
   tile.assistindo = true;
@@ -3086,12 +3094,12 @@ function abrirWsViewerMulti(tile) {
     if (ws !== tile.ws) return;
     tile.ws = null;
     tile.assistindo = false;
-    if (!multiNaTela || tile.oculta || !multiTiles[tile.sala]) return;
+    if (tile.oculta || !_tileValido(tile)) return;
     if (!tile.abriu && tile.tentativas < 3) {
       tile.tentativas++;
       tile.placeholder.textContent = "Reconectando... (" + tile.tentativas + "/3)";
       setTimeout(function () {
-        if (multiTiles[tile.sala] && !tile.oculta) ligarViewerMulti(tile);
+        if (_tileValido(tile) && !tile.oculta) ligarViewerMulti(tile);
       }, 1500 * tile.tentativas);
       return;
     }
