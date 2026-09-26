@@ -158,6 +158,8 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "nivel_requerido_rebirth": regras.nivel_requerido_rebirth(j["rebirths"]),
         "maestria_skill": j.get("maestria_skill"),
         "maestria_nivel": j.get("maestria_nivel", 0),
+        "titulos": j.get("titulos", []),
+        "titulo_equipado": j.get("titulo_equipado"),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
@@ -167,7 +169,16 @@ def _estado_publico(nome: str, agora: float) -> dict:
 async def _enviar_estado(nome: str, extra: Optional[dict] = None) -> None:
     if not _jogador(nome):
         return
-    mensagem = {"tipo": "estado", "jogador": _estado_publico(nome, time.time())}
+    c = conexoes.get(nome)
+    if not c:
+        return
+    # Autoclicker (tick a cada 1s) e cliques manuais podem mandar "estado" quase
+    # ao mesmo tempo por caminhos concorrentes — sem isso, o que chegasse por
+    # último no socket "vencia" mesmo sendo o mais antigo, fazendo o timer da
+    # poção (calculado a partir daqui) parecer voltar no tempo. O client ignora
+    # qualquer "estado" com seq menor que o último aceito.
+    c["seq_estado"] = c.get("seq_estado", 0) + 1
+    mensagem = {"tipo": "estado", "seq_estado": c["seq_estado"], "jogador": _estado_publico(nome, time.time())}
     if extra:
         mensagem.update(extra)
     await _enviar(nome, mensagem)
@@ -495,7 +506,8 @@ async def _tratar(nome: str, dados: dict) -> None:
         await _enviar_estado(nome, extra)
         return
 
-    if tipo in ("comprar", "usar_pocao", "melhorar_auto", "rebirth", "maestria_escolher", "maestria_melhorar"):
+    if tipo in ("comprar", "usar_pocao", "melhorar_auto", "rebirth", "maestria_escolher", "maestria_melhorar",
+                "comprar_titulo", "equipar_titulo", "respec_livros"):
         if tipo == "comprar":
             ok, msg = regras.comprar(j, str(dados.get("item", "")))
         elif tipo == "usar_pocao":
@@ -506,6 +518,12 @@ async def _tratar(nome: str, dados: dict) -> None:
             ok, msg = regras.escolher_maestria(j, str(dados.get("skill", "")))
         elif tipo == "maestria_melhorar":
             ok, msg = regras.melhorar_maestria(j)
+        elif tipo == "comprar_titulo":
+            ok, msg = regras.comprar_titulo(j, str(dados.get("titulo", "")))
+        elif tipo == "equipar_titulo":
+            ok, msg = regras.equipar_titulo(j, dados.get("titulo") or None)
+        elif tipo == "respec_livros":
+            ok, msg = regras.respec_livros(j, dados.get("distribuicao") or {})
         else:
             if nome in luta_de:
                 ok, msg = False, "Termine a luta antes do rebirth."

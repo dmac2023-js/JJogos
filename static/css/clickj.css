@@ -129,6 +129,9 @@
 .cj-auto-card { margin-bottom: 10px; padding: 12px; border: 1px solid #6c4ab6; border-radius: 12px; background: #1d1830; }
 .cj-auto-card strong { display: block; margin-bottom: 4px; }
 .cj-auto-card small { display: block; margin-bottom: 8px; color: #c9ccda; }
+.cj-respec-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid #26314f; border-radius: 10px; background: #111a2e; }
+.cj-respec-input { width: 64px; padding: 6px 8px; border: 1px solid #2d4470; border-radius: 8px; background: #0d1424; color: #f4f6ff; font-size: 14px; text-align: center; }
+#cj-respec-restante { font-weight: 600; font-size: 13px; }
 
 /* Luta */
 .cj-arena { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 34px 8px 10px; }

@@ -26,6 +26,7 @@ var cjDesafio = null;
 var cjDesafioTimer = null;
 var cjToastTimer = null;
 var cjView = "carregando";
+var cjUltimoSeqEstado = 0;
 
 var CJ_CLASSE_ICONES = { mago: "🧙", arqueiro: "🏹", guerreiro: "⚔️", curandeiro: "✨", monge: "🥋" };
 var CJ_CLASSE_DESC = {
@@ -181,6 +182,7 @@ function cjEnviar(obj) {
 
 function cjConectar() {
   if (cjWs && (cjWs.readyState === WebSocket.OPEN || cjWs.readyState === WebSocket.CONNECTING)) return;
+  cjUltimoSeqEstado = 0;
   var protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   var avatar = avatarAtual();
   var url = protocolo + "//" + location.host + "/ws/clickj" +
@@ -221,11 +223,23 @@ function cjProcessar(d) {
       }
       break;
     case "estado":
+      // Cliques manuais e o tick do autoclicker no servidor podem gerar dois
+      // "estado" quase juntos por caminhos concorrentes; a ordem de chegada
+      // no socket não é garantida entre eles. Sem isso, um "estado" mais
+      // antigo chegando depois de um mais novo fazia o timer da poção
+      // parecer voltar no tempo — descarta qualquer um mais velho que o
+      // último já aceito.
+      if (d.seq_estado && d.seq_estado < cjUltimoSeqEstado) break;
+      cjUltimoSeqEstado = d.seq_estado || cjUltimoSeqEstado;
       cjEu = d.jogador;
       cjEuRecebidoEm = Date.now();
       cjLimparLotes(cjEu.ack);
       cjRenderJogo();
-      if (document.querySelector("#cj-loja").classList.contains("ativa")) cjRenderLoja();
+      // Não re-renderiza a aba "Redistribuir" a cada estado de rotina (o
+      // autoclicker manda um por segundo) — apagaria os números que a pessoa
+      // está digitando. Só atualiza ali quando o estado é resposta de uma
+      // ação (tem aviso), pra refletir o resultado de uma redistribuição.
+      if (document.querySelector("#cj-loja").classList.contains("ativa") && (cjLojaAba !== "respec" || d.aviso)) cjRenderLoja();
       if (d.aviso) cjToast(d.aviso);
       break;
     case "online":
@@ -370,7 +384,10 @@ function cjRenderJogo() {
   var nickEl = document.querySelector("#cj-meu-nick");
   nickEl.textContent = cjEu.nick || nomeExibicao();
   aplicarCorNickEl(nickEl, cosm);
-  document.querySelector("#cj-meu-titulo").textContent = CJ_CLASSE_ICONES[cjEu.classe] + " " + cjEu.titulo;
+  var tituloEquipadoInfo = cjEu.titulo_equipado && cjCatalogo.titulos[cjEu.classe] &&
+    Object.values(cjCatalogo.titulos[cjEu.classe]).find(function (t) { return t.id === cjEu.titulo_equipado; });
+  document.querySelector("#cj-meu-titulo").textContent = CJ_CLASSE_ICONES[cjEu.classe] + " " + cjEu.titulo +
+    (tituloEquipadoInfo ? " «" + tituloEquipadoInfo.nome + "»" : "");
   document.querySelector("#cj-meu-nivel").textContent = "Nível " + cjEu.nivel + "/" + cjEu.nivel_max;
   document.querySelector("#cj-meus-rebirths").textContent = cjEu.rebirths ? "🔁 " + cjEu.rebirths + " rebirth" + (cjEu.rebirths > 1 ? "s" : "") : "";
   document.querySelector("#cj-meu-pvp").textContent = "⚔️ " + cjEu.pvp_vitorias + "V / " + cjEu.pvp_derrotas + "D · ❤️ " + cjEu.hp_max;
@@ -601,18 +618,86 @@ function cjRenderMaestria() {
   return html;
 }
 
+function cjRenderTitulos() {
+  var titulos = cjCatalogo.titulos[cjEu.classe] || {};
+  var possuidos = cjEu.titulos || [];
+  var equipado = cjEu.titulo_equipado;
+  var jcoins = cjJcoinsAtuais();
+  var html = '<p class="cj-dica" style="margin-bottom:10px;">Títulos são da sua classe, custam ' +
+    cjMoedaHtml(cjCatalogo.preco_titulo) + " cada e não somem no rebirth. Equipado dá +" +
+    cjCatalogo.titulo_hp_bonus + " HP e +" + cjCatalogo.titulo_skill_bonus + " na skill dele.</p>";
+  Object.keys(titulos).forEach(function (skill) {
+    var t = titulos[skill];
+    var possui = possuidos.indexOf(t.id) !== -1;
+    var estaEquipado = equipado === t.id;
+    var acao;
+    if (estaEquipado) acao = '<span class="cj-possui">✓ Equipado</span>';
+    else if (possui) acao = '<button type="button" class="cj-comprar" data-titulo-equipar="' + t.id + '">Equipar</button>';
+    else acao = cjBotaoComprar('data-titulo-comprar="' + t.id + '"', cjCatalogo.preco_titulo, "", jcoins < cjCatalogo.preco_titulo);
+    html +=
+      '<div class="cj-item' + (estaEquipado ? " equipado" : "") + '">' +
+      '<span class="cj-swatch" style="background:#2a1f45">' + CJ_SKILL_ICONES[skill] + "</span>" +
+      '<div class="cj-item-info"><strong>' + escapeHtml(t.nome) + "</strong>" +
+      "<small>+5 HP · +500 " + cjCatalogo.skill_nomes[skill] + "</small></div>" +
+      '<div class="cj-item-acao">' + acao + "</div></div>";
+  });
+  if (equipado) {
+    html += '<button type="button" class="botao-copiar" data-titulo-equipar="">Remover título equipado</button>';
+  }
+  return html;
+}
+
+function cjRenderRespec() {
+  var resp = cjCatalogo.respec;
+  if (!cjEu.rebirths || cjEu.rebirths < resp.rebirths_necessarios) {
+    return '<div class="cj-auto-card"><strong>🔒 Redistribuir skills</strong><small>Libera depois do ' +
+      resp.rebirths_necessarios + "º rebirth (você tem " + (cjEu.rebirths || 0) + ").</small></div>";
+  }
+  var total = cjCatalogo.skills.reduce(function (soma, s) { return soma + ((cjEu.equip["livro_" + s] || -1) + 1); }, 0);
+  var html = '<p class="cj-dica" style="margin-bottom:10px;">Você tem <strong>' + total +
+    '</strong> pontos investidos nos livros (soma dos níveis de cada um). Redistribua como quiser — a soma' +
+    " abaixo tem que continuar " + total + ". Custa " + cjMoedaHtml(resp.preco) + ".</p>" +
+    '<div id="cj-respec-linhas">';
+  cjCatalogo.skills.forEach(function (s) {
+    var atual = (cjEu.equip["livro_" + s] || -1) + 1;
+    html += '<div class="cj-respec-linha"><span>' + CJ_SKILL_ICONES[s] + " " + cjCatalogo.skill_nomes[s] + "</span>" +
+      '<input type="number" class="cj-respec-input" data-skill="' + s + '" min="0" max="' + cjCatalogo.materiais.length +
+      '" value="' + atual + '" /></div>';
+  });
+  html += "</div>" +
+    '<p><span id="cj-respec-restante"></span></p>' +
+    cjBotaoComprar("data-respec-confirmar", resp.preco, "Confirmar redistribuição", cjJcoinsAtuais() < resp.preco);
+  return html;
+}
+
+function cjAtualizarRespecRestante() {
+  var total = cjCatalogo.skills.reduce(function (soma, s) { return soma + ((cjEu.equip["livro_" + s] || -1) + 1); }, 0);
+  var soma = 0;
+  document.querySelectorAll(".cj-respec-input").forEach(function (input) {
+    soma += Math.max(0, parseInt(input.value, 10) || 0);
+  });
+  var el = document.querySelector("#cj-respec-restante");
+  if (!el) return;
+  var restante = total - soma;
+  el.textContent = restante === 0 ? "Soma OK (" + total + "/" + total + ")." : "Faltam distribuir " + restante + " ponto(s) (" + soma + "/" + total + ").";
+  el.style.color = restante === 0 ? "#85e0ae" : "#ff9a9a";
+  var botao = document.querySelector("[data-respec-confirmar]");
+  if (botao) botao.disabled = restante !== 0 || cjJcoinsAtuais() < cjCatalogo.respec.preco;
+}
+
 function cjCardAutoclicker() {
   var auto = cjCatalogo.auto;
+  var maxAuto = Math.max.apply(null, Object.keys(auto.cps).map(Number));
   if (!cjEu.auto_nivel) {
     return '<div class="cj-auto-card"><strong>🔒 Autoclicker</strong><small>Libera de graça no nível ' +
       auto.nivel_desbloqueio + " (você está no nível " + cjEu.nivel + ").</small></div>";
   }
-  var html = '<div class="cj-auto-card"><strong>🤖 Autoclicker nível ' + cjEu.auto_nivel + "/5</strong>" +
-    "<small>Clica " + auto.cps[cjEu.auto_nivel] + " vezes por segundo enquanto você está no ClickJ.</small>";
-  if (cjEu.auto_nivel < 5) {
+  var html = '<div class="cj-auto-card"><strong>🤖 Autoclicker nível ' + cjEu.auto_nivel + "/" + maxAuto + "</strong>" +
+    "<small>Clica " + cjFmt(auto.cps[cjEu.auto_nivel]) + " vezes por segundo enquanto você está no ClickJ.</small>";
+  if (cjEu.auto_nivel < maxAuto) {
     var prox = cjEu.auto_nivel + 1;
     var preco = auto.precos[prox];
-    html += cjBotaoComprar("data-auto", preco, "Melhorar para nível " + prox + " (" + auto.cps[prox] + "/s)", cjJcoinsAtuais() < preco);
+    html += cjBotaoComprar("data-auto", preco, "Melhorar para nível " + prox + " (" + cjFmt(auto.cps[prox]) + "/s)", cjJcoinsAtuais() < preco);
   } else {
     html += '<span class="cj-possui">✓ Nível máximo</span>';
   }
@@ -645,6 +730,10 @@ function cjRenderLoja() {
     lista = cjLinhasPocoes(tipo);
   } else if (cjLojaAba === "maestria") {
     lista = cjRenderMaestria();
+  } else if (cjLojaAba === "titulos") {
+    lista = cjRenderTitulos();
+  } else if (cjLojaAba === "respec") {
+    lista = cjRenderRespec();
   } else {
     var livro = cjLojaFiltro.utilitarios || cjCatalogo.classes[cjEu.classe].skill;
     filtros = cjFiltrosHtml(skillsOpcoes, livro, "utilitarios");
@@ -653,6 +742,7 @@ function cjRenderLoja() {
   document.querySelector("#cj-loja-filtros").innerHTML = filtros;
   document.querySelector("#cj-loja-lista").innerHTML = lista;
   cjAtualizarContadores();
+  if (cjLojaAba === "respec") cjAtualizarRespecRestante();
 }
 
 function cjAbrirLoja() {
@@ -1023,11 +1113,29 @@ function cjSair() {
     var melhorarM = ev.target.closest("[data-maestria-melhorar]");
     if (melhorarM && !melhorarM.disabled) { cjEnviar({ tipo: "maestria_melhorar" }); return; }
     var trocar = ev.target.closest("[data-maestria-trocar]");
-    if (trocar) cjPopup("Trocar de maestria?",
-      "<p>Isso zera o nível atual (" + (cjEu.maestria_nivel || 0) + ") de " + cjCatalogo.skill_nomes[cjEu.maestria_skill] + ".</p>",
-      cjCatalogo.skills.filter(function (s) { return s !== cjEu.maestria_skill; }).map(function (s) {
-        return { texto: cjCatalogo.skill_nomes[s], acao: function () { cjEnviar({ tipo: "maestria_escolher", skill: s }); cjFecharPopup(); } };
-      }).concat([{ texto: "Cancelar", acao: cjFecharPopup }]));
+    if (trocar) {
+      cjPopup("Trocar de maestria?",
+        "<p>Isso zera o nível atual (" + (cjEu.maestria_nivel || 0) + ") de " + cjCatalogo.skill_nomes[cjEu.maestria_skill] + ".</p>",
+        cjCatalogo.skills.filter(function (s) { return s !== cjEu.maestria_skill; }).map(function (s) {
+          return { texto: cjCatalogo.skill_nomes[s], acao: function () { cjEnviar({ tipo: "maestria_escolher", skill: s }); cjFecharPopup(); } };
+        }).concat([{ texto: "Cancelar", acao: cjFecharPopup }]));
+      return;
+    }
+    var comprarT = ev.target.closest("[data-titulo-comprar]");
+    if (comprarT && !comprarT.disabled) { cjEnviar({ tipo: "comprar_titulo", titulo: comprarT.dataset.tituloComprar }); return; }
+    var equiparT = ev.target.closest("[data-titulo-equipar]");
+    if (equiparT) { cjEnviar({ tipo: "equipar_titulo", titulo: equiparT.dataset.tituloEquipar || null }); return; }
+    var confirmarRespec = ev.target.closest("[data-respec-confirmar]");
+    if (confirmarRespec && !confirmarRespec.disabled) {
+      var distribuicao = {};
+      document.querySelectorAll(".cj-respec-input").forEach(function (input) {
+        distribuicao[input.dataset.skill] = Math.max(0, parseInt(input.value, 10) || 0);
+      });
+      cjEnviar({ tipo: "respec_livros", distribuicao: distribuicao });
+    }
+  });
+  document.querySelector("#cj-loja").addEventListener("input", function (ev) {
+    if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
 

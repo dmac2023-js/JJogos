@@ -52,9 +52,15 @@ NIVEIS = [
 ]
 NIVEL_MAX = len(NIVEIS)
 
-NIVEL_AUTOCLICKER = 5
-AUTO_CPS = {1: 5, 2: 10, 3: 20, 4: 50, 5: 100}
-AUTO_PRECO_UPGRADE = {2: 1_000_000, 3: 5_000_000, 4: 10_000_000, 5: 50_000_000}
+NIVEL_AUTOCLICKER = 5  # nível do personagem em que o autoclicker libera de graça (nível 1 dele)
+AUTO_CPS = {
+    1: 100, 2: 500, 3: 1_000, 4: 2_000, 5: 3_000,
+    6: 5_000, 7: 8_000, 8: 13_000, 9: 20_000, 10: 30_000,
+}
+AUTO_PRECO_UPGRADE = {
+    2: 1_000_000, 3: 5_000_000, 4: 10_000_000, 5: 50_000_000,
+    6: 200_000_000, 7: 500_000_000, 8: 1_000_000_000, 9: 2_500_000_000, 10: 5_000_000_000,
+}
 
 # Hierarquia de materiais: cada um é mais forte (e mais caro) que o anterior.
 # Tem que comprar na ordem — o próximo só libera depois do anterior.
@@ -108,6 +114,60 @@ for _s in SKILLS:
         POCOES[_id] = {"id": _id, "tipo": "skill", "skill": _s, "valor": _bonus, "dur": 0,
                        "preco": _preco,
                        "nome": "Poção de %s %s (+%d na luta)" % (SKILL_NOMES[_s], _rotulo, _bonus)}
+
+# Títulos — um por skill, específico de cada classe (comprado uma vez,
+# depois é só trocar de equipado). Persistem entre rebirths de propósito:
+# são o único "prestígio" permanente do jogo, resto reseta.
+PRECO_TITULO = 10_000_000_000
+TITULO_HP_BONUS = 5
+TITULO_SKILL_BONUS = 500
+TITULOS = {
+    "mago": {
+        "magia": {"id": "arquimago", "nome": "Arquimago"},
+        "precisao": {"id": "sabio", "nome": "Sábio"},
+        "forca": {"id": "destruidor_arcano", "nome": "Destruidor Arcano"},
+        "resistencia": {"id": "necromante", "nome": "Necromante"},
+        "agilidade": {"id": "ilusionista", "nome": "Ilusionista"},
+    },
+    "arqueiro": {
+        "precisao": {"id": "mestre_atirador", "nome": "Mestre Atirador"},
+        "agilidade": {"id": "rastreador", "nome": "Rastreador"},
+        "forca": {"id": "cacador", "nome": "Caçador"},
+        "magia": {"id": "encantador_de_flechas", "nome": "Encantador de Flechas"},
+        "resistencia": {"id": "vigia", "nome": "Vigia"},
+    },
+    "guerreiro": {
+        "forca": {"id": "barbaro", "nome": "Bárbaro"},
+        "resistencia": {"id": "sanguinario", "nome": "Sanguinário"},
+        "precisao": {"id": "duelista", "nome": "Duelista"},
+        "agilidade": {"id": "berserker", "nome": "Berserker"},
+        "magia": {"id": "cavaleiro_runico", "nome": "Cavaleiro Rúnico"},
+    },
+    "curandeiro": {
+        "resistencia": {"id": "guardiao", "nome": "Guardião"},
+        "magia": {"id": "mistico", "nome": "Místico"},
+        "precisao": {"id": "clerigo", "nome": "Clérigo"},
+        "agilidade": {"id": "andarilho", "nome": "Andarilho"},
+        "forca": {"id": "paladino", "nome": "Paladino"},
+    },
+    "monge": {
+        "agilidade": {"id": "mestre_do_vento", "nome": "Mestre do Vento"},
+        "forca": {"id": "punho_de_ferro", "nome": "Punho de Ferro"},
+        "precisao": {"id": "andarilho_silencioso", "nome": "Andarilho Silencioso"},
+        "resistencia": {"id": "monge_de_pedra", "nome": "Monge de Pedra"},
+        "magia": {"id": "iluminado", "nome": "Iluminado"},
+    },
+}
+# id do título -> (classe dona, skill que ele reforça, dict do título).
+_TITULO_POR_ID = {
+    t["id"]: (classe, skill, t)
+    for classe, mapa in TITULOS.items() for skill, t in mapa.items()
+}
+
+# Redistribuir skills — some os pontos investidos nos 5 livros (o único
+# equipamento que cobre as 5 skills 1 pra 1) e deixa reaplicar como quiser.
+NIVEL_REBIRTHS_RESPEC = 2
+PRECO_RESPEC = 1_000_000_000
 
 NIVEL_MAESTRIA_DESBLOQUEIO = 10
 MAESTRIA_MAX = 10
@@ -169,6 +229,9 @@ def catalogo() -> dict:
                  "esquiva_intervalo": ESQUIVA_INTERVALO},
         "maestria": {"desbloqueio": NIVEL_MAESTRIA_DESBLOQUEIO, "precos": MAESTRIA_PRECO,
                      "bonus_pct": MAESTRIA_BONUS_PCT, "max": MAESTRIA_MAX},
+        "titulos": TITULOS, "preco_titulo": PRECO_TITULO,
+        "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
+        "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
     }
 
 
@@ -197,6 +260,8 @@ def normalizar(j: dict) -> dict:
     j.setdefault("pvp_derrotas", 0)
     j.setdefault("maestria_skill", None)
     j.setdefault("maestria_nivel", 0)
+    j.setdefault("titulos", [])
+    j.setdefault("titulo_equipado", None)
     return j
 
 
@@ -204,8 +269,17 @@ def titulo(j: dict) -> str:
     return CLASSES[j["classe"]]["titulo"].get(j.get("genero", "m"), "")
 
 
+def _titulo_equipado_info(j: dict):
+    tid = j.get("titulo_equipado")
+    if not tid or tid not in j.get("titulos", []):
+        return None
+    info = _TITULO_POR_ID.get(tid)
+    return info if info and info[0] == j["classe"] else None
+
+
 def hp_max(j: dict) -> int:
-    return HP_BASE + HP_POR_REBIRTH * j.get("rebirths", 0)
+    base = HP_BASE + HP_POR_REBIRTH * j.get("rebirths", 0)
+    return base + (TITULO_HP_BONUS if _titulo_equipado_info(j) else 0)
 
 
 def nivel_por_cliques(cliques: int) -> int:
@@ -303,6 +377,9 @@ def skills(j: dict, agora: float) -> dict:
     m_skill, m_nivel = j.get("maestria_skill"), j.get("maestria_nivel", 0)
     if m_skill and m_nivel:
         total[m_skill] += round(total[m_skill] * MAESTRIA_BONUS_PCT[m_nivel] / 100)
+    titulo_info = _titulo_equipado_info(j)
+    if titulo_info:
+        total[titulo_info[1]] += TITULO_SKILL_BONUS
     return {"total": total, "pocao": pocao}
 
 
@@ -410,6 +487,66 @@ def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
     j["jcoins"] -= preco
     j["auto_nivel"] = atual + 1
     return True, "Autoclicker agora é nível %d (%d cliques/s)." % (atual + 1, AUTO_CPS[atual + 1])
+
+
+def titulos_da_classe(classe: str) -> list:
+    return [dict(t, skill=skill) for skill, t in TITULOS.get(classe, {}).items()]
+
+
+def comprar_titulo(j: dict, titulo_id: str) -> Tuple[bool, str]:
+    info = _TITULO_POR_ID.get(titulo_id)
+    if not info or info[0] != j["classe"]:
+        return False, "Esse título não é da sua classe."
+    if titulo_id in j.get("titulos", []):
+        return False, "Você já tem esse título."
+    if j["jcoins"] < PRECO_TITULO:
+        return False, "Jcoins insuficientes."
+    j["jcoins"] -= PRECO_TITULO
+    j.setdefault("titulos", []).append(titulo_id)
+    return True, "Título conquistado: " + info[2]["nome"] + "!"
+
+
+def equipar_titulo(j: dict, titulo_id: Optional[str]) -> Tuple[bool, str]:
+    if not titulo_id:
+        j["titulo_equipado"] = None
+        return True, "Título removido."
+    if titulo_id not in j.get("titulos", []):
+        return False, "Você não tem esse título."
+    j["titulo_equipado"] = titulo_id
+    return True, "Título equipado: " + _TITULO_POR_ID[titulo_id][2]["nome"] + "."
+
+
+def pode_respec(j: dict) -> bool:
+    return j.get("rebirths", 0) >= NIVEL_REBIRTHS_RESPEC
+
+
+def total_pontos_livros(j: dict) -> int:
+    return sum(j["equip"].get("livro_" + s, -1) + 1 for s in SKILLS)
+
+
+def respec_livros(j: dict, distribuicao: dict) -> Tuple[bool, str]:
+    """Redistribui os pontos já investidos nos 5 livros (a soma continua a
+    mesma — só decide como ela se divide entre as skills)."""
+    if not pode_respec(j):
+        return False, "Redistribuir skills libera depois do 2º rebirth."
+    if j["jcoins"] < PRECO_RESPEC:
+        return False, "Jcoins insuficientes."
+    total_atual = total_pontos_livros(j)
+    try:
+        nova = {s: int(distribuicao.get(s, 0)) for s in SKILLS}
+    except (TypeError, ValueError):
+        return False, "Distribuição inválida."
+    if any(v < 0 or v > len(MATERIAIS) for v in nova.values()):
+        return False, "Cada skill pode ter de 0 a %d pontos." % len(MATERIAIS)
+    if sum(nova.values()) != total_atual:
+        return False, "A soma precisa ser igual ao total atual (%d)." % total_atual
+    j["jcoins"] -= PRECO_RESPEC
+    for s in SKILLS:
+        if nova[s] > 0:
+            j["equip"]["livro_" + s] = nova[s] - 1
+        else:
+            j["equip"].pop("livro_" + s, None)
+    return True, "Skills redistribuídas!"
 
 
 def nivel_requerido_rebirth(rebirths: int) -> int:
