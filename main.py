@@ -32,9 +32,10 @@ async def liberar_embed_discord(request: Request, call_next):
     return response
 
 
-from routers import auth, economia, perfil, sudoku, velha, ludo, campo, termo, tela, lobby  # noqa: E402
+from routers import auth, economia, perfil, sudoku, velha, ludo, campo, termo, tela, lobby, clickj  # noqa: E402
 
 app.include_router(auth.router)
+app.include_router(clickj.router)
 app.include_router(economia.router)
 app.include_router(perfil.router)
 app.include_router(sudoku.router)

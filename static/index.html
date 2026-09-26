@@ -5,16 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260925-07" />
-    <link rel="stylesheet" href="./css/ranking.css?v=20260925-10" />
+    <link rel="stylesheet" href="./css/base.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/ranking.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/clickj.css?v=20260926-01" />
   </head>
   <body>
     <main class="aplicacao">
@@ -133,6 +134,35 @@
           <span>
             <strong>Termo</strong>
             <small>Adivinhe a palavra de 5 letras — solo ou contra jogador.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
+        <button id="jogo-clickj" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">
+            <svg class="cj-icone" viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+              <g stroke="#9dc2ff" stroke-linecap="round">
+                <line x1="8.2" y1="15.8" x2="20.6" y2="3.4" stroke-width="2.3"/>
+                <line x1="5.6" y1="13.4" x2="10.6" y2="18.4" stroke-width="1.8"/>
+                <line x1="7.4" y1="16.6" x2="4.4" y2="19.6" stroke-width="1.7" stroke="#f5c542"/>
+              </g>
+              <circle cx="3.8" cy="20.2" r="1.2" fill="#f5c542"/>
+              <g fill="#f4f6ff" stroke="#0a0e1a" stroke-width="0.6">
+                <rect x="11.7" y="15.2" width="8.8" height="7.8" rx="2.4"/>
+                <rect x="17.8" y="14.4" width="2.4" height="3.6" rx="1.2"/>
+                <rect x="15.4" y="13.8" width="2.4" height="3.8" rx="1.2"/>
+                <rect x="9.6" y="17" width="3.6" height="2.3" rx="1.15"/>
+                <rect x="12.4" y="10.6" width="2.5" height="7.6" rx="1.25"/>
+              </g>
+              <g stroke="#f5c542" stroke-width="1.1" stroke-linecap="round">
+                <line x1="16.4" y1="9.6" x2="17.9" y2="8.6"/>
+                <line x1="16.9" y1="11.8" x2="18.7" y2="11.8"/>
+                <line x1="10.2" y1="9.4" x2="9.2" y2="8"/>
+              </g>
+            </svg>
+          </span>
+          <span>
+            <strong>ClickJ</strong>
+            <small>Clique, evolua seu herói e desafie quem está online.</small>
           </span>
           <span class="seta">&rarr;</span>
         </button>
@@ -1044,21 +1074,136 @@
         <button id="ranking-atualizar" class="botao" style="margin-top: 14px; width: 100%;">Atualizar ranking</button>
       </section>
 
+      <!-- Tela: ClickJ -->
+      <section id="tela-clickj" class="tela">
+        <button class="voltar" id="voltar-clickj" data-tela="tela-jogos">&larr; Voltar aos jogos</button>
+        <div class="titulo-tela cj-titulo">
+          <h2>ClickJ</h2>
+          <p>Clique, fique mais forte e desafie quem está online.</p>
+        </div>
+        <p id="cj-mensagem" class="mensagem"></p>
+
+        <div id="cj-view-carregando" class="cj-view ativa"><p class="vazio">Conectando...</p></div>
+
+        <div id="cj-view-criar" class="cj-view">
+          <h3 class="cj-subtitulo">Crie seu personagem</h3>
+          <div class="cj-genero">
+            <button type="button" class="cj-genero-btn ativo" data-genero="m">Masculino</button>
+            <button type="button" class="cj-genero-btn" data-genero="f">Feminino</button>
+          </div>
+          <div id="cj-classes" class="cj-classes"></div>
+          <button id="cj-criar" type="button" class="botao principal cj-criar-btn" disabled>Escolha uma classe</button>
+        </div>
+
+        <div id="cj-view-jogo" class="cj-view">
+          <div class="cj-layout">
+            <div class="cj-principal">
+              <div class="cj-heroi">
+                <div id="cj-meu-avatar"></div>
+                <div class="cj-heroi-info">
+                  <strong id="cj-meu-nick"></strong>
+                  <small id="cj-meu-titulo"></small>
+                  <div class="cj-badges">
+                    <span id="cj-meu-nivel" class="cj-badge"></span>
+                    <span id="cj-meus-rebirths" class="cj-badge"></span>
+                    <span id="cj-meu-pvp" class="cj-badge"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cj-recursos">
+                <div class="cj-jcoins"><span class="cj-moeda">J</span><span id="cj-jcoins">0</span></div>
+                <div class="cj-progresso"><div id="cj-progresso-barra"></div></div>
+                <small id="cj-progresso-texto"></small>
+              </div>
+
+              <button id="cj-botao-clique" class="cj-botao-clique" type="button" aria-label="Clicar">
+                <span id="cj-botao-icone"></span>
+                <strong>CLICAR</strong>
+                <small id="cj-valor-clique"></small>
+              </button>
+              <p id="cj-info-clique" class="cj-info-clique"></p>
+              <div id="cj-efeitos" class="cj-efeitos"></div>
+
+              <div class="cj-acoes">
+                <button id="cj-abrir-loja" type="button" class="botao principal">🛒 Loja</button>
+                <button id="cj-rebirth" type="button" class="botao cj-rebirth-btn" style="display:none;">🔁 Rebirth</button>
+              </div>
+              <p id="cj-rebirth-dica" class="cj-dica"></p>
+
+              <h3 class="cj-subtitulo">Skills</h3>
+              <div id="cj-skills" class="cj-skills"></div>
+            </div>
+
+            <aside class="cj-online">
+              <h3 class="cj-subtitulo">Online agora</h3>
+              <div id="cj-online-lista"><p class="vazio">Ninguém online.</p></div>
+            </aside>
+          </div>
+        </div>
+
+        <div id="cj-view-luta" class="cj-view">
+          <div class="cj-arena">
+            <div id="cj-lutador-eu" class="cj-lutador"></div>
+            <div class="cj-vs"><span>VS</span><small id="cj-turno-tempo"></small></div>
+            <div id="cj-lutador-outro" class="cj-lutador"></div>
+          </div>
+          <p id="cj-turno-msg" class="cj-turno-msg"></p>
+          <div class="cj-acoes-luta">
+            <button type="button" class="cj-acao" data-acao="atacar">⚔️ <span>Atacar</span><small>Força/Magia + Precisão</small></button>
+            <button type="button" class="cj-acao" data-acao="esquivar">💨 <span>Esquivar</span><small id="cj-esquiva-info">Agilidade</small></button>
+            <button type="button" class="cj-acao" data-acao="defender">🛡️ <span>Defender</span><small>Resistência</small></button>
+            <button type="button" class="cj-acao" data-acao="curar">✚ <span>Curar</span><small id="cj-cura-info">Magia</small></button>
+          </div>
+          <div id="cj-resultado" class="cj-resultado" style="display:none;"></div>
+          <div id="cj-log" class="cj-log"></div>
+          <button id="cj-desistir" type="button" class="botao-copiar cj-desistir">Desistir da luta</button>
+        </div>
+
+        <div id="cj-loja" class="cj-loja-overlay">
+          <div class="cj-loja">
+            <div class="cj-loja-topo">
+              <h3>Loja</h3>
+              <span class="cj-jcoins cj-jcoins-pequeno"><span class="cj-moeda">J</span><span id="cj-loja-jcoins">0</span></span>
+              <button id="cj-fechar-loja" type="button" class="rmodal-fechar" aria-label="Fechar">✕</button>
+            </div>
+            <div class="cj-abas">
+              <button type="button" class="cj-aba ativa" data-aba="armas">Armas</button>
+              <button type="button" class="cj-aba" data-aba="armaduras">Armaduras</button>
+              <button type="button" class="cj-aba" data-aba="pocoes">Poções</button>
+              <button type="button" class="cj-aba" data-aba="utilitarios">Utilitários</button>
+            </div>
+            <div id="cj-loja-filtros" class="cj-filtros"></div>
+            <div id="cj-loja-lista" class="cj-loja-lista"></div>
+          </div>
+        </div>
+      </section>
+
+      <div id="cj-popup" class="popup-overlay">
+        <div class="popup cj-popup">
+          <h3 id="cj-popup-titulo"></h3>
+          <div id="cj-popup-corpo"></div>
+          <div id="cj-popup-botoes" class="popup-botoes"></div>
+        </div>
+      </div>
+      <div id="cj-toast" class="cj-toast"></div>
+
       <footer>
         <p>Mais jogos serão adicionados em breve.</p>
         <p style="margin-top: 6px;"><a href="/politica.html">Política de Privacidade</a> &middot; <a href="/termos.html">Termos de Serviço</a></p>
       </footer>
     </main>
 
-    <script src="./js/perfil.js?v=20260925-07"></script>
-    <script src="./js/loja.js?v=20260925-07"></script>
-    <script src="./js/ranking.js?v=20260925-10"></script>
-    <script src="./js/core.js?v=20260925-07"></script>
-    <script src="./js/sudoku.js?v=20260925-07"></script>
-    <script src="./js/velha.js?v=20260925-07"></script>
-    <script src="./js/ludo.js?v=20260925-07"></script>
-    <script src="./js/campo.js?v=20260925-07"></script>
-    <script src="./js/termo.js?v=20260925-07"></script>
-    <script src="./js/tela.js?v=20260925-07"></script>
+    <script src="./js/perfil.js?v=20260926-01"></script>
+    <script src="./js/loja.js?v=20260926-01"></script>
+    <script src="./js/ranking.js?v=20260926-01"></script>
+    <script src="./js/core.js?v=20260926-01"></script>
+    <script src="./js/sudoku.js?v=20260926-01"></script>
+    <script src="./js/velha.js?v=20260926-01"></script>
+    <script src="./js/ludo.js?v=20260926-01"></script>
+    <script src="./js/campo.js?v=20260926-01"></script>
+    <script src="./js/termo.js?v=20260926-01"></script>
+    <script src="./js/tela.js?v=20260926-01"></script>
+    <script src="./js/clickj.js?v=20260926-01"></script>
   </body>
 </html>

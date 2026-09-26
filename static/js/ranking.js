@@ -118,6 +118,7 @@ var RANKING_GRUPOS_JOGO = [
   { titulo: "Campo Minado",  variantes: [["campo_solo", "Solo"], ["campo_online", "Online"]] },
   { titulo: "Termo",         variantes: [["termo_solo", "Solo"], ["termo_online", "Online"]] },
   { titulo: "Ludo",          variantes: [["ludo", "Online"]] },
+  { titulo: "ClickJ",        variantes: [["clickj_pvp", "PvP"]] },
 ];
 
 function _renderizarConteudoModal(container, jogador, perfil) {

@@ -62,6 +62,7 @@ PARTIDAS_JOGOS = [
     "campo_solo", "campo_online",
     "termo_solo", "termo_online",
     "ludo",
+    "clickj_pvp",
 ]
 
 # Roleta da sorte — 7 fatias intercaladas (mesma categoria nunca é vizinha),
