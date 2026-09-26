@@ -764,8 +764,13 @@ var CJ_PET_ICONE = { basica: "🐾", epica: "🐉", divina: "✨" };
 function cjRenderPets() {
   var pets = cjCatalogo.pets;
   var jcoins = cjJcoinsAtuais();
-  var meusPets = cjEu.pets || [];
   var equipados = cjEu.pets_equipados || [];
+  var meusPets = (cjEu.pets || []).slice().sort(function (a, b) {
+    var ea = equipados.indexOf(a.id) !== -1;
+    var eb = equipados.indexOf(b.id) !== -1;
+    if (ea === eb) return 0;
+    return ea ? -1 : 1;
+  });
   var rebirths = cjEu.rebirths || 0;
   var minimos = pets.rebirth_minimo || {};
   var mochilaCheia = meusPets.length >= pets.max_mochila;
@@ -811,7 +816,7 @@ function cjRenderPets() {
       } else {
         acaoEquip = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
       }
-      var acaoVender = '<button type="button" class="cj-comprar" data-pet-vender="' + p.id + '">Vender (' + cjMoedaHtml(reembolso) + ")</button>";
+      var acaoVender = '<button type="button" class="cj-comprar cj-vender-pet" data-pet-vender="' + p.id + '">Vender · ' + cjMoedaHtml(reembolso) + "</button>";
       html += '<div class="cj-pet-card' + (estaEquipado ? " equipado" : "") + '" title="' + escapeHtml(cjPetDescricaoInstancia(p)) + '">' +
         '<span class="cj-pet-icone">' + CJ_PET_ICONE[p.tier] + "</span>" +
         '<span class="cj-pet-nome">' + escapeHtml(p.nome) + "</span>" +
