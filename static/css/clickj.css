@@ -212,6 +212,9 @@
 .cj-toast.visivel { opacity: 1; transform: translate(-50%, 0); }
 .cj-toast.erro { border-color: #b64a4a; color: #ffb3b3; }
 
+@media (min-width: 721px) {
+  #tela-clickj .cj-layout { padding-right: 130px; }
+}
 @media (max-width: 720px) {
   .cj-layout { grid-template-columns: 1fr; }
   .cj-online { position: static; }

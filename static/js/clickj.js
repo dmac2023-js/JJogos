@@ -357,6 +357,8 @@ function cjAtualizarContadores() {
   var cliques = cjEu.cliques + extra * cjEu.cliques_por_clique;
   document.querySelector("#cj-jcoins").textContent = jcoins.toLocaleString("pt-BR");
   document.querySelector("#cj-loja-jcoins").textContent = cjFmt(jcoins);
+  var converterBtn = document.querySelector("#cj-converter");
+  if (converterBtn) converterBtn.style.display = jcoins >= 1e12 ? "" : "none";
   var barra = document.querySelector("#cj-progresso-barra");
   var texto = document.querySelector("#cj-progresso-texto");
   if (cjEu.cliques_proximo_nivel) {
@@ -818,6 +820,43 @@ function cjResponderDesafio(aceitar) {
   cjFecharPopup();
 }
 
+function cjAbrirConverter() {
+  if (!cjEu) return;
+  if (cjPendentes > 0) { clearTimeout(cjEnvioTimer); cjEnviarLote(); }
+  var trilhoesMax = Math.floor(cjJcoinsAtuais() / 1e12);
+  if (trilhoesMax < 1) return;
+  cjPopup(
+    "🔄 Converter Jcoins em Moedas",
+    "<p>1T de Jcoins = 100 moedas. Você tem <strong>" + trilhoesMax.toLocaleString("pt-BR") + "T</strong> disponíveis.</p>" +
+    '<p style="color:#aeb2c7;font-size:13px;margin-top:4px;">Conversão apenas em múltiplos de 1T.</p>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:center;">' +
+    '<input type="number" id="cj-converter-input" min="1" max="' + trilhoesMax + '" step="1" value="1"' +
+    ' style="width:90px;padding:8px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:18px;text-align:center;">' +
+    '<span style="color:#c9ccda;">T &nbsp;=&nbsp; <strong id="cj-converter-moedas">100</strong> moedas</span>' +
+    "</div>",
+    [
+      { texto: "Converter", principal: true, acao: function () {
+        var input = document.querySelector("#cj-converter-input");
+        var n = Math.max(1, Math.min(trilhoesMax, parseInt(input ? input.value : "1", 10) || 1));
+        cjEnviar({ tipo: "converter_jcoins", trilhoes: n });
+        cjFecharPopup();
+        setTimeout(function () { if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader(); }, 800);
+      }},
+      { texto: "Cancelar", acao: cjFecharPopup },
+    ]
+  );
+  var input = document.querySelector("#cj-converter-input");
+  if (input) {
+    input.addEventListener("input", function () {
+      var n = Math.max(1, Math.min(trilhoesMax, parseInt(input.value, 10) || 1));
+      var el = document.querySelector("#cj-converter-moedas");
+      if (el) el.textContent = (n * 100).toLocaleString("pt-BR");
+    });
+    input.focus();
+    input.select();
+  }
+}
+
 function cjConfirmarRebirth() {
   if (!cjEu) return;
   var mult = 10 * (cjEu.rebirths + 1);
@@ -1159,6 +1198,7 @@ function cjSair() {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
+  document.querySelector("#cj-converter").addEventListener("click", cjAbrirConverter);
 
   document.querySelector("#cj-online-lista").addEventListener("click", function (ev) {
     var b = ev.target.closest(".cj-desafiar");

@@ -17,7 +17,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from shared import clickj as regras
 from shared.config import PASTA_BASE
 from shared.db import redis_get, redis_set, usando_redis
-from shared.economia import cosmeticos_equipados, registrar_fim_partida
+from shared.economia import (
+    carregar_economia,
+    cosmeticos_equipados,
+    obter_carteira,
+    registrar_fim_partida,
+    salvar_economia,
+)
 from shared.logging_util import log_tela
 from shared.recordes import eh_anonimo
 
@@ -540,6 +546,28 @@ async def _tratar(nome: str, dados: dict) -> None:
         if tipo == "rebirth":
             await _salvar_se_sujo()
             await _transmitir_online(forcar=True)
+        return
+
+    if tipo == "converter_jcoins":
+        try:
+            trilhoes = max(1, int(dados.get("trilhoes", 0)))
+        except (TypeError, ValueError):
+            trilhoes = 0
+        if trilhoes < 1:
+            await _enviar(nome, {"tipo": "erro", "mensagem": "Quantidade inválida."})
+            return
+        custo = trilhoes * 1_000_000_000_000
+        if j["jcoins"] < custo:
+            await _enviar(nome, {"tipo": "erro", "mensagem": "Jcoins insuficientes."})
+            return
+        j["jcoins"] -= custo
+        moedas = trilhoes * 100
+        eco = await asyncio.to_thread(carregar_economia)
+        carteira = obter_carteira(eco, nome)
+        carteira["saldo"] = carteira.get("saldo", 0) + moedas
+        await asyncio.to_thread(salvar_economia, eco)
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": "Converteu %dT em %d moedas!" % (trilhoes, moedas)})
         return
 
     if tipo == "usar_pocao_luta":
