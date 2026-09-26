@@ -956,7 +956,6 @@ async function iniciarEncoderRelay() {
       framerate: telaFps,
       bitrate: bitrateRelay(),
       latencyMode: "realtime",
-      hardwareAcceleration: "prefer-hardware",
     };
   }
 
