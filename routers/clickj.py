@@ -155,6 +155,9 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "skills": sk["total"],
         "skills_pocao": sk["pocao"],
         "faltando_rebirth": regras.faltando_rebirth(j),
+        "nivel_requerido_rebirth": regras.nivel_requerido_rebirth(j["rebirths"]),
+        "maestria_skill": j.get("maestria_skill"),
+        "maestria_nivel": j.get("maestria_nivel", 0),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
@@ -222,6 +225,7 @@ def _luta_publica(luta: dict, agora: float) -> dict:
             "defendendo": l["defendendo"], "esquivando": l["esquivando"],
             "esquiva_em": max(0, l["esquiva_livre_em"] - l["turnos"]),
             "pode_curar": regras.pode_curar(l),
+            "pocoes_usadas": l.get("pocoes_usadas", []),
             "conectado": nome in conexoes,
         }
     return {
@@ -491,13 +495,17 @@ async def _tratar(nome: str, dados: dict) -> None:
         await _enviar_estado(nome, extra)
         return
 
-    if tipo in ("comprar", "usar_pocao", "melhorar_auto", "rebirth"):
+    if tipo in ("comprar", "usar_pocao", "melhorar_auto", "rebirth", "maestria_escolher", "maestria_melhorar"):
         if tipo == "comprar":
             ok, msg = regras.comprar(j, str(dados.get("item", "")))
         elif tipo == "usar_pocao":
             ok, msg = regras.usar_pocao(j, str(dados.get("item", "")), agora)
         elif tipo == "melhorar_auto":
             ok, msg = regras.melhorar_autoclicker(j)
+        elif tipo == "maestria_escolher":
+            ok, msg = regras.escolher_maestria(j, str(dados.get("skill", "")))
+        elif tipo == "maestria_melhorar":
+            ok, msg = regras.melhorar_maestria(j)
         else:
             if nome in luta_de:
                 ok, msg = False, "Termine a luta antes do rebirth."
@@ -511,6 +519,20 @@ async def _tratar(nome: str, dados: dict) -> None:
         if tipo == "rebirth":
             await _salvar_se_sujo()
             await _transmitir_online(forcar=True)
+        return
+
+    if tipo == "usar_pocao_luta":
+        luta = lutas.get(luta_de.get(nome, ""))
+        if not luta or luta["fim"]:
+            await _enviar(nome, {"tipo": "erro", "mensagem": "Poções de atributo só valem durante uma luta."})
+            return
+        ok, msg = regras.usar_pocao_luta(j, luta["lutadores"][nome], str(dados.get("item", "")))
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": msg})
+        await _transmitir_luta(luta)
         return
 
     if tipo == "desafiar":

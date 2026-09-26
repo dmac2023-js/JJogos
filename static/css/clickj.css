@@ -117,6 +117,7 @@
 .cj-cat-basico { background: #243049; color: #9dc2ff; }
 .cj-cat-medio { background: #203a2c; color: #85e0ae; }
 .cj-cat-avancado { background: #3a2a48; color: #d5a6ff; }
+.cj-cat-lendario { background: #4a3410; color: #ffd36a; }
 .cj-item-acao { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .cj-comprar { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid #2f6fe0; border-radius: 8px; background: #1c2c4a; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .cj-comprar .cj-moeda { width: 14px; height: 14px; margin-right: -1px; font-size: 9px; }
@@ -145,6 +146,11 @@
 .cj-vs { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .cj-vs span { font-size: 26px; font-weight: 900; color: #ff8a8a; }
 .cj-vs small { color: #ffd36a; font-variant-numeric: tabular-nums; }
+.cj-pocoes-luta { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 12px; }
+.cj-pocoes-luta:empty { display: none; }
+.cj-pocao-luta { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #6c4ab6; border-radius: 999px; background: #2a1f45; color: #d5c4ff; font-size: 12px; cursor: pointer; }
+.cj-pocao-luta:hover:not(:disabled) { background: #4b2f86; }
+.cj-pocao-luta:disabled { opacity: .45; cursor: not-allowed; border-style: dashed; }
 .cj-turno-msg { margin: 8px 0 12px; text-align: center; font-weight: bold; color: #9dc2ff; }
 .cj-turno-msg.minha { color: #ffd36a; }
 .cj-acoes-luta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

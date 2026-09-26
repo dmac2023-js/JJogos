@@ -36,7 +36,7 @@ var CJ_CLASSE_DESC = {
   monge: "Esquiva com facilidade.",
 };
 var CJ_SKILL_ICONES = { magia: "🔮", precisao: "🎯", forca: "💪", resistencia: "🛡️", agilidade: "💨" };
-var CJ_CATEGORIAS = { basico: "Básico", medio: "Médio", avancado: "Avançado" };
+var CJ_CATEGORIAS = { basico: "Básico", medio: "Médio", avancado: "Avançado", lendario: "Lendário" };
 var CJ_PALETA = {
   m: { pano: "#3552c9", detalhe: "#f5c542", enfeite: "#5b9dff", borla: "#e03131" },
   f: { pano: "#9c36b5", detalhe: "#ff8cc6", enfeite: "#ffb3dc", borla: "#ff8cc6" },
@@ -373,6 +373,8 @@ function cjRenderJogo() {
   document.querySelector("#cj-meu-nivel").textContent = "Nível " + cjEu.nivel + "/" + cjEu.nivel_max;
   document.querySelector("#cj-meus-rebirths").textContent = cjEu.rebirths ? "🔁 " + cjEu.rebirths + " rebirth" + (cjEu.rebirths > 1 ? "s" : "") : "";
   document.querySelector("#cj-meu-pvp").textContent = "⚔️ " + cjEu.pvp_vitorias + "V / " + cjEu.pvp_derrotas + "D · ❤️ " + cjEu.hp_max;
+  document.querySelector("#cj-meu-maestria").textContent = (cjEu.maestria_skill && cjEu.maestria_nivel)
+    ? "🏅 " + cjCatalogo.skill_nomes[cjEu.maestria_skill] + " " + cjEu.maestria_nivel + "/" + cjCatalogo.maestria.max : "";
   document.querySelector("#cj-valor-clique").textContent = "+" + cjFmt(cjEu.jcoins_por_clique) + " J";
   var auto = cjEu.auto_nivel
     ? "Autoclicker nível " + cjEu.auto_nivel + ": " + cjEu.auto_cps + " cliques/s"
@@ -385,8 +387,13 @@ function cjRenderJogo() {
   var podeRebirth = cjEu.faltando_rebirth.length === 0;
   document.querySelector("#cj-rebirth").style.display = podeRebirth ? "" : "none";
   var dica = "";
-  if (!podeRebirth && cjEu.nivel >= cjEu.nivel_max) {
-    dica = "Rebirth: falta comprar " + cjEu.faltando_rebirth.length + " item(ns) de Diamante (armas, armaduras e livros).";
+  if (!podeRebirth) {
+    if (cjEu.nivel < cjEu.nivel_requerido_rebirth) {
+      dica = "Rebirth nº " + (cjEu.rebirths + 1) + ": precisa chegar ao nível " + cjEu.nivel_requerido_rebirth + ".";
+    } else {
+      var ultimoMaterial = cjCatalogo.materiais[cjCatalogo.materiais.length - 1].nome;
+      dica = "Rebirth: falta comprar " + cjEu.faltando_rebirth.length + " item(ns) de " + ultimoMaterial + " (armas, armaduras e livros).";
+    }
   }
   document.querySelector("#cj-rebirth-dica").textContent = dica;
   cjRenderSkills();
@@ -540,20 +547,56 @@ function cjLinhasPocoes(filtro) {
   cjCatalogo.pocoes.forEach(function (p) {
     if (filtro === "clique" ? p.tipo !== "clique" : p.skill !== filtro) return;
     var tenho = (cjEu.pocoes || {})[p.id] || 0;
-    var dur = p.dur >= 3600 ? (p.dur / 3600) + " h" : (p.dur / 60) + " min";
-    var desc = p.tipo === "clique"
-      ? "Cliques valem " + p.valor + "x por " + dur
-      : "+" + p.valor + " " + cjCatalogo.skill_nomes[p.skill] + " por " + dur + " (vale na luta)";
+    var acaoExtra;
+    if (p.tipo === "clique") {
+      var dur = p.dur >= 3600 ? (p.dur / 3600) + " h" : (p.dur / 60) + " min";
+      var desc = "Cliques valem " + p.valor + "x por " + dur;
+      acaoExtra = tenho ? '<button type="button" class="cj-comprar cj-usar" data-usar="' + p.id + '">Usar</button>' : "";
+    } else {
+      var desc = "+" + p.valor + " " + cjCatalogo.skill_nomes[p.skill] + " — só em combate, 1x por luta";
+      acaoExtra = tenho ? '<span class="cj-tag">Use na tela de luta</span>' : "";
+    }
     html +=
       '<div class="cj-item">' +
       '<span class="cj-swatch" style="background:#2a1f45">' + (p.tipo === "clique" ? "⚡" : CJ_SKILL_ICONES[p.skill]) + "</span>" +
       '<div class="cj-item-info"><strong>' + escapeHtml(p.nome) + "</strong><small>" + desc +
       (tenho ? " · você tem " + tenho : "") + "</small></div>" +
-      '<div class="cj-item-acao">' +
-      (tenho ? '<button type="button" class="cj-comprar cj-usar" data-usar="' + p.id + '">Usar</button>' : "") +
+      '<div class="cj-item-acao">' + acaoExtra +
       cjBotaoComprar('data-comprar="' + p.id + '"', p.preco, "", jcoins < p.preco) +
       "</div></div>";
   });
+  return html;
+}
+
+function cjRenderMaestria() {
+  var m = cjCatalogo.maestria;
+  if (cjEu.nivel < m.desbloqueio) {
+    return '<div class="cj-auto-card"><strong>🔒 Maestria</strong><small>Libera no nível ' +
+      m.desbloqueio + " (você está no nível " + cjEu.nivel + ").</small></div>";
+  }
+  if (!cjEu.maestria_skill) {
+    var html = '<p class="cj-dica" style="margin-bottom:10px;">Escolha uma skill para se tornar mestre — só uma por vez, e trocar depois zera o progresso.</p>';
+    cjCatalogo.skills.forEach(function (s) {
+      html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">' + CJ_SKILL_ICONES[s] + "</span>" +
+        '<div class="cj-item-info"><strong>' + cjCatalogo.skill_nomes[s] + "</strong></div>" +
+        '<div class="cj-item-acao"><button type="button" class="cj-comprar" data-maestria-escolher="' + s + '">Escolher</button></div></div>';
+    });
+    return html;
+  }
+  var skill = cjEu.maestria_skill;
+  var nivel = cjEu.maestria_nivel || 0;
+  var html = '<div class="cj-auto-card"><strong>' + CJ_SKILL_ICONES[skill] + " Maestria de " + cjCatalogo.skill_nomes[skill] +
+    " — nível " + nivel + "/" + m.max + "</strong>" +
+    "<small>" + (nivel ? "+" + m.bonus_pct[nivel] + "% em " + cjCatalogo.skill_nomes[skill] : "Ainda sem bônus — compre o nível 1.") + "</small>";
+  if (nivel < m.max) {
+    var preco = m.precos[nivel + 1];
+    html += cjBotaoComprar("data-maestria-melhorar", preco,
+      "Nível " + (nivel + 1) + " (+" + m.bonus_pct[nivel + 1] + "%)", cjJcoinsAtuais() < preco);
+  } else {
+    html += '<span class="cj-possui">✓ Nível máximo</span>';
+  }
+  html += "</div>";
+  html += '<button type="button" class="botao-copiar" data-maestria-trocar>Trocar de skill (zera o progresso)</button>';
   return html;
 }
 
@@ -599,6 +642,8 @@ function cjRenderLoja() {
     var tipo = cjLojaFiltro.pocoes || "clique";
     filtros = cjFiltrosHtml([["clique", "⚡ Cliques"]].concat(skillsOpcoes), tipo, "pocoes");
     lista = cjLinhasPocoes(tipo);
+  } else if (cjLojaAba === "maestria") {
+    lista = cjRenderMaestria();
   } else {
     var livro = cjLojaFiltro.utilitarios || cjCatalogo.classes[cjEu.classe].skill;
     filtros = cjFiltrosHtml(skillsOpcoes, livro, "utilitarios");
@@ -678,7 +723,7 @@ function cjConfirmarRebirth() {
   if (!cjEu) return;
   var mult = 10 * (cjEu.rebirths + 1);
   cjPopup("🔁 Rebirth",
-    "<p>Você volta ao nível 1 e perde Jcoins, cliques, armas, armaduras, livros e poções.</p>" +
+    "<p>Você volta ao nível 1 e perde Jcoins, cliques, armas, armaduras, livros, poções e a maestria.</p>" +
     "<p>Em troca: cada clique passa a dar <strong>" + mult + "x</strong> Jcoins, o autoclicker já vem no nível 1 e sua vida no PvP vai para <strong>" +
     (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong>.</p>",
     [
@@ -775,12 +820,30 @@ function cjRenderLuta() {
     eu.esquiva_em > 0 ? "em " + eu.esquiva_em + " turno(s)" : "Agilidade";
   document.querySelector("#cj-cura-info").textContent =
     eu.hp >= eu.hp_max ? "vida cheia" : eu.pode_curar ? "Magia" : "não 2x seguidas";
+  cjRenderPocoesLuta(eu, luta.fim);
   document.querySelector("#cj-desistir").style.display = luta.fim ? "none" : "";
 
   document.querySelector("#cj-log").innerHTML = luta.log.slice().reverse().map(function (t) {
     return "<p>" + escapeHtml(t) + "</p>";
   }).join("");
   cjAtualizarRelogioTurno();
+}
+
+function cjRenderPocoesLuta(eu, fim) {
+  var el = document.querySelector("#cj-pocoes-luta");
+  if (!el) return;
+  if (fim) { el.innerHTML = ""; return; }
+  var usadas = eu.pocoes_usadas || [];
+  var html = "";
+  Object.keys(cjEu.pocoes || {}).forEach(function (id) {
+    var p = cjCatalogo.pocoes.find(function (x) { return x.id === id; });
+    if (!p || p.tipo !== "skill") return;
+    var usada = usadas.indexOf(p.skill) !== -1;
+    html += '<button type="button" class="cj-pocao-luta" data-usar-luta="' + id + '"' + (usada ? " disabled" : "") + ">" +
+      CJ_SKILL_ICONES[p.skill] + " +" + p.valor + " " + cjCatalogo.skill_nomes[p.skill] +
+      (usada ? " (usada)" : "") + "</button>";
+  });
+  el.innerHTML = html;
 }
 
 function cjAtualizarRelogioTurno() {
@@ -953,7 +1016,17 @@ function cjSair() {
     var usar = ev.target.closest("[data-usar]");
     if (usar) { cjEnviar({ tipo: "usar_pocao", item: usar.dataset.usar }); return; }
     var auto = ev.target.closest("[data-auto]");
-    if (auto && !auto.disabled) cjEnviar({ tipo: "melhorar_auto" });
+    if (auto && !auto.disabled) { cjEnviar({ tipo: "melhorar_auto" }); return; }
+    var escolher = ev.target.closest("[data-maestria-escolher]");
+    if (escolher) { cjEnviar({ tipo: "maestria_escolher", skill: escolher.dataset.maestriaEscolher }); return; }
+    var melhorarM = ev.target.closest("[data-maestria-melhorar]");
+    if (melhorarM && !melhorarM.disabled) { cjEnviar({ tipo: "maestria_melhorar" }); return; }
+    var trocar = ev.target.closest("[data-maestria-trocar]");
+    if (trocar) cjPopup("Trocar de maestria?",
+      "<p>Isso zera o nível atual (" + (cjEu.maestria_nivel || 0) + ") de " + cjCatalogo.skill_nomes[cjEu.maestria_skill] + ".</p>",
+      cjCatalogo.skills.filter(function (s) { return s !== cjEu.maestria_skill; }).map(function (s) {
+        return { texto: cjCatalogo.skill_nomes[s], acao: function () { cjEnviar({ tipo: "maestria_escolher", skill: s }); cjFecharPopup(); } };
+      }).concat([{ texto: "Cancelar", acao: cjFecharPopup }]));
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
 
@@ -971,6 +1044,10 @@ function cjSair() {
       document.querySelectorAll(".cj-acao").forEach(function (x) { x.disabled = true; });
       cjEnviar({ tipo: "acao", acao: b.dataset.acao });
     });
+  });
+  document.querySelector("#cj-pocoes-luta").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-usar-luta]");
+    if (b && !b.disabled) { b.disabled = true; cjEnviar({ tipo: "usar_pocao_luta", item: b.dataset.usarLuta }); }
   });
   document.querySelector("#cj-desistir").addEventListener("click", function () {
     cjPopup("Desistir da luta?", "<p>Quem desiste perde a luta.</p>", [

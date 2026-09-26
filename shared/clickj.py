@@ -39,6 +39,16 @@ NIVEIS = [
     (50_000_000, 500, 1_000),
     (250_000_000, 1_000, 2_500),
     (1_000_000_000, 2_000, 5_000),
+    (3_000_000_000, 3_000, 7_500),
+    (9_000_000_000, 4_500, 11_000),
+    (27_000_000_000, 7_000, 17_000),
+    (80_000_000_000, 10_000, 25_000),
+    (240_000_000_000, 15_000, 37_000),
+    (700_000_000_000, 22_000, 55_000),
+    (2_000_000_000_000, 33_000, 80_000),
+    (6_000_000_000_000, 50_000, 120_000),
+    (18_000_000_000_000, 75_000, 180_000),
+    (50_000_000_000_000, 110_000, 270_000),
 ]
 NIVEL_MAX = len(NIVEIS)
 
@@ -59,6 +69,11 @@ MATERIAIS = [
     {"id": "titanio", "nome": "Titânio", "categoria": "avancado", "bonus": 350, "preco": 1_000_000, "cor": "#7fa7c9"},
     {"id": "obsidiana", "nome": "Obsidiana", "categoria": "avancado", "bonus": 600, "preco": 3_500_000, "cor": "#8a63c9"},
     {"id": "diamante", "nome": "Diamante", "categoria": "avancado", "bonus": 1_000, "preco": 10_000_000, "cor": "#8ef3ff"},
+    {"id": "platina", "nome": "Platina", "categoria": "lendario", "bonus": 1_500, "preco": 30_000_000, "cor": "#c9d6e3"},
+    {"id": "mithril", "nome": "Mithril", "categoria": "lendario", "bonus": 2_200, "preco": 90_000_000, "cor": "#7de8ff"},
+    {"id": "adamantina", "nome": "Adamantina", "categoria": "lendario", "bonus": 3_300, "preco": 270_000_000, "cor": "#5865f2"},
+    {"id": "draconio", "nome": "Dracônio", "categoria": "lendario", "bonus": 5_000, "preco": 800_000_000, "cor": "#ff5c3d"},
+    {"id": "divino", "nome": "Divino", "categoria": "lendario", "bonus": 7_500, "preco": 2_500_000_000, "cor": "#ffe28a"},
 ]
 _MATERIAL_INDICE = {m["id"]: i for i, m in enumerate(MATERIAIS)}
 
@@ -82,15 +97,32 @@ for _mult, _precos in ((2, (1_000, 8_000, 40_000)), (5, (5_000, 40_000, 200_000)
         POCOES[_id] = {"id": _id, "tipo": "clique", "valor": _mult, "dur": _dur, "preco": _preco,
                        "nome": "Poção de Clique %dx (%s)" % (_mult, _rotulo)}
 for _s in SKILLS:
-    for _nivel, _rotulo, _bonus, _dur, _dur_rotulo, _preco in (
-        ("menor", "Menor", 50, 60, "1 min", 1_000),
-        ("media", "Média", 200, 600, "10 min", 20_000),
-        ("maior", "Maior", 500, 3600, "1 h", 250_000),
+    # Só valem durante uma luta (usar_pocao_luta) — o bônus fica pro resto
+    # daquela luta, sem gastar turno; só uma por skill por luta.
+    for _nivel, _rotulo, _bonus, _preco in (
+        ("menor", "Menor", 50, 1_000),
+        ("media", "Média", 200, 20_000),
+        ("maior", "Maior", 500, 250_000),
     ):
         _id = "%s_%s" % (_s, _nivel)
-        POCOES[_id] = {"id": _id, "tipo": "skill", "skill": _s, "valor": _bonus, "dur": _dur,
+        POCOES[_id] = {"id": _id, "tipo": "skill", "skill": _s, "valor": _bonus, "dur": 0,
                        "preco": _preco,
-                       "nome": "Poção de %s %s (+%d, %s)" % (SKILL_NOMES[_s], _rotulo, _bonus, _dur_rotulo)}
+                       "nome": "Poção de %s %s (+%d na luta)" % (SKILL_NOMES[_s], _rotulo, _bonus)}
+
+NIVEL_MAESTRIA_DESBLOQUEIO = 10
+MAESTRIA_MAX = 10
+# Nível de maestria -> custo em Jcoins e % de bônus sobre o total da skill
+# escolhida (base + classe + equipamento + livros + poção), aplicado por
+# cima de tudo isso. Só uma maestria ativa por vez — trocar de skill zera o nível.
+MAESTRIA_PRECO = {
+    1: 15_000_000, 2: 150_000_000, 3: 450_000_000, 4: 900_000_000, 5: 1_000_000_000,
+    6: 2_000_000_000, 7: 4_000_000_000, 8: 5_000_000_000, 9: 10_000_000_000, 10: 100_000_000_000,
+}
+MAESTRIA_BONUS_PCT = {1: 10, 2: 15, 3: 25, 4: 30, 5: 50, 6: 66, 7: 75, 8: 90, 9: 100, 10: 200}
+
+# Nível necessário pra próxima rebirth, indexado pelo número de rebirths já
+# feitos (0 = ainda nenhuma). Da 3ª em diante sempre exige o nível máximo.
+NIVEL_REBIRTH_REQUERIDO = {0: 10, 1: 15}
 
 HP_BASE = 50
 HP_POR_REBIRTH = 10
@@ -135,6 +167,8 @@ def catalogo() -> dict:
         "auto": {"cps": AUTO_CPS, "precos": AUTO_PRECO_UPGRADE, "nivel_desbloqueio": NIVEL_AUTOCLICKER},
         "luta": {"hp_base": HP_BASE, "hp_por_rebirth": HP_POR_REBIRTH,
                  "esquiva_intervalo": ESQUIVA_INTERVALO},
+        "maestria": {"desbloqueio": NIVEL_MAESTRIA_DESBLOQUEIO, "precos": MAESTRIA_PRECO,
+                     "bonus_pct": MAESTRIA_BONUS_PCT, "max": MAESTRIA_MAX},
     }
 
 
@@ -161,6 +195,8 @@ def normalizar(j: dict) -> dict:
     j.setdefault("efeitos", {})
     j.setdefault("pvp_vitorias", 0)
     j.setdefault("pvp_derrotas", 0)
+    j.setdefault("maestria_skill", None)
+    j.setdefault("maestria_nivel", 0)
     return j
 
 
@@ -264,6 +300,9 @@ def skills(j: dict, agora: float) -> dict:
         if extra:
             pocao[s] = extra
             total[s] += extra
+    m_skill, m_nivel = j.get("maestria_skill"), j.get("maestria_nivel", 0)
+    if m_skill and m_nivel:
+        total[m_skill] += round(total[m_skill] * MAESTRIA_BONUS_PCT[m_nivel] / 100)
     return {"total": total, "pocao": pocao}
 
 
@@ -311,25 +350,51 @@ def comprar(j: dict, item_id: str) -> Tuple[bool, str]:
 
 
 def usar_pocao(j: dict, pocao_id: str, agora: float) -> Tuple[bool, str]:
+    """Só poções de clique passam por aqui — as de skill só valem em combate
+    (ver usar_pocao_luta), então nunca consomem/expiram fora de uma luta."""
     p = POCOES.get(pocao_id)
     if not p:
         return False, "Poção inválida."
+    if p["tipo"] != "clique":
+        return False, "Essa poção só pode ser usada durante uma luta."
     if j["pocoes"].get(pocao_id, 0) <= 0:
         return False, "Você não tem essa poção."
-    chave = "clique" if p["tipo"] == "clique" else p["skill"]
-    ativo = j["efeitos"].get(chave)
+    ativo = j["efeitos"].get("clique")
     if ativo and ativo.get("expira", 0) > agora:
         if ativo["valor"] > p["valor"]:
             return False, "Você já tem uma poção mais forte desse tipo ativa."
         if ativo["valor"] == p["valor"]:
             ativo["expira"] += p["dur"]
         else:
-            j["efeitos"][chave] = {"valor": p["valor"], "expira": agora + p["dur"]}
+            j["efeitos"]["clique"] = {"valor": p["valor"], "expira": agora + p["dur"]}
     else:
-        j["efeitos"][chave] = {"valor": p["valor"], "expira": agora + p["dur"]}
+        j["efeitos"]["clique"] = {"valor": p["valor"], "expira": agora + p["dur"]}
     j["pocoes"][pocao_id] -= 1
     if j["pocoes"][pocao_id] <= 0:
         del j["pocoes"][pocao_id]
+    return True, "Usou: " + p["nome"] + "."
+
+
+def pode_usar_pocao_luta(lutador: dict, pocao_id: str) -> bool:
+    p = POCOES.get(pocao_id)
+    return bool(p) and p["tipo"] == "skill" and p["skill"] not in lutador.get("pocoes_usadas", [])
+
+
+def usar_pocao_luta(j: dict, lutador: dict, pocao_id: str) -> Tuple[bool, str]:
+    """Poção de atributo em combate: some com a skill pro resto da luta, não
+    gasta o turno e só uma por skill (não empilha nem troca de vez)."""
+    p = POCOES.get(pocao_id)
+    if not p or p["tipo"] != "skill":
+        return False, "Poção inválida para uso em luta."
+    if j["pocoes"].get(pocao_id, 0) <= 0:
+        return False, "Você não tem essa poção."
+    if p["skill"] in lutador.get("pocoes_usadas", []):
+        return False, "Você já usou uma poção de %s nesta luta." % SKILL_NOMES[p["skill"]]
+    j["pocoes"][pocao_id] -= 1
+    if j["pocoes"][pocao_id] <= 0:
+        del j["pocoes"][pocao_id]
+    lutador["stats"][p["skill"]] = lutador["stats"].get(p["skill"], 0) + p["valor"]
+    lutador.setdefault("pocoes_usadas", []).append(p["skill"])
     return True, "Usou: " + p["nome"] + "."
 
 
@@ -347,10 +412,15 @@ def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
     return True, "Autoclicker agora é nível %d (%d cliques/s)." % (atual + 1, AUTO_CPS[atual + 1])
 
 
+def nivel_requerido_rebirth(rebirths: int) -> int:
+    return NIVEL_REBIRTH_REQUERIDO.get(rebirths, NIVEL_MAX)
+
+
 def faltando_rebirth(j: dict) -> list:
     faltando = []
-    if j["nivel"] < NIVEL_MAX:
-        faltando.append("Nível %d" % NIVEL_MAX)
+    necessario = nivel_requerido_rebirth(j.get("rebirths", 0))
+    if j["nivel"] < necessario:
+        faltando.append("Nível %d" % necessario)
     ultimo = len(MATERIAIS) - 1
     for slot in SLOTS_REBIRTH:
         if j["equip"].get(slot, -1) < ultimo:
@@ -365,9 +435,42 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
     j.update({
         "jcoins": 0, "cliques": 0, "nivel": 1, "auto_nivel": 1,
         "equip": {}, "pocoes": {}, "efeitos": {},
+        "maestria_skill": None, "maestria_nivel": 0,
     })
     return True, "Rebirth %d feito! Agora cada clique dá %dx Jcoins e você tem %d de vida." % (
         j["rebirths"], _mult_rebirth(j), hp_max(j))
+
+
+# ---------------------------------------------------------------------------
+# Maestria — bônus permanente (até o próximo rebirth) numa única skill.
+# ---------------------------------------------------------------------------
+
+def escolher_maestria(j: dict, skill: str) -> Tuple[bool, str]:
+    if skill not in SKILLS:
+        return False, "Skill inválida."
+    if j["nivel"] < NIVEL_MAESTRIA_DESBLOQUEIO:
+        return False, "A maestria libera no nível %d." % NIVEL_MAESTRIA_DESBLOQUEIO
+    if j.get("maestria_skill") == skill:
+        return False, "Você já está trilhando essa maestria."
+    j["maestria_skill"] = skill
+    j["maestria_nivel"] = 0
+    return True, "Maestria escolhida: " + SKILL_NOMES[skill] + "."
+
+
+def melhorar_maestria(j: dict) -> Tuple[bool, str]:
+    skill = j.get("maestria_skill")
+    if not skill:
+        return False, "Escolha uma skill pra evoluir a maestria primeiro."
+    nivel = j.get("maestria_nivel", 0)
+    if nivel >= MAESTRIA_MAX:
+        return False, "Maestria já está no nível máximo."
+    preco = MAESTRIA_PRECO[nivel + 1]
+    if j["jcoins"] < preco:
+        return False, "Jcoins insuficientes."
+    j["jcoins"] -= preco
+    j["maestria_nivel"] = nivel + 1
+    return True, "Maestria de %s agora é nível %d (+%d%%)." % (
+        SKILL_NOMES[skill], nivel + 1, MAESTRIA_BONUS_PCT[nivel + 1])
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +496,7 @@ def novo_lutador(j: dict, agora: float) -> dict:
         "esquiva_livre_em": 0,
         "curou_ultimo": False,
         "curas": 0,
+        "pocoes_usadas": [],
     }
 
 
