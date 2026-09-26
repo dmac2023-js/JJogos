@@ -264,6 +264,10 @@ function cjProcessar(d) {
     case "erro":
       cjToast(d.mensagem, true);
       if (cjLuta && !cjLuta.fim && cjView === "luta") cjRenderLuta();
+      // Reabilita/atualiza os botões da loja se uma compra foi recusada
+      // (ex.: "Jcoins insuficientes" por causa da corrida com o lote de
+      // cliques) — sem isso o botão ficava travado no estado "comprando...".
+      if (document.querySelector("#cj-loja").classList.contains("ativa") && cjLojaAba !== "respec") cjRenderLoja();
       break;
     case "erro_fatal":
       cjBloqueado = true;
@@ -1108,16 +1112,26 @@ function cjSair() {
     if (aba) { cjLojaAba = aba.dataset.aba; cjRenderLoja(); return; }
     var filtro = ev.target.closest(".cj-filtro");
     if (filtro) { cjLojaFiltro[filtro.dataset.abaFiltro] = filtro.dataset.filtro; cjRenderLoja(); return; }
+    // Qualquer compra/melhoria manda os cliques pendentes ANTES — senão o
+    // saldo mostrado na loja já conta cliques que o servidor ainda não
+    // recebeu (o lote só sai a cada 250ms), e a compra podia ser recusada
+    // por "Jcoins insuficientes" mesmo com o botão parecendo liberado.
+    var acaoComPreco = ev.target.closest(
+      "[data-comprar], [data-auto], [data-maestria-melhorar], [data-titulo-comprar], [data-respec-confirmar]");
+    if (acaoComPreco && !acaoComPreco.disabled && cjPendentes > 0) {
+      clearTimeout(cjEnvioTimer);
+      cjEnviarLote();
+    }
     var comprar = ev.target.closest("[data-comprar]");
-    if (comprar && !comprar.disabled) { cjEnviar({ tipo: "comprar", item: comprar.dataset.comprar }); return; }
+    if (comprar && !comprar.disabled) { comprar.disabled = true; cjEnviar({ tipo: "comprar", item: comprar.dataset.comprar }); return; }
     var usar = ev.target.closest("[data-usar]");
     if (usar) { cjEnviar({ tipo: "usar_pocao", item: usar.dataset.usar }); return; }
     var auto = ev.target.closest("[data-auto]");
-    if (auto && !auto.disabled) { cjEnviar({ tipo: "melhorar_auto" }); return; }
+    if (auto && !auto.disabled) { auto.disabled = true; cjEnviar({ tipo: "melhorar_auto" }); return; }
     var escolher = ev.target.closest("[data-maestria-escolher]");
     if (escolher) { cjEnviar({ tipo: "maestria_escolher", skill: escolher.dataset.maestriaEscolher }); return; }
     var melhorarM = ev.target.closest("[data-maestria-melhorar]");
-    if (melhorarM && !melhorarM.disabled) { cjEnviar({ tipo: "maestria_melhorar" }); return; }
+    if (melhorarM && !melhorarM.disabled) { melhorarM.disabled = true; cjEnviar({ tipo: "maestria_melhorar" }); return; }
     var trocar = ev.target.closest("[data-maestria-trocar]");
     if (trocar) {
       cjPopup("Trocar de maestria?",
@@ -1128,11 +1142,12 @@ function cjSair() {
       return;
     }
     var comprarT = ev.target.closest("[data-titulo-comprar]");
-    if (comprarT && !comprarT.disabled) { cjEnviar({ tipo: "comprar_titulo", titulo: comprarT.dataset.tituloComprar }); return; }
+    if (comprarT && !comprarT.disabled) { comprarT.disabled = true; cjEnviar({ tipo: "comprar_titulo", titulo: comprarT.dataset.tituloComprar }); return; }
     var equiparT = ev.target.closest("[data-titulo-equipar]");
     if (equiparT) { cjEnviar({ tipo: "equipar_titulo", titulo: equiparT.dataset.tituloEquipar || null }); return; }
     var confirmarRespec = ev.target.closest("[data-respec-confirmar]");
     if (confirmarRespec && !confirmarRespec.disabled) {
+      confirmarRespec.disabled = true;
       var distribuicao = {};
       document.querySelectorAll(".cj-respec-input").forEach(function (input) {
         distribuicao[input.dataset.skill] = Math.max(0, parseInt(input.value, 10) || 0);
