@@ -22,7 +22,7 @@ body.assistir-ativo .assistir-painel {
 }
 
 .assistir-topo {
-  display: flex; align-items: center; justify-content: space-between;
+  position: relative; display: flex; align-items: center; justify-content: space-between;
   padding: 16px 18px; border-bottom: 1px solid #20293f; flex-shrink: 0;
 }
 .assistir-topo strong { font-size: 16px; }

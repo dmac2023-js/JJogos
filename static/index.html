@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/ranking.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/clickj.css?v=20260926-08" />
-    <link rel="stylesheet" href="./css/assistir.css?v=20260926-08" />
+    <link rel="stylesheet" href="./css/base.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/ranking.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/clickj.css?v=20260926-09" />
+    <link rel="stylesheet" href="./css/assistir.css?v=20260926-09" />
   </head>
   <body>
     <div id="app-split">
@@ -1233,7 +1233,10 @@
     <aside id="assistir-painel" class="assistir-painel">
       <div class="assistir-topo">
         <strong>Assistir</strong>
-        <button id="assistir-fechar" type="button" class="rmodal-fechar" aria-label="Fechar">✕</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="assistir-voltar-jogo" type="button" class="botao-copiar" style="font-size:12px;padding:5px 10px;">🎮 Voltar ao jogo</button>
+          <button id="assistir-fechar" type="button" class="rmodal-fechar" aria-label="Fechar">✕</button>
+        </div>
       </div>
 
       <div id="assistir-lista" class="assistir-lista">
@@ -1242,6 +1245,7 @@
           <button id="assistir-codigo-ir" type="button" class="botao-copiar">Entrar</button>
         </div>
         <p id="assistir-lista-erro" class="mensagem erro" style="display:none;"></p>
+        <button id="assistir-atualizar" type="button" class="botao-copiar" style="margin-top:10px; width:100%;">🔄 Atualizar lista</button>
         <h4>Transmissões públicas</h4>
         <div id="assistir-lista-transmissoes"><p class="vazio">Carregando...</p></div>
         <h4>Salas multi-tela públicas</h4>
@@ -1255,17 +1259,17 @@
     </aside>
     </div>
 
-    <script src="./js/perfil.js?v=20260926-08"></script>
-    <script src="./js/loja.js?v=20260926-08"></script>
-    <script src="./js/ranking.js?v=20260926-08"></script>
-    <script src="./js/core.js?v=20260926-08"></script>
-    <script src="./js/sudoku.js?v=20260926-08"></script>
-    <script src="./js/velha.js?v=20260926-08"></script>
-    <script src="./js/ludo.js?v=20260926-08"></script>
-    <script src="./js/campo.js?v=20260926-08"></script>
-    <script src="./js/termo.js?v=20260926-08"></script>
-    <script src="./js/tela.js?v=20260926-08"></script>
-    <script src="./js/clickj.js?v=20260926-08"></script>
-    <script src="./js/assistir.js?v=20260926-08"></script>
+    <script src="./js/perfil.js?v=20260926-09"></script>
+    <script src="./js/loja.js?v=20260926-09"></script>
+    <script src="./js/ranking.js?v=20260926-09"></script>
+    <script src="./js/core.js?v=20260926-09"></script>
+    <script src="./js/sudoku.js?v=20260926-09"></script>
+    <script src="./js/velha.js?v=20260926-09"></script>
+    <script src="./js/ludo.js?v=20260926-09"></script>
+    <script src="./js/campo.js?v=20260926-09"></script>
+    <script src="./js/termo.js?v=20260926-09"></script>
+    <script src="./js/tela.js?v=20260926-09"></script>
+    <script src="./js/clickj.js?v=20260926-09"></script>
+    <script src="./js/assistir.js?v=20260926-09"></script>
   </body>
 </html>

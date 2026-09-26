@@ -836,10 +836,13 @@ function cjAbrirConverter() {
     "🔄 Converter Jcoins em Moedas",
     "<p>1T de Jcoins = 100 moedas. Você tem <strong>" + trilhoesMax.toLocaleString("pt-BR") + "T</strong> disponíveis.</p>" +
     '<p style="color:#aeb2c7;font-size:13px;margin-top:4px;">Conversão apenas em múltiplos de 1T.</p>' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:center;">' +
+    '<div style="margin-top:14px;">' +
+    '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
     '<input type="number" id="cj-converter-input" min="1" max="' + trilhoesMax + '" step="1" value="1"' +
-    ' style="width:90px;padding:8px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:18px;text-align:center;">' +
-    '<span style="color:#c9ccda;">T &nbsp;=&nbsp; <strong id="cj-converter-moedas">100</strong> moedas</span>' +
+    ' style="width:80px;flex-shrink:0;padding:8px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:18px;text-align:center;">' +
+    '<span style="color:#c9ccda;font-size:16px;">T</span>' +
+    "</div>" +
+    '<p style="margin:12px 0 0;color:#c9ccda;">= <strong id="cj-converter-moedas">100</strong> moedas</p>' +
     "</div>",
     [
       { texto: "Converter", principal: true, acao: function () {

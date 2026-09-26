@@ -151,24 +151,16 @@ function bitrateEfetivo() {
   return telaFps === 60 ? Math.round(base * 1.5) : base;
 }
 
-// Relay: prefere fluidez (pouco fps/delay) sobre bitrate máximo — o proxy do
-// Discord historicamente engasgava perto de ~8 Mbps de JSON base64 e aí o
-// vídeo "trava". Mantemos uma margem de segurança abaixo disso mesmo com o
-// teto mais alto e o pequeno bônus de 60fps abaixo.
-var TELA_RELAY_TETO_SEGURANCA = 7500000;
+var TELA_RELAY_TETO_SEGURANCA = 10000000;
 
 function bitrateRelay() {
-  // 60fps ganha um pouco mais de bits (antes usava o mesmo budget do 30fps,
-  // o que deixava a imagem mais "borrada" em 60fps por dividir o mesmo
-  // orçamento entre o dobro de quadros) — sem chegar perto do ponto onde o
-  // proxy engasgava.
-  var fatorFps = telaFps === 60 ? 1.15 : 1;
+  var fatorFps = telaFps === 60 ? 1.25 : 1;
   if (multiSala) {
-    return Math.min(Math.round(5500000 * fatorFps), TELA_RELAY_TETO_SEGURANCA);
+    return Math.min(Math.round(6500000 * fatorFps), TELA_RELAY_TETO_SEGURANCA);
   }
   var base = TELA_PRESETS[telaResolucao].bitrate;
-  var teto = telaResolucao === "1080p" ? 7000000
-    : telaResolucao === "720p" ? 5500000 : 3000000;
+  var teto = telaResolucao === "1080p" ? 9000000
+    : telaResolucao === "720p" ? 7500000 : 4000000;
   var b = Math.min(base, teto);
   return Math.min(Math.round(b * fatorFps), TELA_RELAY_TETO_SEGURANCA);
 }
@@ -811,7 +803,7 @@ function decodificarRelayFrame(ehKey, timestamp, payload) {
   // VP8 exige keyframe para começar (viewer pode entrar no meio do GOP).
   if (!ehKey && !relayTemKey) return;
   if (ehKey) relayTemKey = true;
-  var maxDecodeRelay = multiSala ? 12 : 30;
+  var maxDecodeRelay = multiSala ? 16 : 40;
   if (relayDecoder.decodeQueueSize > maxDecodeRelay && !ehKey) return;
   relayQuadros++;
   if (!relayRxEnviado) {
@@ -922,7 +914,7 @@ async function iniciarEncoderRelay() {
         var b64 = btoa(s);
         var k = chunk.type === "key" ? 1 : 0;
         var t = chunk.timestamp;
-        var TAM = 12000;
+        var TAM = 32000;
         if (b64.length <= TAM) {
           enviarTela({ tipo: "quadro", k: k, t: t, d: b64 });
         } else {
@@ -964,6 +956,7 @@ async function iniciarEncoderRelay() {
       framerate: telaFps,
       bitrate: bitrateRelay(),
       latencyMode: "realtime",
+      hardwareAcceleration: "prefer-hardware",
     };
   }
 
@@ -998,16 +991,25 @@ async function iniciarEncoderRelay() {
   document.addEventListener("visibilitychange", aoVoltarAba);
   relayEncoderVisibilityListener = aoVoltarAba;
 
-  // setTimeout recursivo: lê telaFps ao vivo e não acumula atraso como setInterval.
   var relayDrawRodando = false;
+  var relayUltimoFrame = 0;
+  var intervaloMinimo = Math.floor(1000 / telaFps) - 2;
+
   function agendarDraw() {
     if (!relayAtivo || relayDrawRodando) return;
     relayDrawRodando = true;
-    var intervalo = Math.max(16, Math.floor(1000 / telaFps));
-    relayDrawTimer = setTimeout(function () {
+    if (video && typeof video.requestVideoFrameCallback === "function") {
+      video.requestVideoFrameCallback(function () { drawTick(); });
+    } else {
+      requestAnimationFrame(function () { drawTick(); });
+    }
+  }
+
+  function drawTick() {
       relayDrawRodando = false;
       if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
-      // Multi: reavalia a fonte (tile.preview pode só existir depois do grid).
+      var agora = performance.now();
+      if (agora - relayUltimoFrame < intervaloMinimo) { agendarDraw(); return; }
       if (multiSala) {
         var fonte = hostVideoEncoder();
         if (fonte && fonte !== video) video = fonte;
@@ -1018,7 +1020,7 @@ async function iniciarEncoderRelay() {
       }
       if (!video || video.readyState < 2 || !video.videoWidth) {
         ticksSemVideo++;
-        if (ticksSemVideo === 300) { // ~10s mesmo com timer throttado
+        if (ticksSemVideo === 300) {
           enviarTela({ tipo: "relay_erro", mensagem: "O vídeo da captura não carregou no transmissor (readyState=" +
             (video ? video.readyState : "nulo") + ", escondido=" + document.hidden + "). Ctrl+F5 e transmita de novo." });
           pararEncoderRelay();
@@ -1027,17 +1029,12 @@ async function iniciarEncoderRelay() {
         return;
       }
       ticksSemVideo = 0;
-      // Fila maior = menos frames descartados em picos (qualidade/fps).
-      // Multi: fila > 6 começa a atrasar — descarta antes (menos delay).
-      // 60fps single: fila um pouco maior (o dobro de quadros por segundo
-      // enche a fila mais rápido; sem isso muitos quadros eram descartados
-      // mesmo com CPU sobrando) — ainda baixa o bastante pra não acumular
-      // atraso perceptível.
-      var maxFila = multiSala ? 6 : (telaFps === 60 ? 5 : 4);
+      var maxFila = multiSala ? 8 : (telaFps === 60 ? 8 : 6);
       if (relayEncoder.encodeQueueSize > maxFila) {
         agendarDraw();
         return;
       }
+      relayUltimoFrame = agora;
       var frame;
       try {
         // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
@@ -1063,9 +1060,7 @@ async function iniciarEncoderRelay() {
         return;
       }
       tsUs += Math.round(1000000 / telaFps);
-      var agora = performance.now();
-      // Keyframe: multi 500ms (join rápido + menos delay acumulado no GOP),
-      // single 1s (economiza bitrate).
+      agora = performance.now();
       var intervaloKey = multiSala ? 500 : 1000;
       var forcar = relayForcarKey || (agora - ultimoKey) >= intervaloKey;
       if (forcar) { ultimoKey = agora; relayForcarKey = false; }
@@ -1085,7 +1080,6 @@ async function iniciarEncoderRelay() {
         return;
       }
       agendarDraw();
-    }, intervalo);
   }
   agendarDraw();
 }
@@ -3313,8 +3307,7 @@ function decodificarRelayFrameTile(tile, ehKey, timestamp, payload) {
   if (!payload || payload.byteLength < 1) return;
   if (!ehKey && !tile.temKey) return;
   if (ehKey) tile.temKey = true;
-  // Fila de decode: multi usa limiar menor (menos delay); single mantém 30.
-  var maxDecode = multiSala ? 12 : 30;
+  var maxDecode = multiSala ? 16 : 40;
   if (tile.decoder.decodeQueueSize > maxDecode && !ehKey) return;
   try {
     tile.decoder.decode(new EncodedVideoChunk({

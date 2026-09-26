@@ -323,5 +323,9 @@ async function assistirAtualizarMulti() {
   document.querySelector("#assistir-codigo-input").addEventListener("keydown", function (ev) {
     if (ev.key === "Enter") assistirEntrarCodigo();
   });
+  var btnAtualizar = document.querySelector("#assistir-atualizar");
+  if (btnAtualizar) btnAtualizar.addEventListener("click", assistirCarregarListas);
+  var btnVoltar = document.querySelector("#assistir-voltar-jogo");
+  if (btnVoltar) btnVoltar.addEventListener("click", assistirFecharPainel);
   setInterval(atualizarBotaoAssistirAlgo, 1000);
 })();

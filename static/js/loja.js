@@ -478,7 +478,6 @@ async function comprarDecoracao(skuId) {
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
     lojaAtualizarSaldoTelas();
-    lojaPaginaDecoracoes = 0;
     renderLojaDecoracoes();
   } catch (e) { alert("Não foi possível comprar agora."); }
 }
@@ -513,7 +512,6 @@ async function equiparItem(tipo, valor) {
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
     if (tipo === "decoracao") {
-      lojaPaginaDecoracoes = 0;
       renderLojaDecoracoes();
     } else if (tipo === "fonte_nick") {
       renderLojaFontes();
