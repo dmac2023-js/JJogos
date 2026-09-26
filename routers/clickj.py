@@ -12,7 +12,8 @@ import secrets
 import time
 from typing import Dict, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from shared import clickj as regras
 from shared.config import PASTA_BASE
@@ -20,6 +21,7 @@ from shared.db import redis_get, redis_set, usando_redis
 from shared.economia import (
     creditar_moedas,
     cosmeticos_equipados,
+    eh_admin_discord_id,
     registrar_fim_partida,
 )
 from shared.logging_util import log_tela
@@ -153,6 +155,7 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "auto_nivel": j["auto_nivel"],
         "auto_cps": regras.AUTO_CPS.get(j["auto_nivel"], 0),
         "auto_preco_mult": regras.mult_preco_autoclicker(j["rebirths"]),
+        "equip_preco_mult": regras.mult_preco_equip(j["rebirths"]),
         "equip": j["equip"],
         "pocoes": j["pocoes"],
         "efeitos": {k: {"valor": ef["valor"], "restante": max(0, int(ef["expira"] - agora))}
@@ -167,6 +170,8 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "titulo_equipado": j.get("titulo_equipado"),
         "respec_atual": regras.respec_distribuicao_atual(j),
         "respec_total": regras.total_pontos_respec(j),
+        "pets": j.get("pets", []),
+        "pets_equipados": j.get("pets_equipados", []),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
@@ -559,7 +564,7 @@ async def _tratar(nome: str, dados: dict) -> None:
             await _enviar(nome, {"tipo": "erro", "mensagem": "Jcoins insuficientes."})
             return
         j["jcoins"] -= custo
-        moedas = trilhoes * 100
+        moedas = trilhoes * 10  # 10T Jcoins = 100 moedas
         await asyncio.to_thread(creditar_moedas, nome, moedas)
         _marcar_sujo()
         await _enviar_estado(nome, {"aviso": "Converteu %dT em %d moedas!" % (trilhoes, moedas)})
@@ -568,6 +573,27 @@ async def _tratar(nome: str, dados: dict) -> None:
     if tipo == "comprar_maximo_equip":
         slot = str(dados.get("slot", ""))
         ok, msg, _ = regras.comprar_maximo_equip(j, slot)
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": msg})
+        return
+
+    if tipo == "pet_rolar":
+        tier = str(dados.get("tier", ""))
+        ok, msg, _ = regras.rolar_pet(j, tier, agora)
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": msg})
+        return
+
+    if tipo == "pet_equipar":
+        pet_id = str(dados.get("pet_id", ""))
+        equipar = bool(dados.get("equipar"))
+        ok, msg = regras.equipar_pet(j, pet_id, equipar)
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
@@ -636,6 +662,42 @@ async def _tratar(nome: str, dados: dict) -> None:
         if luta and not luta["fim"]:
             await _finalizar_luta(luta, _outro(luta, nome), "%s desistiu." % luta["lutadores"][nome]["nick"])
         return
+
+
+# ---------------------------------------------------------------------------
+# Admin
+# ---------------------------------------------------------------------------
+
+class ResetarProgresso(BaseModel):
+    admin_id: str
+
+
+@router.post("/clickj/admin/resetar-progresso")
+async def admin_resetar_progresso(dados: ResetarProgresso):
+    """Ação única: zera nível, cliques e rebirths de TODOS os jogadores
+    salvos do ClickJ. Não mexe em jcoins, equipamento, pets, títulos etc."""
+    if not eh_admin_discord_id(dados.admin_id):
+        raise HTTPException(status_code=403, detail="Você não tem permissão para isso.")
+    try:
+        await _garantir_carregado()
+    except Exception as erro:
+        raise HTTPException(status_code=500, detail="Não consegui carregar os dados: " + str(erro))
+
+    afetados = 0
+    for j in _dados["jogadores"].values():
+        j["cliques"] = 0
+        j["nivel"] = 1
+        j["rebirths"] = 0
+        afetados += 1
+    _marcar_sujo()
+    await _salvar_se_sujo()
+
+    for nome in list(conexoes):
+        if _jogador(nome):
+            await _enviar_estado(nome, {"aviso": "Um administrador resetou nível e rebirths de todos os jogadores."})
+    await _transmitir_online(forcar=True)
+
+    return {"ok": True, "jogadores_afetados": afetados}
 
 
 @router.websocket("/ws/clickj")

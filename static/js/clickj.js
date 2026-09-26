@@ -547,20 +547,26 @@ function cjLinhasEquip(slot) {
   var atual = cjEu.equip[slot] != null ? cjEu.equip[slot] : -1;
   var jcoins = cjJcoinsAtuais();
   var skill = cjSkillDoSlot(slot);
+  var mult = cjEu.equip_preco_mult || 1;
   var podeMax = 0;
   var tempJcoins = jcoins;
   for (var ci = atual + 1; ci < cjCatalogo.materiais.length; ci++) {
-    if (tempJcoins >= cjCatalogo.materiais[ci].preco) { tempJcoins -= cjCatalogo.materiais[ci].preco; podeMax++; } else break;
+    var precoCi = cjCatalogo.materiais[ci].preco * mult;
+    if (tempJcoins >= precoCi) { tempJcoins -= precoCi; podeMax++; } else break;
   }
   var html = podeMax >= 2
     ? '<div class="cj-comprar-max-wrap"><button type="button" class="cj-comprar" data-comprar-max="' + slot + '">Comprar máximo (' + podeMax + ')</button></div>'
     : "";
+  if (mult > 1) {
+    html = '<p style="color:#ff9a9a;font-size:12px;margin:0 0 8px;">Rebirth encareceu esses itens em ' + cjFmt(mult) + "x.</p>" + html;
+  }
   cjCatalogo.materiais.forEach(function (m, idx) {
     var estado = idx <= atual ? "comprado" : idx === atual + 1 ? "disponivel" : "bloqueado";
+    var preco = m.preco * mult;
     var acao;
     if (estado === "comprado") acao = '<span class="cj-possui">' + (idx === atual ? "✓ Em uso" : "✓ Comprado") + "</span>";
-    else if (estado === "disponivel") acao = cjBotaoComprar('data-comprar="' + slot + ":" + m.id + '"', m.preco, "Comprar", jcoins < m.preco);
-    else acao = '<span class="cj-tag">🔒 ' + cjMoedaHtml(m.preco) + "</span>";
+    else if (estado === "disponivel") acao = cjBotaoComprar('data-comprar="' + slot + ":" + m.id + '"', preco, "Comprar", jcoins < preco);
+    else acao = '<span class="cj-tag">🔒 ' + cjMoedaHtml(preco) + "</span>";
     html +=
       '<div class="cj-item ' + estado + '">' +
       '<span class="cj-swatch" style="background:' + m.cor + '"></span>' +
@@ -699,6 +705,59 @@ function cjAtualizarRespecRestante() {
   if (botao) botao.disabled = restante !== 0 || cjJcoinsAtuais() < cjCatalogo.respec.preco;
 }
 
+var CJ_PET_DESCRICAO = {
+  basica: "Multiplica seu clique (e o autoclicker) entre 2x e 5x, sorteado na hora — só depende do pet.",
+  epica: "Todo pet multiplica o clique por 5x e dá +1.000 em TODAS as suas skills.",
+  divina: "Todo pet multiplica o clique por 10x, dá +2.000 na sua skill mais fraca e +1.000 no resto.",
+};
+
+function cjPetDescricaoInstancia(p) {
+  if (p.tier === "basica") return "Multiplica clique em " + p.mult + "x";
+  if (p.tier === "epica") return "Multiplica clique em " + p.mult + "x · +1.000 em todas as skills";
+  var extra = p.skill_extra || {};
+  var nomeFoco = extra.foco ? cjCatalogo.skill_nomes[extra.foco] : "?";
+  return "Multiplica clique em " + p.mult + "x · +2.000 em " + nomeFoco + " · +1.000 no resto";
+}
+
+function cjRenderPets() {
+  var pets = cjCatalogo.pets;
+  var jcoins = cjJcoinsAtuais();
+  var meusPets = cjEu.pets || [];
+  var equipados = cjEu.pets_equipados || [];
+  var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + pets.max_equipados +
+    " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Pets não somem no rebirth.</p>";
+
+  ["basica", "epica", "divina"].forEach(function (tier) {
+    var info = pets.tiers[tier];
+    html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
+      '<div class="cj-item-info"><strong>' + info.nome + "</strong><small>" + CJ_PET_DESCRICAO[tier] + "</small></div>" +
+      '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', info.preco, "Rolar", jcoins < info.preco) +
+      "</div></div>";
+  });
+
+  html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + ")</h4>";
+  if (!meusPets.length) {
+    html += '<p class="cj-dica">Você ainda não tem nenhum pet.</p>';
+  }
+  meusPets.forEach(function (p) {
+    var estaEquipado = equipados.indexOf(p.id) !== -1;
+    var acao;
+    if (estaEquipado) {
+      acao = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
+    } else if (equipados.length >= pets.max_equipados) {
+      acao = '<span class="cj-tag">Slots cheios</span>';
+    } else {
+      acao = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
+    }
+    html += '<div class="cj-item' + (estaEquipado ? " equipado" : "") + '">' +
+      '<span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
+      '<div class="cj-item-info"><strong>' + escapeHtml(p.nome) + " (" + pets.tiers[p.tier].nome + ")</strong>" +
+      "<small>" + cjPetDescricaoInstancia(p) + "</small></div>" +
+      '<div class="cj-item-acao">' + acao + "</div></div>";
+  });
+  return html;
+}
+
 function cjCardAutoclicker() {
   var auto = cjCatalogo.auto;
   var maxAuto = Math.max.apply(null, Object.keys(auto.cps).map(Number));
@@ -745,6 +804,8 @@ function cjRenderLoja() {
     var tipo = cjLojaFiltro.pocoes || "clique";
     filtros = cjFiltrosHtml([["clique", "⚡ Cliques"]].concat(skillsOpcoes), tipo, "pocoes");
     lista = cjLinhasPocoes(tipo);
+  } else if (cjLojaAba === "pets") {
+    lista = cjRenderPets();
   } else if (cjLojaAba === "maestria") {
     lista = cjRenderMaestria();
   } else if (cjLojaAba === "titulos") {
@@ -834,7 +895,7 @@ function cjAbrirConverter() {
   if (trilhoesMax < 1) return;
   cjPopup(
     "🔄 Converter Jcoins em Moedas",
-    "<p>1T de Jcoins = 100 moedas. Você tem <strong>" + trilhoesMax.toLocaleString("pt-BR") + "T</strong> disponíveis.</p>" +
+    "<p>10T de Jcoins = 100 moedas. Você tem <strong>" + trilhoesMax.toLocaleString("pt-BR") + "T</strong> disponíveis.</p>" +
     '<p style="color:#aeb2c7;font-size:13px;margin-top:4px;">Conversão apenas em múltiplos de 1T.</p>' +
     '<div style="margin-top:14px;">' +
     '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
@@ -842,7 +903,7 @@ function cjAbrirConverter() {
     ' style="width:80px;flex-shrink:0;padding:8px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:18px;text-align:center;">' +
     '<span style="color:#c9ccda;font-size:16px;">T</span>' +
     "</div>" +
-    '<p style="margin:12px 0 0;color:#c9ccda;">= <strong id="cj-converter-moedas">100</strong> moedas</p>' +
+    '<p style="margin:12px 0 0;color:#c9ccda;">= <strong id="cj-converter-moedas">10</strong> moedas</p>' +
     "</div>",
     [
       { texto: "Converter", principal: true, acao: function () {
@@ -860,7 +921,7 @@ function cjAbrirConverter() {
     input.addEventListener("input", function () {
       var n = Math.max(1, Math.min(trilhoesMax, parseInt(input.value, 10) || 1));
       var el = document.querySelector("#cj-converter-moedas");
-      if (el) el.textContent = (n * 100).toLocaleString("pt-BR");
+      if (el) el.textContent = (n * 10).toLocaleString("pt-BR");
     });
     input.focus();
     input.select();
@@ -1166,7 +1227,7 @@ function cjSair() {
     // recebeu (o lote só sai a cada 250ms), e a compra podia ser recusada
     // por "Jcoins insuficientes" mesmo com o botão parecendo liberado.
     var acaoComPreco = ev.target.closest(
-      "[data-comprar], [data-comprar-max], [data-auto], [data-maestria-melhorar], [data-titulo-comprar], [data-respec-confirmar]");
+      "[data-comprar], [data-comprar-max], [data-auto], [data-maestria-melhorar], [data-titulo-comprar], [data-respec-confirmar], [data-pet-rolar]");
     if (acaoComPreco && !acaoComPreco.disabled && cjPendentes > 0) {
       clearTimeout(cjEnvioTimer);
       cjEnviarLote();
@@ -1205,6 +1266,12 @@ function cjSair() {
       });
       cjEnviar({ tipo: "respec_livros", distribuicao: distribuicao });
     }
+    var petRolar = ev.target.closest("[data-pet-rolar]");
+    if (petRolar && !petRolar.disabled) { petRolar.disabled = true; cjEnviar({ tipo: "pet_rolar", tier: petRolar.dataset.petRolar }); return; }
+    var petEquipar = ev.target.closest("[data-pet-equipar]");
+    if (petEquipar) { cjEnviar({ tipo: "pet_equipar", pet_id: petEquipar.dataset.petEquipar, equipar: true }); return; }
+    var petDesequipar = ev.target.closest("[data-pet-desequipar]");
+    if (petDesequipar) { cjEnviar({ tipo: "pet_equipar", pet_id: petDesequipar.dataset.petDesequipar, equipar: false }); return; }
   });
   document.querySelector("#cj-loja").addEventListener("input", function (ev) {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();

@@ -5,6 +5,7 @@ a persistência ficam em routers/clickj.py. Jcoins são uma moeda própria do
 ClickJ — não se misturam com as moedas da loja do site.
 """
 import random
+import secrets
 from typing import Optional, Tuple
 
 SKILLS = ["magia", "precisao", "forca", "resistencia", "agilidade"]
@@ -96,8 +97,9 @@ SLOTS_LIVRO = {
 SLOTS_REBIRTH = ["arma"] + list(SLOTS_ARMADURA) + list(SLOTS_LIVRO)
 
 POCOES = {}
-for _mult, _precos in ((2, (1_000, 8_000, 40_000)), (5, (5_000, 40_000, 200_000)),
-                       (10, (15_000, 120_000, 1_000_000))):
+# Preços por (1 min, 10 min, 1 h) — na mesma ordem de _dur logo abaixo.
+for _mult, _precos in ((2, (2_000, 20_000, 100_000)), (5, (10_000_000, 100_000_000, 500_000_000)),
+                       (10, (20_000_000, 200_000_000, 1_000_000_000))):
     for _dur, _rotulo, _preco in zip((60, 600, 3600), ("1 min", "10 min", "1 h"), _precos):
         _id = "clique_x%d_%d" % (_mult, _dur)
         POCOES[_id] = {"id": _id, "tipo": "clique", "valor": _mult, "dur": _dur, "preco": _preco,
@@ -212,6 +214,50 @@ PESO_ARMADURA = 1 / 3
 PESO_BOTA = 0.3
 PESO_MAGIA_ATAQUE = 0.9
 
+# Resistência a cada tipo de ataque, por classe (multiplica o dano recebido).
+# Tipo do ataque = "magica" se a magia do atacante for >= força dele, senão
+# "fisica". >1 = fraqueza, <1 = resistência, 1 = neutro.
+RESISTENCIA_CLASSE = {
+    "mago": {"fisica": 1.25, "magica": 1.0},
+    "curandeiro": {"fisica": 1.20, "magica": 0.85},
+    "arqueiro": {"fisica": 0.8, "magica": 1.2},
+    "guerreiro": {"fisica": 1.0, "magica": 1.0},
+    "monge": {"fisica": 0.85, "magica": 0.85},
+}
+# Mago também sofre extra de quem ataca com muita precisão (até +50% de
+# dano quando a precisão do atacante domina completamente a do mago).
+PRECISAO_EXTRA_MAGO = 0.5
+# Arqueiro toma "crítico de magia": chance extra de dano mágico ampliado.
+CHANCE_CRITICO_MAGICO_ARQUEIRO = 0.25
+CRITICO_MAGICO_MULT = 1.5
+# Monge é pouco ágil: sua agilidade em combate rende menos que a mostrada
+# na ficha (afeta esquiva, tanto passiva quanto ativa).
+AGILIDADE_MULT_CLASSE = {"monge": 0.6}
+
+
+# ---------------------------------------------------------------------------
+# Pets — 3 roletas (básica, épica, divina). Guardados em j["pets"] (lista de
+# instâncias possuídas) e j["pets_equipados"] (até PET_MAX_EQUIPADOS ids).
+# Persistem entre rebirths de propósito (são caros demais pra resetar).
+# ---------------------------------------------------------------------------
+PET_MAX_EQUIPADOS = 3
+PET_TIERS = {
+    "basica": {"nome": "Roleta Básica", "preco": 1_000_000},
+    "epica": {"nome": "Roleta Épica", "preco": 10_000_000_000},
+    "divina": {"nome": "Roleta Divina", "preco": 1_000_000_000_000},
+}
+PET_MULT_BASICA = (2.0, 5.0)  # sorteado uniformemente nesse intervalo
+PET_MULT_EPICA = 5
+PET_MULT_DIVINA = 10
+PET_BONUS_EPICA = 1_000
+PET_BONUS_DIVINA_FOCO = 2_000
+PET_BONUS_DIVINA_RESTO = 1_000
+PET_NOMES = {
+    "basica": ["Gatinho", "Cachorrinho", "Coelhinho", "Passarinho", "Raposa", "Coruja", "Filhote de Lobo"],
+    "epica": ["Fênix", "Grifo", "Hidra", "Quimera", "Basilisco", "Ciclope"],
+    "divina": ["Leviatã", "Behemoth", "Ancião Celestial", "Avatar Divino", "Serafim"],
+}
+
 
 def catalogo() -> dict:
     return {
@@ -232,6 +278,12 @@ def catalogo() -> dict:
         "titulos": TITULOS, "preco_titulo": PRECO_TITULO,
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
+        "pets": {
+            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS,
+            "mult_basica": PET_MULT_BASICA, "mult_epica": PET_MULT_EPICA, "mult_divina": PET_MULT_DIVINA,
+            "bonus_epica": PET_BONUS_EPICA,
+            "bonus_divina_foco": PET_BONUS_DIVINA_FOCO, "bonus_divina_resto": PET_BONUS_DIVINA_RESTO,
+        },
     }
 
 
@@ -263,6 +315,8 @@ def normalizar(j: dict) -> dict:
     j.setdefault("titulos", [])
     j.setdefault("titulo_equipado", None)
     j.setdefault("respec_pontos", {})
+    j.setdefault("pets", [])
+    j.setdefault("pets_equipados", [])
     return j
 
 
@@ -312,11 +366,39 @@ def _efeito(j: dict, chave: str, agora: float) -> int:
     return 0
 
 
+def _pets_equipados(j: dict) -> list:
+    por_id = {p["id"]: p for p in j.get("pets", [])}
+    return [por_id[pid] for pid in j.get("pets_equipados", []) if pid in por_id]
+
+
+def _mult_pets(j: dict) -> float:
+    mult = 1.0
+    for p in _pets_equipados(j):
+        mult *= p.get("mult", 1)
+    return mult
+
+
+def _bonus_skill_pets(j: dict) -> dict:
+    bonus = {s: 0 for s in SKILLS}
+    for p in _pets_equipados(j):
+        extra = p.get("skill_extra")
+        if not extra:
+            continue
+        if extra["tipo"] == "todas":
+            for s in SKILLS:
+                bonus[s] += extra["bonus"]
+        elif extra["tipo"] == "foco":
+            for s in SKILLS:
+                bonus[s] += extra["bonus_foco"] if s == extra["foco"] else extra["bonus_resto"]
+    return bonus
+
+
 def valores_clique(j: dict, agora: float) -> Tuple[int, int]:
     """(quanto 1 clique conta pro nível, quantos Jcoins 1 clique dá)."""
     _, cpc, jpc = NIVEIS[j["nivel"] - 1]
     mult = _efeito(j, "clique", agora) or 1
-    return cpc * _mult_rebirth(j) * mult, jpc * mult
+    mult_pets = _mult_pets(j)
+    return round(cpc * _mult_rebirth(j) * mult * mult_pets), round(jpc * mult * mult_pets)
 
 
 def _atualizar_nivel(j: dict) -> int:
@@ -371,6 +453,9 @@ def skills(j: dict, agora: float) -> dict:
         total[info["skill"]] += _bonus_slot(j, slot)
     for slot, info in SLOTS_LIVRO.items():
         total[info["skill"]] += _bonus_slot(j, slot)
+    bonus_pets = _bonus_skill_pets(j)
+    for s in SKILLS:
+        total[s] += bonus_pets[s]
     pocao = {}
     for s in SKILLS:
         extra = _efeito(j, s, agora)
@@ -406,6 +491,10 @@ def nome_item(j: dict, slot: str, idx: int) -> str:
     return "%s (%s)" % (SLOTS_LIVRO[slot]["nome"], material)
 
 
+def _preco_equip(j: dict, idx: int) -> int:
+    return MATERIAIS[idx]["preco"] * mult_preco_equip(j.get("rebirths", 0))
+
+
 def comprar(j: dict, item_id: str) -> Tuple[bool, str]:
     if item_id in POCOES:
         p = POCOES[item_id]
@@ -424,7 +513,7 @@ def comprar(j: dict, item_id: str) -> Tuple[bool, str]:
         return False, "Você já tem esse item."
     if idx != atual + 1:
         return False, "Compre antes: " + nome_item(j, slot, atual + 1) + "."
-    preco = MATERIAIS[idx]["preco"]
+    preco = _preco_equip(j, idx)
     if j["jcoins"] < preco:
         return False, "Jcoins insuficientes."
     j["jcoins"] -= preco
@@ -443,10 +532,10 @@ def comprar_maximo_equip(j: dict, slot: str) -> Tuple[bool, str, int]:
         prox = atual + 1
         if prox >= len(MATERIAIS):
             break
-        m = MATERIAIS[prox]
-        if j["jcoins"] < m["preco"]:
+        preco = _preco_equip(j, prox)
+        if j["jcoins"] < preco:
             break
-        j["jcoins"] -= m["preco"]
+        j["jcoins"] -= preco
         j["equip"][slot] = prox
         ultimo = nome_item(j, slot, prox)
         comprados += 1
@@ -517,6 +606,18 @@ def mult_preco_autoclicker(rebirths: int) -> int:
     return 200 * (10 ** (rebirths - 3))
 
 
+def mult_preco_equip(rebirths: int) -> int:
+    """Arma, armadura e livros ficam mais caros a cada rebirth (menos
+    agressivo que o autoclicker, mas ainda pesado no fim do jogo)."""
+    if rebirths <= 0:
+        return 1
+    if rebirths == 1:
+        return 3
+    if rebirths == 2:
+        return 8
+    return 8 * (5 ** (rebirths - 2))
+
+
 def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
     atual = j["auto_nivel"]
     if atual == 0:
@@ -529,6 +630,60 @@ def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
     j["jcoins"] -= preco
     j["auto_nivel"] = atual + 1
     return True, "Autoclicker agora é nível %d (%d cliques/s)." % (atual + 1, AUTO_CPS[atual + 1])
+
+
+# ---------------------------------------------------------------------------
+# Pets
+# ---------------------------------------------------------------------------
+
+def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dict]]:
+    info = PET_TIERS.get(tier)
+    if not info:
+        return False, "Roleta inválida.", None
+    if j["jcoins"] < info["preco"]:
+        return False, "Jcoins insuficientes.", None
+    j["jcoins"] -= info["preco"]
+    rng = random.Random()
+    nome = rng.choice(PET_NOMES[tier])
+    if tier == "basica":
+        mult = round(rng.uniform(*PET_MULT_BASICA), 1)
+        skill_extra = None
+    elif tier == "epica":
+        mult = PET_MULT_EPICA
+        skill_extra = {"tipo": "todas", "bonus": PET_BONUS_EPICA}
+    else:  # divina
+        mult = PET_MULT_DIVINA
+        total_atual = skills(j, agora)["total"]
+        foco = min(SKILLS, key=lambda s: total_atual[s])
+        skill_extra = {"tipo": "foco", "foco": foco,
+                       "bonus_foco": PET_BONUS_DIVINA_FOCO, "bonus_resto": PET_BONUS_DIVINA_RESTO}
+    pet = {
+        "id": secrets.token_hex(4),
+        "tier": tier,
+        "nome": nome,
+        "mult": mult,
+        "skill_extra": skill_extra,
+    }
+    j.setdefault("pets", []).append(pet)
+    return True, "Pet obtido: %s (%s, %sx no clique)!" % (nome, info["nome"], mult), pet
+
+
+def equipar_pet(j: dict, pet_id: str, equipar: bool) -> Tuple[bool, str]:
+    por_id = {p["id"]: p for p in j.get("pets", [])}
+    if pet_id not in por_id:
+        return False, "Pet não encontrado."
+    equipados = j.setdefault("pets_equipados", [])
+    if equipar:
+        if pet_id in equipados:
+            return False, "Esse pet já está equipado."
+        if len(equipados) >= PET_MAX_EQUIPADOS:
+            return False, "Você só pode equipar até %d pets." % PET_MAX_EQUIPADOS
+        equipados.append(pet_id)
+        return True, "Pet equipado: %s." % por_id[pet_id]["nome"]
+    if pet_id not in equipados:
+        return False, "Esse pet não está equipado."
+    equipados.remove(pet_id)
+    return True, "Pet removido: %s." % por_id[pet_id]["nome"]
 
 
 def titulos_da_classe(classe: str) -> list:
@@ -687,6 +842,9 @@ def novo_lutador(j: dict, agora: float) -> dict:
     for s, info in SLOTS_ARMADURA.items():
         peso = PESO_BOTA if s == "bota" else PESO_ARMADURA
         stats[info["skill"]] -= round(_bonus_slot(j, s) * (1 - peso))
+    mult_agil = AGILIDADE_MULT_CLASSE.get(j["classe"], 1.0)
+    if mult_agil != 1.0:
+        stats["agilidade"] = round(stats["agilidade"] * mult_agil)
     return {
         "stats": stats,
         "hp": vida,
@@ -722,6 +880,10 @@ def _cura(ator: dict, alvo: dict) -> int:
     return max(1, round(base * CURA_DECAIMENTO ** ator["curas"]))
 
 
+def _tipo_ataque(stats: dict) -> str:
+    return "magica" if stats["magia"] >= stats["forca"] else "fisica"
+
+
 def _resolver_ataque(ator: dict, alvo: dict, rng: random.Random) -> dict:
     a, d = ator["stats"], alvo["stats"]
     agil = _disputa(d["agilidade"], a["agilidade"], G_AGILIDADE)
@@ -738,6 +900,23 @@ def _resolver_ataque(ator: dict, alvo: dict, rng: random.Random) -> dict:
     dano = (DANO_BASE
             * 2 * _disputa(_poder_ataque(a), _poder_ataque(d), G_ATAQUE)
             * 2 * _disputa(a["resistencia"], d["resistencia"], G_RESISTENCIA))
+
+    # Fraquezas/resistências por classe, conforme o tipo do ataque.
+    tipo = _tipo_ataque(a)
+    classe_alvo = alvo.get("classe")
+    dano *= RESISTENCIA_CLASSE.get(classe_alvo, {}).get(tipo, 1.0)
+
+    # Mago é fraco contra precisão: quanto mais o atacante domina em
+    # precisão, mais dano extra o mago toma (até +50%).
+    if classe_alvo == "mago":
+        dano *= 1 + PRECISAO_EXTRA_MAGO * prec
+
+    # Arqueiro toma "crítico de magia": chance extra de dano mágico ampliado.
+    critico_magico = False
+    if tipo == "magica" and classe_alvo == "arqueiro" and rng.random() < CHANCE_CRITICO_MAGICO_ARQUEIRO:
+        dano *= CRITICO_MAGICO_MULT
+        critico_magico = True
+
     total = rng.random() < 0.3 + 0.6 * prec
     if not total:
         dano *= rng.uniform(*DANO_PARCIAL)
@@ -747,7 +926,7 @@ def _resolver_ataque(ator: dict, alvo: dict, rng: random.Random) -> dict:
         resultado = "defendeu"
     dano = max(1, round(dano))
     alvo["hp"] = max(0, alvo["hp"] - dano)
-    return {"resultado": resultado, "dano": dano, "total": total}
+    return {"resultado": resultado, "dano": dano, "total": total, "critico_magico": critico_magico}
 
 
 def pode_esquivar(lutador: dict) -> bool:
@@ -784,8 +963,11 @@ def executar_acao(ator: dict, alvo: dict, acao: str, nick_ator: str, nick_alvo: 
         elif evento["resultado"] == "defendeu":
             evento["texto"] = "%s atacou, mas %s defendeu: só %d de dano." % (nick_ator, nick_alvo, evento["dano"])
         else:
+            sufixo = " (dano total!)" if evento["total"] else ""
+            if evento.get("critico_magico"):
+                sufixo += " (crítico mágico!)"
             evento["texto"] = "%s deu um tapa em %s: %d de dano%s." % (
-                nick_ator, nick_alvo, evento["dano"], " (dano total!)" if evento["total"] else "")
+                nick_ator, nick_alvo, evento["dano"], sufixo)
     elif acao == "esquivar":
         ator["esquivando"] = True
         ator["esquiva_livre_em"] = ator["turnos"] + ESQUIVA_INTERVALO
