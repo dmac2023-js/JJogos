@@ -689,9 +689,9 @@ function abrirModalAdminDoar() {
   card.innerHTML =
     '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
     "<h3>💰 Doar/Gerar moedas</h3>" +
-    '<p style="color:#aeb2c7;font-size:13px;">Credita moedas (Jogos7, não Jcoins do ClickJ) na conta de quem você quiser, pelo ID do Discord.</p>' +
-    '<label style="display:block;margin-top:10px;">ID do usuário (Discord)' +
-    '<input id="admin-doar-id" type="text" inputmode="numeric" placeholder="Ex: 1527038915628761110"' +
+    '<p style="color:#aeb2c7;font-size:13px;">Credita moedas (Jogos7, não Jcoins do ClickJ) na conta de quem você quiser.</p>' +
+    '<label style="display:block;margin-top:10px;">ID do Discord ou @username' +
+    '<input id="admin-doar-id" type="text" placeholder="Ex: 1527038915628761110 ou kaizo"' +
     ' style="width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;"></label>' +
     '<label style="display:block;margin-top:10px;">Quantidade de moedas' +
     '<input id="admin-doar-qtd" type="number" min="1" step="1" value="100"' +

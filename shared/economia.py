@@ -205,6 +205,18 @@ def resolver_nome_por_discord_id(discord_id: str) -> Optional[str]:
     return None
 
 
+def resolver_nome_alvo(identificador: str) -> Optional[str]:
+    """Aceita ID do Discord OU o 'nome' (username) direto — o ID só resolve
+    pra quem já teve o discord_id gravado na carteira (após abrir o site com
+    a versão atual); o username sempre funciona, pois é a própria chave."""
+    if not identificador:
+        return None
+    carteiras = carregar_economia().get("carteiras", {})
+    if identificador in carteiras:
+        return identificador
+    return resolver_nome_por_discord_id(identificador)
+
+
 def _imagem_decoracao(sku: Optional[str], animada: bool) -> Optional[str]:
     if not sku:
         return None

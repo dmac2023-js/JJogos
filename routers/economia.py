@@ -24,7 +24,7 @@ from shared.economia import (
     obter_carteira,
     perfil_publico,
     registrar_fim_partida,
-    resolver_nome_por_discord_id,
+    resolver_nome_alvo,
     salvar_economia,
     tentar_reclamar_bonus,
     top_ranking,
@@ -268,11 +268,13 @@ def admin_doar_moedas(dados: DoarMoedas):
     if dados.quantidade <= 0 or dados.quantidade > 1_000_000_000:
         raise HTTPException(status_code=400, detail="Quantidade inválida.")
 
-    nome_alvo = resolver_nome_por_discord_id(dados.alvo_id)
+    nome_alvo = resolver_nome_alvo(dados.alvo_id.strip())
     if not nome_alvo:
         raise HTTPException(
             status_code=404,
-            detail="Esse ID ainda não tem carteira (a pessoa precisa abrir o site logada com Discord pelo menos uma vez).",
+            detail=("Não achei ninguém com esse ID/username. Se for um ID do Discord, a pessoa "
+                    "precisa ter aberto o site logada pelo menos uma vez recentemente (versão "
+                    "atual). Tente também o @username dela do Discord direto."),
         )
 
     novo_saldo = creditar_moedas(nome_alvo, dados.quantidade)

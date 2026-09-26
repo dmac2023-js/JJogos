@@ -357,57 +357,75 @@ async function conectarAoDiscord() {
       }
 
       var autenticou = false;
-      try {
-        // Fluxo correto da Activity: authorize -> code -> /token -> access_token
-        // -> authenticate({access_token}) -> user. authenticate() sem token
-        // retorna sem user e deixava o header em "sem login".
-        var authz = await discordSdkGlobal.commands.authorize({
-          client_id: configuracao.application_id,
-          response_type: "code",
-          state: "",
-          prompt: "none",
-          scope: ["identify", "applications.commands"],
-        });
-        var codigo = authz && authz.code;
-        if (!codigo) throw new Error("authorize não retornou code");
 
-        var resTroca = await fetch("./token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: codigo, activity: true }),
-        });
-        var token = await resTroca.json();
-        if (!resTroca.ok) {
-          var detalhe = token.detail;
-          if (resTroca.status === 429 && detalhe && typeof detalhe === "object") {
-            var espera = Number(detalhe.retry_after) || 5;
-            // Margem de segurança em cima do retry_after do Discord.
-            discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
-            throw new Error(detalhe.mensagem || "Discord limitou os logins.");
-          }
-          throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o code.");
-        }
-
-        // O @me já vem pronto do backend (buscado lá) — dentro da Activity um
-        // fetch do cliente direto para discord.com fica preso pelo sandbox do
-        // iframe (mapeamento de URLs do portal) e nunca resolve.
-        var user = token.user;
-        if (!user || !user.id) throw new Error("@me sem user.");
-
-        usuarioDiscord = user;
-        autenticou = true;
+      // Já temos um access_token salvo (sessão anterior)? Reusa direto —
+      // evita repetir authorize()+/token (que bate no /oauth2/token do
+      // Discord, rate-limitado) toda vez que a Activity é aberta/recarregada.
+      // Só cai pro fluxo completo abaixo se isso falhar ou não existir.
+      var sessaoSalva = estadoDiscord();
+      if (sessaoSalva && sessaoSalva.access_token && sessaoSalva.user) {
         try {
-          await discordSdkGlobal.commands.authenticate({ access_token: token.access_token });
-        } catch (eAuth) {
-          console.warn("SDK authenticate (com token) falhou (ok se @me ok):", eAuth);
+          await discordSdkGlobal.commands.authenticate({ access_token: sessaoSalva.access_token });
+          usuarioDiscord = sessaoSalva.user;
+          autenticou = true;
+        } catch (eReusar) {
+          console.warn("Token salvo não colou, tentando login completo:", eReusar);
         }
-        salvarSessaoDiscord({
-          user: user,
-          access_token: token.access_token,
-          refresh_token: token.refresh_token,
-          obtido_em: Date.now(),
-        });
-        console.log("Discord user identified:", user.username);
+      }
+
+      try {
+        if (!autenticou) {
+          // Fluxo completo da Activity: authorize -> code -> /token -> access_token
+          // -> authenticate({access_token}) -> user. authenticate() sem token
+          // retorna sem user e deixava o header em "sem login".
+          var authz = await discordSdkGlobal.commands.authorize({
+            client_id: configuracao.application_id,
+            response_type: "code",
+            state: "",
+            prompt: "none",
+            scope: ["identify", "applications.commands"],
+          });
+          var codigo = authz && authz.code;
+          if (!codigo) throw new Error("authorize não retornou code");
+
+          var resTroca = await fetch("./token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: codigo, activity: true }),
+          });
+          var token = await resTroca.json();
+          if (!resTroca.ok) {
+            var detalhe = token.detail;
+            if (resTroca.status === 429 && detalhe && typeof detalhe === "object") {
+              var espera = Number(detalhe.retry_after) || 5;
+              // Margem de segurança em cima do retry_after do Discord.
+              discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
+              throw new Error(detalhe.mensagem || "Discord limitou os logins.");
+            }
+            throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o code.");
+          }
+
+          // O @me já vem pronto do backend (buscado lá) — dentro da Activity um
+          // fetch do cliente direto para discord.com fica preso pelo sandbox do
+          // iframe (mapeamento de URLs do portal) e nunca resolve.
+          var user = token.user;
+          if (!user || !user.id) throw new Error("@me sem user.");
+
+          usuarioDiscord = user;
+          autenticou = true;
+          try {
+            await discordSdkGlobal.commands.authenticate({ access_token: token.access_token });
+          } catch (eAuth) {
+            console.warn("SDK authenticate (com token) falhou (ok se @me ok):", eAuth);
+          }
+          salvarSessaoDiscord({
+            user: user,
+            access_token: token.access_token,
+            refresh_token: token.refresh_token,
+            obtido_em: Date.now(),
+          });
+          console.log("Discord user identified:", user.username);
+        }
       } catch (e) {
         console.warn("Não foi possível autenticar:", e);
         if (dentroDaActivity()) {
