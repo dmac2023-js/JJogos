@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from shared.economia import cosmeticos_equipados
 from shared.lobby_state import conexoes_lobby
 from shared.logging_util import log_tela
 
@@ -65,6 +66,8 @@ def info_transmissao(sala: str, transmissao: dict) -> dict:
         "sala": sala,
         "nick": transmissao["host_nick"],
         "avatar": transmissao.get("host_avatar"),
+        "host_nome": transmissao.get("host_nome") or "",
+        "cosmeticos": cosmeticos_equipados(transmissao.get("host_nome") or ""),
         "publica": bool(transmissao.get("publica")),
         "resolucao": transmissao["resolucao"],
         "fps": transmissao["fps"],
@@ -95,7 +98,9 @@ def info_sala_multi(codigo: str, s: dict) -> dict:
         {
             "id": mid,
             "nick": m.get("nick") or "Anônimo",
+            "nome": m.get("nome") or "",
             "avatar": m.get("avatar"),
+            "cosmeticos": cosmeticos_equipados(m.get("nome") or ""),
             "logado": bool(m.get("logado")),
             "conectado": m.get("ws") is not None,
         }
@@ -537,7 +542,8 @@ async def _ws_tela_host(websocket: WebSocket, sala: str, transmissao: dict, nick
 
 
 async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, nick: str,
-                          transporte: str, avatar: Optional[str] = None, logado: bool = False):
+                          transporte: str, avatar: Optional[str] = None, logado: bool = False,
+                          nome: str = ""):
     if len(transmissao["viewers"]) >= MAX_ESPECTADORES_TELA:
         log_tela("viewer recusado (sala cheia) sala=" + sala)
         await websocket.send_json({"tipo": "erro", "mensagem": "Transmissão cheia (máximo de 9 espectadores)."})
@@ -552,6 +558,8 @@ async def _ws_tela_viewer(websocket: WebSocket, sala: str, transmissao: dict, ni
         "nick": nick or ("Anônimo" if not logado else "—"),
         "avatar": avatar or None,
         "logado": bool(logado),
+        "nome": nome if logado else "",
+        "cosmeticos": cosmeticos_equipados(nome if logado else ""),
     }
     if eh_relay:
         transmissao.setdefault("relay_ws", {})[viewer_id] = websocket
@@ -656,6 +664,7 @@ async def ws_tela(websocket: WebSocket, sala: str):
     transporte = websocket.query_params.get("transporte", "webrtc")
     avatar = websocket.query_params.get("avatar") or None
     logado = websocket.query_params.get("logado", "") in ("1", "true", "True")
+    nome = (websocket.query_params.get("nome") or "").strip() if logado else ""
 
     transmissao = salas_tela.get(sala)
     if not transmissao:
@@ -665,9 +674,11 @@ async def ws_tela(websocket: WebSocket, sala: str):
         return
 
     if papel == "host":
+        if nome:
+            transmissao["host_nome"] = nome
         await _ws_tela_host(websocket, sala, transmissao, nick)
     else:
-        await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte, avatar, logado)
+        await _ws_tela_viewer(websocket, sala, transmissao, nick, transporte, avatar, logado, nome)
 
 
 # ---------------------------------------------------------------------------
@@ -729,6 +740,7 @@ async def ws_multitela(websocket: WebSocket, codigo: str):
     nick = websocket.query_params.get("nick", "Anônimo") or "Anônimo"
     avatar = websocket.query_params.get("avatar") or None
     logado = websocket.query_params.get("logado", "") in ("1", "true", "True")
+    nome = (websocket.query_params.get("nome") or "").strip() if logado else ""
 
     s = salas_multi.get(codigo)
     if not s:
@@ -750,6 +762,7 @@ async def ws_multitela(websocket: WebSocket, codigo: str):
     s.setdefault("membros", {})[mid] = {
         "id": mid,
         "nick": nick,
+        "nome": nome,
         "avatar": avatar,
         "logado": bool(logado),
         "ws": websocket,

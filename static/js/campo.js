@@ -266,6 +266,7 @@ function campoDerrotaSolo(idx) {
   campoPintarCelula(idx, "perigo", -1);
   campoMsg("💥 Você acertou uma bomba! Tempo: " + formatarTempo(campoTempoSeg()), "erro");
   campoMostrarBotao("#campo-reiniciar", true);
+  jogoRegistrarTempo("campo_solo", false);
 }
 
 async function campoVitoriaSolo() {
@@ -294,9 +295,7 @@ async function campoVitoriaSolo() {
     });
     carregarRankingCampo();
     jogoRegistrarTempo("campo_solo", true);
-    atualizarMoedasHeader();
-    registrarHistoricoGeral("Campo Minado", "Vitória · " + formatarTempo(campoTempoFinal));
-  } catch (e) { /* ignore */ }
+    atualizarMoedasHeader();  } catch (e) { /* ignore */ }
 }
 
 function campoToggleBandeiraSolo(idx) {
@@ -563,15 +562,9 @@ function campoRenderPlacar(jogadores, placar) {
     var av = document.querySelector("#placar-campo-avatar-" + slot);
     var nk = document.querySelector("#placar-campo-nick-" + slot);
     var gl = document.querySelector("#placar-campo-gol-" + slot);
-    if (nk) nk.textContent = j.nick || "—";
+    if (nk) { nk.textContent = j.nick || "—"; aplicarCorNickEl(nk, j.cosmeticos, j.nome); }
     if (gl) gl.textContent = String((campoPlacar || {})[slot] || 0);
-    if (av) {
-      if (j.avatar) {
-        av.innerHTML = '<img src="' + escapeHtml(j.avatar) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />';
-      } else {
-        av.textContent = (j.nick || "?").charAt(0).toUpperCase();
-      }
-    }
+    preencherAvatarPlacar(av, j.nick, j.avatar, j.cosmeticos, j.nome);
   });
 }
 
@@ -732,6 +725,7 @@ function processarMensagemCampo(dados) {
         });
       }
       campoMsg("💣 Ambos erraram. Empate!", "erro");
+      jogoRegistrarTempo("campo_online", false, "empate");
       campoMostrarBotao("#campo-pedir-revanche", true);
       break;
     case "revanche_pedida":
@@ -888,20 +882,13 @@ async function carregarRankingCampo() {
     }
     container.innerHTML = "";
     lista.slice(0, 3).forEach(function (r, i) {
-      var img = r.avatar
-        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
-        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + "</span>";
       var tempo = r.melhor_tempo ? formatarTempo(r.melhor_tempo) : "—";
       var el = document.createElement("div");
       el.className = "registro-recorde campo-top";
-      el.innerHTML =
-        '<span class="recorde-posicao">' + (medallas[i] || (i + 1)) + "</span>" +
-        img +
-        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + "</strong>" +
-        '<span class="recorde-vert">' +
-        '<span class="vitorias-linha">' + (r.vitorias || 0) + " vitórias</span>" +
-        '<span class="tempo-linha">' + tempo + "</span>" +
-        "</span></span>";
+      el.innerHTML = linhaRecordeHtml(medallas[i] || (i + 1), r,
+        '<span class="recorde-vert"><span class="vitorias-linha">' + (r.vitorias || 0) + " vitórias</span>" +
+        '<span class="tempo-linha">' + tempo + "</span></span>");
+      marcarPerfilEl(el, r.nome);
       container.appendChild(el);
     });
   } catch (e) {

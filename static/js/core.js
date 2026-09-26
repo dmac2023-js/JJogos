@@ -97,17 +97,6 @@ function formatarTempo(segundos) {
   return m + ":" + s;
 }
 
-// ---------------------------------------------------------------------------
-// Perfil — histórico recente unificado (todos os jogos)
-// ---------------------------------------------------------------------------
-function registrarHistoricoGeral(jogo, detalhe) {
-  try {
-    const lista = JSON.parse(localStorage.getItem("jj-historico-geral") || "[]");
-    lista.unshift({ jogo: jogo, detalhe: detalhe, data: new Date().toLocaleDateString("pt-BR") });
-    localStorage.setItem("jj-historico-geral", JSON.stringify(lista.slice(0, 20)));
-  } catch (e) { /* ignore */ }
-}
-
 
 let lobbyWs = null;
 let lobbyPingTimer = null;
@@ -211,7 +200,26 @@ document.querySelectorAll(".voltar").forEach(function (botao) {
   });
 });
 
-function preencherAvatarPlacar(el, nick, avatar, cosmeticos) {
+var FONTES_NICK_IDS = ["negrito", "italico", "mono", "serifa", "cursiva", "impacto", "versalete", "espacada"];
+
+/** Marca um elemento como clicável pra abrir o perfil do jogador (o clique é
+ *  tratado por um ouvinte único, lá embaixo). */
+function marcarPerfilEl(el, nome) {
+  if (!el) return;
+  if (nome && !ehAnonimoNick(nome)) {
+    el.dataset.perfil = nome;
+    el.title = "Ver perfil";
+  } else {
+    delete el.dataset.perfil;
+  }
+}
+
+function atributoPerfilHtml(nome) {
+  if (!nome || ehAnonimoNick(nome)) return "";
+  return ' data-perfil="' + escapeHtml(nome) + '" title="Ver perfil"';
+}
+
+function preencherAvatarPlacar(el, nick, avatar, cosmeticos, nome) {
   if (!el) return;
   var decoracaoUrl = cosmeticos && cosmeticos.decoracao;
   el.classList.toggle("tem-decoracao", !!decoracaoUrl);
@@ -222,18 +230,27 @@ function preencherAvatarPlacar(el, nick, avatar, cosmeticos) {
     html += '<img class="avatar-decoracao-img" src="' + escapeHtml(decoracaoUrl) + '" alt="" />';
   }
   el.innerHTML = html;
+  marcarPerfilEl(el, nome);
 }
 
-/** Aplica a cor/arco-íris do nick equipado num elemento de texto qualquer
- *  (placares, listas de sala) — usa a mesma lógica do cabeçalho. */
-function aplicarCorNickEl(el, cosmeticos) {
-  if (!el || typeof aplicarCorEmElemento !== "function") return;
-  aplicarCorEmElemento(el, cosmeticos && cosmeticos.cor_nick);
+function aplicarFonteNickEl(el, fonte) {
+  if (!el) return;
+  FONTES_NICK_IDS.forEach(function (f) { el.classList.remove("nick-fonte-" + f); });
+  if (fonte && FONTES_NICK_IDS.indexOf(fonte) !== -1) el.classList.add("nick-fonte-" + fonte);
 }
 
-/** HTML de um avatar pequeno (listas de sala) com a decoração de perfil
- *  equipada sobreposta, quando houver. */
-function avatarSalaHtml(avatar, nick, cosmeticos) {
+/** Aplica cor/arco-íris + fonte do nick equipados num elemento de texto
+ *  (placares, cabeçalho, perfil) — e, se vier o nome, deixa clicável. */
+function aplicarCorNickEl(el, cosmeticos, nome) {
+  if (!el) return;
+  if (typeof aplicarCorEmElemento === "function") aplicarCorEmElemento(el, cosmeticos && cosmeticos.cor_nick);
+  aplicarFonteNickEl(el, cosmeticos && cosmeticos.fonte_nick);
+  if (nome !== undefined) marcarPerfilEl(el, nome);
+}
+
+/** HTML de um avatar pequeno (listas de sala, tabelas) com a decoração de
+ *  perfil equipada sobreposta, quando houver. */
+function avatarSalaHtml(avatar, nick, cosmeticos, nome) {
   var decoracaoUrl = cosmeticos && cosmeticos.decoracao;
   var interno = avatar
     ? '<img class="sala-item-avatar" src="' + escapeHtml(avatar) + '" alt="" />'
@@ -241,19 +258,42 @@ function avatarSalaHtml(avatar, nick, cosmeticos) {
   if (decoracaoUrl) {
     interno += '<img class="avatar-decoracao-img" src="' + escapeHtml(decoracaoUrl) + '" alt="" />';
   }
-  return '<span class="sala-item-avatar-box">' + interno + "</span>";
+  return '<span class="sala-item-avatar-box"' + atributoPerfilHtml(nome) + ">" + interno + "</span>";
 }
 
-/** Atributo style/class pra colorir um <strong>/<span> de nick em HTML
- *  montado via string (listas de sala) — mesma cor/arco-íris da loja. */
+/** Atributos class/style pra colorir e trocar a fonte de um <span> de nick em
+ *  HTML montado via string — mesma cor/arco-íris/fonte da loja. */
 function corNickAtributoHtml(cosmeticos) {
+  var classes = [];
+  var estilo = "";
   var cor = cosmeticos && cosmeticos.cor_nick;
-  if (cor === "arco-iris") return ' class="nick-arco-iris"';
-  if (cor && typeof LOJA_CORES_HEX !== "undefined" && LOJA_CORES_HEX[cor]) {
-    return ' style="color:' + LOJA_CORES_HEX[cor] + '"';
-  }
-  return '';
+  if (cor === "arco-iris") classes.push("nick-arco-iris");
+  else if (cor && typeof LOJA_CORES_HEX !== "undefined" && LOJA_CORES_HEX[cor]) estilo = ' style="color:' + LOJA_CORES_HEX[cor] + '"';
+  var fonte = cosmeticos && cosmeticos.fonte_nick;
+  if (fonte && FONTES_NICK_IDS.indexOf(fonte) !== -1) classes.push("nick-fonte-" + fonte);
+  return (classes.length ? ' class="' + classes.join(" ") + '"' : "") + estilo;
 }
+
+function nickHtml(nick, cosmeticos, nome) {
+  return "<span" + corNickAtributoHtml(cosmeticos) + atributoPerfilHtml(nome) + ">" + escapeHtml(nick || "?") + "</span>";
+}
+
+/** Linha das tabelas de vitórias/recordes de cada jogo: medalha, avatar com
+ *  decoração, nick com cor/fonte e o valor — tudo clicável pro perfil. */
+function linhaRecordeHtml(posicao, r, subtitulo, valor) {
+  return '<span class="recorde-posicao">' + posicao + "</span>" +
+    avatarSalaHtml(r.avatar, r.nick, r.cosmeticos) +
+    '<span class="recorde-info"><strong>' + nickHtml(r.nick, r.cosmeticos) + "</strong>" +
+    (subtitulo ? "<small>" + subtitulo + "</small>" : "") + "</span>" +
+    (valor !== undefined ? '<span class="recorde-tempo">' + valor + "</span>" : "");
+}
+
+document.addEventListener("click", function (ev) {
+  var alvo = ev.target.closest && ev.target.closest("[data-perfil]");
+  if (!alvo || typeof abrirPerfilJogador !== "function") return;
+  ev.preventDefault();
+  abrirPerfilJogador(alvo.dataset.perfil);
+});
 
 
 // ---------------------------------------------------------------------------

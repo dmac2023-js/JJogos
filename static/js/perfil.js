@@ -16,9 +16,13 @@ function renderPerfilIdentidade() {
   if (!alvo) return;
   var nick = nomeExibicao();
   var logado = !!usuarioDiscord;
+  var cosmeticos = logado ? minhasCosmeticosAtuais() : null;
   var avatarHtml = logado
     ? '<img src="' + escapeHtml(avatarAtual()) + '" alt="" />'
     : escapeHtml((nick || "?").charAt(0).toUpperCase());
+  if (cosmeticos && cosmeticos.decoracao) {
+    avatarHtml += '<img class="avatar-decoracao-img" src="' + escapeHtml(cosmeticos.decoracao) + '" alt="" />';
+  }
   alvo.innerHTML =
     '<span class="perfil-avatar">' + avatarHtml + "</span>" +
     "<span><span class=\"perfil-nome\">" + escapeHtml(nick) + "</span>" +
@@ -27,29 +31,38 @@ function renderPerfilIdentidade() {
       ? "Conectado com Discord"
       : "Modo navegador — entre com Discord para registrar recordes") +
     "</div></span>";
-  // Aplica a cor do nick equipada
-  var nomeSpan = alvo.querySelector(".perfil-nome");
-  if (nomeSpan && typeof aplicarCorEmElemento === "function" && typeof minhaCarteira !== "undefined") {
-    aplicarCorEmElemento(nomeSpan, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
-  }
+  aplicarCorNickEl(alvo.querySelector(".perfil-nome"), cosmeticos);
 }
+
+var PERFIL_RESULTADOS = {
+  vitoria: { texto: "Vitória", cor: "#85e0ae" },
+  derrota: { texto: "Derrota", cor: "#ff9a9a" },
+  empate: { texto: "Empate", cor: "#ffd36a" },
+};
 
 function renderPerfilHistorico() {
   var alvo = document.querySelector("#perfil-historico");
   if (!alvo) return;
-  var lista = [];
-  try { lista = JSON.parse(localStorage.getItem("jj-historico-geral") || "[]"); } catch (e) { /* ignore */ }
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="vazio">Entre com Discord para guardar o histórico das suas partidas.</p>';
+    return;
+  }
+  var lista = (minhaCarteira && minhaCarteira.historico) || [];
   if (lista.length === 0) {
-    alvo.innerHTML = '<p class="vazio">Nenhuma partida concluída ainda neste navegador.</p>';
+    alvo.innerHTML = '<p class="vazio">Nenhuma partida registrada ainda.</p>';
     return;
   }
   alvo.innerHTML = "";
-  lista.forEach(function (item) {
+  lista.slice(0, 10).forEach(function (item) {
+    var resultado = PERFIL_RESULTADOS[item.resultado] || PERFIL_RESULTADOS.derrota;
+    var quando = new Date((item.em || 0) * 1000).toLocaleString("pt-BR", {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
     var linha = document.createElement("div");
     linha.className = "registro";
     linha.innerHTML =
-      "<span>" + escapeHtml(item.jogo) + " &middot; " + escapeHtml(item.data) + "</span>" +
-      "<strong>" + escapeHtml(item.detalhe) + "</strong>";
+      "<span>" + escapeHtml(RANKING_JOGO_LABELS[item.jogo] || item.jogo) + " &middot; " + escapeHtml(quando) + "</span>" +
+      '<strong style="color:' + resultado.cor + '">' + resultado.texto + "</strong>";
     alvo.appendChild(linha);
   });
 }

@@ -138,9 +138,7 @@ function salvarHistorico() {
     data: new Date().toLocaleDateString("pt-BR"),
   });
   localStorage.setItem("historico-sudoku", JSON.stringify(historico.slice(0, 20)));
-  carregarHistorico();
-  registrarHistoricoGeral("Sudoku", nomesDificuldade[dificuldadeAtual] + " · " + formatarTempo(tempoAtual()));
-}
+  carregarHistorico();}
 
 
 // ---------------------------------------------------------------------------
@@ -162,15 +160,8 @@ async function carregarRecordes(dificuldade) {
     lista.forEach(function (recorde, i) {
       const registro = document.createElement("div");
       registro.className = "registro-recorde";
-      var avatarHtml = recorde.avatar
-        ? '<img class="recorde-avatar" src="' + escapeHtml(recorde.avatar) + '" alt="" />'
-        : '<span class="recorde-avatar placeholder">' + escapeHtml((recorde.nick || "?").charAt(0).toUpperCase()) + '</span>';
-      registro.innerHTML =
-        '<span class="recorde-posicao">' + (medallas[i] || "") + "</span>" +
-        avatarHtml +
-        '<span class="recorde-info"><strong>' + escapeHtml(recorde.nick) + "</strong>" +
-        "<small>" + escapeHtml(recorde.nome || "") + "</small></span>" +
-        '<span class="recorde-tempo">' + formatarTempo(recorde.tempo_segundos) + "</span>";
+      registro.innerHTML = linhaRecordeHtml(medallas[i] || "", recorde, escapeHtml(recorde.nome || ""), formatarTempo(recorde.tempo_segundos));
+      marcarPerfilEl(registro, recorde.nome);
       elementoRecordes.appendChild(registro);
     });
   } catch (erro) {
@@ -316,16 +307,16 @@ function atualizarPlacarTimesSudoku() {
   var js = sudokuUltimosJogadores || [];
   var p1 = js[0] || {};
   var p2 = js[1] || {};
-  var a = { nick: p1.nick || "Aguardando...", avatar: p1.avatar, cosmeticos: p1.cosmeticos, gol: sudokuPlacar.p1 || 0 };
-  var b = { nick: p2.nick || "Aguardando...", avatar: p2.avatar, cosmeticos: p2.cosmeticos, gol: sudokuPlacar.p2 || 0 };
-  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p1"), a.nick, a.avatar, a.cosmeticos);
-  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p2"), b.nick, b.avatar, b.cosmeticos);
+  var a = { nick: p1.nick || "Aguardando...", nome: p1.nome, avatar: p1.avatar, cosmeticos: p1.cosmeticos, gol: sudokuPlacar.p1 || 0 };
+  var b = { nick: p2.nick || "Aguardando...", nome: p2.nome, avatar: p2.avatar, cosmeticos: p2.cosmeticos, gol: sudokuPlacar.p2 || 0 };
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p1"), a.nick, a.avatar, a.cosmeticos, a.nome);
+  preencherAvatarPlacar(document.querySelector("#placar-sudoku-avatar-p2"), b.nick, b.avatar, b.cosmeticos, b.nome);
   var n1 = document.querySelector("#placar-sudoku-nick-p1");
   var n2 = document.querySelector("#placar-sudoku-nick-p2");
   var g1 = document.querySelector("#placar-sudoku-gol-p1");
   var g2 = document.querySelector("#placar-sudoku-gol-p2");
-  if (n1) { n1.textContent = a.nick; aplicarCorNickEl(n1, a.cosmeticos); }
-  if (n2) { n2.textContent = b.nick; aplicarCorNickEl(n2, b.cosmeticos); }
+  if (n1) { n1.textContent = a.nick; aplicarCorNickEl(n1, a.cosmeticos, a.nome); }
+  if (n2) { n2.textContent = b.nick; aplicarCorNickEl(n2, b.cosmeticos, b.nome); }
   if (g1) g1.textContent = String(a.gol);
   if (g2) g2.textContent = String(b.gol);
 }
@@ -402,6 +393,8 @@ function conectarWsSudoku(sala) {
   ws.onerror = function () {};
 }
 
+var sudokuDerrotaRegistrada = false;
+
 function processarMensagemSudoku(d) {
   switch (d.tipo) {
     case "erro":
@@ -424,6 +417,10 @@ function processarMensagemSudoku(d) {
       } else if (d.fase === "jogando") {
         sudokuStatus("Jogando!");
       } else if (d.fase === "fim" || d.fase === "parcial") {
+        if (d.vencedor_rodada && d.vencedor_rodada !== sudokuSlot && !sudokuDerrotaRegistrada) {
+          sudokuDerrotaRegistrada = true;
+          jogoRegistrarTempo("sudoku_online", false);
+        }
         if (d.vencedor_rodada) {
           var nick = "";
           var outro = d.jogadores ? (d.jogadores[0].slot === d.vencedor_rodada ? d.jogadores[0] : d.jogadores[1]) : null;
@@ -450,6 +447,7 @@ function processarMensagemSudoku(d) {
     case "contagem":
       sudokuOnlineAtivo = true;
       sudokuFase = "contagem";
+      sudokuDerrotaRegistrada = false;
       if (d.n > 0) {
         mostrarMensagem("Começa em " + d.n + "...", "");
         sudokuStatus("Contagem: " + d.n);

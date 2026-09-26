@@ -35,7 +35,7 @@
 /* Lista de quem está assistindo a transmissão (host). */
 .viewers-lista { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
 .viewer-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 999px; background: #16233d; border: 1px solid #20293f; font-size: 12px; color: #9dc2ff; max-width: 160px; }
-.viewer-chip img, .viewer-chip .viewer-inicial { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #1c2c4a; border: 1px solid #2d4470; display: grid; place-items: center; font-size: 11px; font-weight: bold; color: #9dc2ff; flex-shrink: 0; box-sizing: border-box; }
+.viewer-chip .sala-item-avatar, .viewer-chip .sala-item-avatar-inicial { width: 22px; height: 22px; border-width: 1px; font-size: 11px; }
 .viewer-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viewer-chip.anon { opacity: .75; border-style: dashed; }
 .viewer-expulsar { margin-left: 2px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: #5a2a3a; color: #ffb0c0; font-size: 12px; line-height: 1; cursor: pointer; padding: 0; }
@@ -142,10 +142,8 @@ body.modo-cheia-transmissao #tela-transmissao #controles-transmissao.oculto {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px;
   background: #111a2e; font-size: 13px; color: #c9ccda;
 }
-.multi-tile-rodape img, .multi-tile-rodape .ini {
-  width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
-  background: #1c2c4a; border: 1px solid #2d4470; display: grid; place-items: center;
-  font-weight: bold; font-size: 12px; color: #9dc2ff; flex-shrink: 0;
+.multi-tile-rodape .sala-item-avatar, .multi-tile-rodape .sala-item-avatar-inicial {
+  width: 28px; height: 28px; border-width: 1px; font-size: 12px;
 }
 .multi-tile-rodape strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .multi-tile-eu .multi-tile-rodape { border-top: 2px solid #2f6fe0; }
@@ -166,12 +164,10 @@ body.modo-cheia-transmissao #tela-transmissao #controles-transmissao.oculto {
   border-radius: 999px; background: #141c30; border: 1px solid #26314f;
   font-size: 12px; color: #c9ccda; max-width: 180px;
 }
-.multi-membro img, .multi-membro .ini {
-  width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
-  background: #1c2c4a; border: 1px solid #2d4470; display: grid;
-  place-items: center; font-size: 10px; font-weight: bold; color: #9dc2ff;
-  flex-shrink: 0;
+.multi-membro .sala-item-avatar, .multi-membro .sala-item-avatar-inicial {
+  width: 22px; height: 22px; border-width: 1px; font-size: 10px;
 }
+.transmissao-host-info { display: flex; align-items: center; justify-content: center; gap: 10px; margin: -6px 0 12px; color: #c9ccda; font-size: 14px; }
 .multi-membro strong {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;

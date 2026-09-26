@@ -20,6 +20,20 @@ BONUS_INTERVALO_SEGUNDOS = 15 * 60
 BONUS_QUANTIDADE = 5
 PRECO_DECORACAO = 70
 PRECO_COR_NICK = 30
+PRECO_FONTE_NICK = 60
+HISTORICO_MAXIMO = 10
+
+# id -> nome exibido na loja (o visual de cada uma fica em .nick-fonte-<id> no css).
+FONTES_NICK = {
+    "negrito": "Negrito",
+    "italico": "Itálico",
+    "mono": "Monoespaçada",
+    "serifa": "Serifada",
+    "cursiva": "Cursiva",
+    "impacto": "Impacto",
+    "versalete": "Versalete",
+    "espacada": "Espaçada",
+}
 
 # Moedas por vitória — cada jogo tem sua própria tabela (por dificuldade,
 # quando aplicável). Online sempre paga mais que o modo solo/vs-máquina.
@@ -74,7 +88,7 @@ ROLETA_FATIAS = [
     {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
     {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
     {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
-    {"tipo": "decoracao", "peso": 10, "label": "Decoração grátis"},
+    {"tipo": "presente", "peso": 10, "label": "Presente"},
     {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
     {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
     {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
@@ -111,6 +125,10 @@ def decoracao_existe(sku_id: str) -> bool:
     return sku_id in _DECORACOES_POR_SKU
 
 
+_cache_carteiras = {"em": 0.0, "carteiras": None}
+CACHE_CARTEIRAS_SEGUNDOS = 5
+
+
 def carregar_economia() -> dict:
     dados = carregar_json(CHAVE_ECONOMIA, ARQUIVO_ECONOMIA)
     dados.setdefault("carteiras", {})
@@ -119,6 +137,16 @@ def carregar_economia() -> dict:
 
 def salvar_economia(dados: dict) -> None:
     salvar_json(CHAVE_ECONOMIA, dados, ARQUIVO_ECONOMIA)
+    _cache_carteiras.update(em=time.time(), carteiras=dados.get("carteiras", {}))
+
+
+def _carteiras_recentes() -> dict:
+    """Carteiras de até 5s atrás — os placares pedem os cosméticos de cada
+    jogador a cada atualização, e sem isso cada pedido era uma ida ao Redis."""
+    agora = time.time()
+    if _cache_carteiras["carteiras"] is None or agora - _cache_carteiras["em"] > CACHE_CARTEIRAS_SEGUNDOS:
+        _cache_carteiras.update(em=agora, carteiras=carregar_economia().get("carteiras", {}))
+    return _cache_carteiras["carteiras"]
 
 
 def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None) -> dict:
@@ -127,10 +155,14 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None)
     carteira.setdefault("ultimo_bonus", 0)
     carteira.setdefault("decoracoes", [])
     carteira.setdefault("cores_nick", [])
-    carteira.setdefault("equipado", {"decoracao": None, "cor_nick": None})
+    carteira.setdefault("fontes_nick", [])
+    equipado = carteira.setdefault("equipado", {})
+    for chave in ("decoracao", "cor_nick", "fonte_nick"):
+        equipado.setdefault(chave, None)
     carteira.setdefault("segundos_jogados", 0)
     carteira.setdefault("partidas", {})
     carteira.setdefault("vitorias", {})
+    carteira.setdefault("historico", [])
     if nick:
         carteira["nick"] = nick
     if avatar:
@@ -138,39 +170,58 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None)
     return carteira
 
 
+def _imagem_decoracao(sku: Optional[str], animada: bool) -> Optional[str]:
+    if not sku:
+        return None
+    return _DECORACOES_POR_SKU.get(sku, {}).get("imagem_animada" if animada else "imagem")
+
+
 def carteira_publica(carteira: dict) -> dict:
-    equipado = carteira.get("equipado", {"decoracao": None, "cor_nick": None})
-    decoracao_sku = equipado.get("decoracao")
+    equipado = carteira.get("equipado") or {}
     return {
         "saldo": carteira.get("saldo", 0),
         "decoracoes": carteira.get("decoracoes", []),
         "cores_nick": carteira.get("cores_nick", []),
-        "equipado": equipado,
+        "fontes_nick": carteira.get("fontes_nick", []),
+        "equipado": {
+            "decoracao": equipado.get("decoracao"),
+            "cor_nick": equipado.get("cor_nick"),
+            "fonte_nick": equipado.get("fonte_nick"),
+        },
         # URL pronta da decoração equipada, pro front não precisar carregar o
         # catálogo inteiro só pra desenhar o avatar do cabeçalho/perfil.
-        "decoracao_imagem": _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem_animada") if decoracao_sku else None,
+        "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
+        "historico": carteira.get("historico", []),
+    }
+
+
+def _cosmeticos_da_carteira(carteira: Optional[dict]) -> dict:
+    equipado = (carteira or {}).get("equipado") or {}
+    return {
+        "decoracao": _imagem_decoracao(equipado.get("decoracao"), animada=False),
+        "cor_nick": equipado.get("cor_nick"),
+        "fonte_nick": equipado.get("fonte_nick"),
     }
 
 
 def cosmeticos_equipados(nome: str) -> dict:
-    """Usado pelos jogos pra mostrar a decoração/cor equipada de QUALQUER
-    jogador (não só o usuário atual) — ex: no placar de uma partida."""
+    """Usado pelos jogos pra mostrar a decoração/cor/fonte equipada de
+    QUALQUER jogador (não só o usuário atual) — ex: no placar de uma partida."""
     if eh_anonimo(nome) or not nome:
-        return {"decoracao": None, "cor_nick": None}
-    dados = carregar_economia()
-    carteira = dados.get("carteiras", {}).get(nome)
-    if not carteira:
-        return {"decoracao": None, "cor_nick": None}
-    equipado = carteira.get("equipado") or {}
-    decoracao_sku = equipado.get("decoracao")
-    imagem = _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem") if decoracao_sku else None
-    return {"decoracao": imagem, "cor_nick": equipado.get("cor_nick")}
+        return _cosmeticos_da_carteira(None)
+    return _cosmeticos_da_carteira(_carteiras_recentes().get(nome))
+
+
+def cosmeticos_de_varios(nomes) -> dict:
+    carteiras = _carteiras_recentes()
+    return {n: _cosmeticos_da_carteira(carteiras.get(n)) for n in nomes if n}
 
 
 def registrar_fim_partida(nome: str, nick: str, segundos: int,
                           jogo: str = "", avatar: str = None,
-                          venceu: bool = False) -> None:
-    """Registra fim de partida: acumula segundos, incrementa partidas e vitórias por jogo."""
+                          venceu: bool = False, resultado: str = "") -> None:
+    """Registra fim de partida: acumula segundos, incrementa partidas e
+    vitórias por jogo e guarda no histórico das últimas partidas."""
     if eh_anonimo(nome) or not nome:
         return
     dados = carregar_economia()
@@ -183,51 +234,45 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
         if venceu:
             vitorias = carteira.setdefault("vitorias", {})
             vitorias[jogo] = vitorias.get(jogo, 0) + 1
+        if resultado not in ("vitoria", "derrota", "empate"):
+            resultado = "vitoria" if venceu else "derrota"
+        historico = carteira.setdefault("historico", [])
+        historico.insert(0, {"jogo": jogo, "resultado": resultado, "em": int(time.time())})
+        del historico[HISTORICO_MAXIMO:]
     salvar_economia(dados)
 
 
+def _entrada_publica(nome: str, carteira: dict) -> dict:
+    equipado = carteira.get("equipado") or {}
+    partidas = carteira.get("partidas", {})
+    return {
+        "nome": nome,
+        "nick": carteira.get("nick") or nome,
+        "cor_nick": equipado.get("cor_nick"),
+        "fonte_nick": equipado.get("fonte_nick"),
+        "avatar": carteira.get("avatar"),
+        "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
+        "saldo": carteira.get("saldo", 0),
+        "segundos": carteira.get("segundos_jogados", 0),
+        "partidas": partidas,
+        "vitorias": carteira.get("vitorias", {}),
+        "total_partidas": sum(partidas.values()),
+    }
+
+
+def perfil_publico(nome: str) -> Optional[dict]:
+    carteira = carregar_economia().get("carteiras", {}).get(nome)
+    return _entrada_publica(nome, carteira) if carteira else None
+
+
 def top_ranking(limit: int = 10) -> dict:
-    """Retorna os top jogadores por moedas e por horas jogadas."""
-    dados = carregar_economia()
-    carteiras = dados.get("carteiras", {})
-
-    top_moedas = []
-    top_horas = []
-
-    for nome, carteira in carteiras.items():
-        nick = carteira.get("nick") or nome
-        equipado = carteira.get("equipado") or {}
-        cor_nick = equipado.get("cor_nick")
-        decoracao_sku = equipado.get("decoracao")
-        decoracao_imagem = (
-            _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem_animada")
-            if decoracao_sku else None
-        )
-        saldo = carteira.get("saldo", 0)
-        segundos = carteira.get("segundos_jogados", 0)
-        partidas_dict = carteira.get("partidas", {})
-        total_partidas = sum(partidas_dict.values())
-        vitorias_dict = carteira.get("vitorias", {})
-        entrada = {
-            "nome": nome,
-            "nick": nick,
-            "cor_nick": cor_nick,
-            "avatar": carteira.get("avatar"),
-            "decoracao_imagem": decoracao_imagem,
-            "segundos": segundos,
-            "partidas": partidas_dict,
-            "vitorias": vitorias_dict,
-            "total_partidas": total_partidas,
-        }
-        top_moedas.append({**entrada, "saldo": saldo})
-        top_horas.append({**entrada, "saldo": saldo})
-
-    top_moedas.sort(key=lambda x: x["saldo"], reverse=True)
-    top_horas.sort(key=lambda x: x["total_partidas"], reverse=True)
-
+    """Retorna os top jogadores por moedas e por partidas jogadas."""
+    entradas = [_entrada_publica(nome, c) for nome, c in carregar_economia().get("carteiras", {}).items()]
+    top_moedas = sorted(entradas, key=lambda x: x["saldo"], reverse=True)
+    top_partidas = sorted(entradas, key=lambda x: x["total_partidas"], reverse=True)
     return {
         "top_moedas": top_moedas[:limit],
-        "top_horas": top_horas[:limit],
+        "top_horas": top_partidas[:limit],
     }
 
 
@@ -278,12 +323,28 @@ def sortear_fatia_roleta() -> dict:
     return fatia
 
 
-def sortear_decoracao_nao_possuida(carteira: dict) -> Optional[dict]:
-    possuidas = set(carteira.get("decoracoes", []))
-    candidatas = [item for item in CATALOGO_DECORACOES if item["sku_id"] not in possuidas]
-    if not candidatas:
+def sortear_presente(carteira: dict) -> Optional[dict]:
+    """Presente da roleta: sorteia primeiro a categoria (decoração, cor ou
+    fonte do nick) entre as que ainda têm item não possuído, depois o item."""
+    aleatorio = secrets.SystemRandom()
+    decoracoes = [d for d in CATALOGO_DECORACOES if d["sku_id"] not in carteira.get("decoracoes", [])]
+    cores = [c for c in CORES_NICK if c not in carteira.get("cores_nick", [])]
+    fontes = [f for f in FONTES_NICK if f not in carteira.get("fontes_nick", [])]
+    categorias = [nome for nome, itens in (("decoracao", decoracoes), ("cor_nick", cores), ("fonte_nick", fontes)) if itens]
+    if not categorias:
         return None
-    return secrets.SystemRandom().choice(candidatas)
+    categoria = aleatorio.choice(categorias)
+    if categoria == "decoracao":
+        item = aleatorio.choice(decoracoes)
+        carteira["decoracoes"].append(item["sku_id"])
+        return {"tipo": "decoracao", "id": item["sku_id"], "nome": item["nome"], "imagem": item["imagem"]}
+    if categoria == "cor_nick":
+        cor = aleatorio.choice(cores)
+        carteira["cores_nick"].append(cor)
+        return {"tipo": "cor_nick", "id": cor, "nome": "Arco-íris" if cor == "arco-iris" else cor.capitalize()}
+    fonte = aleatorio.choice(fontes)
+    carteira["fontes_nick"].append(fonte)
+    return {"tipo": "fonte_nick", "id": fonte, "nome": FONTES_NICK[fonte]}
 
 
 def girar_roleta(nome: str, aposta: int) -> dict:
@@ -303,17 +364,15 @@ def girar_roleta(nome: str, aposta: int) -> dict:
     carteira["saldo"] -= aposta
     fatia = sortear_fatia_roleta()
     premio_moedas = 0
-    decoracao_ganha = None
+    presente = None
 
     if fatia["tipo"] == "multiplicador":
         premio_moedas = int(aposta * fatia["valor"])
         carteira["saldo"] += premio_moedas
-    elif fatia["tipo"] == "decoracao":
-        decoracao_ganha = sortear_decoracao_nao_possuida(carteira)
-        if decoracao_ganha:
-            carteira["decoracoes"].append(decoracao_ganha["sku_id"])
-        else:
-            # já tem todas as decorações — credita o preço de uma em moedas.
+    elif fatia["tipo"] == "presente":
+        presente = sortear_presente(carteira)
+        if not presente:
+            # já tem tudo da loja — credita o preço de uma decoração em moedas.
             premio_moedas = PRECO_DECORACAO
             carteira["saldo"] += premio_moedas
 
@@ -322,6 +381,6 @@ def girar_roleta(nome: str, aposta: int) -> dict:
         "fatia_indice": fatia["indice"],
         "resultado": fatia,
         "premio_moedas": premio_moedas,
-        "decoracao": decoracao_ganha,
+        "presente": presente,
         "carteira": carteira_publica(carteira),
     }

@@ -29,9 +29,20 @@ def eh_anonimo(nick: str) -> bool:
     return (nick or "").strip().lower() in {"anônimo", "anonimo"}
 
 
+def com_cosmeticos(registros: list) -> list:
+    """Cópias dos registros com a decoração/cor/fonte equipadas HOJE por cada
+    jogador (cópia pra não gravar isso dentro dos recordes por acidente)."""
+    from shared.economia import cosmeticos_de_varios  # economia importa este módulo
+    try:
+        cosmeticos = cosmeticos_de_varios([r.get("nome") for r in registros])
+    except Exception:
+        cosmeticos = {}
+    return [dict(r, cosmeticos=cosmeticos.get(r.get("nome")) or {}) for r in registros]
+
+
 def ranking_top(registros: list, chave: str, reverse: bool, limite: int = 3) -> list:
     filtrados = [r for r in registros if not eh_anonimo(str(r.get("nick", "")))]
-    return sorted(filtrados, key=lambda r: r.get(chave, 0), reverse=reverse)[:limite]
+    return com_cosmeticos(sorted(filtrados, key=lambda r: r.get(chave, 0), reverse=reverse)[:limite])
 
 
 def ranking_vitorias(lista: list, dificuldade: Optional[str] = None,
@@ -44,8 +55,8 @@ def ranking_vitorias(lista: list, dificuldade: Optional[str] = None,
         if dificuldade and r.get("dificuldade") not in (None, dificuldade):
             continue
         filtrados.append(r)
-    return sorted(filtrados, key=lambda r: r.get("vitorias", 0),
-                  reverse=True)[:limite]
+    return com_cosmeticos(sorted(filtrados, key=lambda r: r.get("vitorias", 0),
+                                 reverse=True)[:limite])
 
 
 def _registrar_vitoria(lista: list, nick: str, nome: str,

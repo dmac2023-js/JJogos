@@ -1843,6 +1843,8 @@ function enviarTela(obj) {
 
 function conectarWsTela(host, tentativa) {
   limparConexaoTela(); // não mexe em telaSala — quem chama já definiu a sala
+  var hostInfo = document.querySelector("#transmissao-host-info");
+  if (hostInfo) hostInfo.style.display = "none";
   telaAbriu = false;
   telaTentativa = tentativa || 1;
 
@@ -1854,6 +1856,7 @@ function conectarWsTela(host, tentativa) {
     "?papel=" + (host ? "host" : "viewer") + "&nick=" + encodeURIComponent(nick) +
     "&avatar=" + encodeURIComponent(avatar) +
     "&logado=" + logado +
+    (usuarioDiscord ? "&nome=" + encodeURIComponent(nomeUsuario()) : "") +
     (!host && telaModoRelay ? "&transporte=relay" : "");
 
   var ws = new WebSocket(url);
@@ -1954,6 +1957,7 @@ function processarMensagemTela(dados) {
     case "entrada_ok":
       mostrarBadgeQualidade(dados.resolucao, dados.fps, dados.codec || relayCodecAtual);
       mensagemTransmissao("Conectado a " + dados.nick + " (" + dados.resolucao + " " + dados.fps + "fps). Aguardando vídeo...", "sucesso");
+      mostrarHostTransmissao(dados);
       clearTimeout(telaOfertaTimer);
       clearTimeout(telaRelayTimer);
       relayFrameOk = false;
@@ -2077,19 +2081,10 @@ function processarMensagemTela(dados) {
             var chip = document.createElement("span");
             chip.className = "viewer-chip" + (v.logado ? " logado" : " anon");
             chip.title = v.logado ? (v.nick + " (Discord)") : (v.nick + " (site)");
-            if (v.avatar) {
-              var img = document.createElement("img");
-              img.src = v.avatar;
-              img.alt = "";
-              chip.appendChild(img);
-            } else {
-              var ini = document.createElement("span");
-              ini.className = "viewer-inicial";
-              ini.textContent = (v.nick || "?").charAt(0).toUpperCase();
-              chip.appendChild(ini);
-            }
+            chip.insertAdjacentHTML("beforeend", avatarSalaHtml(v.avatar, v.nick, v.cosmeticos, v.nome));
             var nome = document.createElement("small");
-            nome.textContent = v.logado ? v.nick : (v.nick === "Anônimo" ? "Anônimo" : v.nick);
+            nome.textContent = v.nick || "Anônimo";
+            aplicarCorNickEl(nome, v.cosmeticos, v.nome);
             chip.appendChild(nome);
             if (telaEhHost && v.id) {
               var btnX = document.createElement("button");
@@ -2569,7 +2564,8 @@ function conectarMultiWs() {
   var url = protocolo + "//" + location.host + "/ws/multitela/" + encodeURIComponent(multiSala) +
     "?nick=" + encodeURIComponent(nick) +
     "&avatar=" + encodeURIComponent(avatar) +
-    "&logado=" + logado;
+    "&logado=" + logado +
+    (usuarioDiscord ? "&nome=" + encodeURIComponent(nomeUsuario()) : "");
 
   var ws = new WebSocket(url);
   multiWs = ws;
@@ -2641,8 +2637,8 @@ function atualizarMultiEstado(estado) {
       membros.forEach(function (m) {
         var chip = document.createElement("span");
         chip.className = "multi-membro" + (m.logado ? "" : " anonimo");
-        chip.innerHTML = avatarOuIni(m.nick || "Anônimo", m.avatar) +
-          "<strong>" + escapeHtml(m.nick || "Anônimo") + "</strong>" +
+        chip.innerHTML = avatarSalaHtml(m.avatar, m.nick || "Anônimo", m.cosmeticos, m.nome) +
+          "<strong>" + nickHtml(m.nick || "Anônimo", m.cosmeticos, m.nome) + "</strong>" +
           (m.logado ? "" : '<span class="etiqueta">anônimo</span>');
         if (!m.conectado) chip.style.opacity = "0.55";
         lista.appendChild(chip);
@@ -2699,14 +2695,6 @@ function removerTileMulti(sala) {
   desligarViewerMulti(tile);
   if (tile.el && tile.el.parentNode) tile.el.parentNode.removeChild(tile.el);
   delete multiTiles[sala];
-}
-
-function avatarOuIni(nick, avatar) {
-  if (avatar) {
-    return '<img src="' + escapeHtml(avatar) + '" alt="" onerror="this.outerHTML=\'<span class=&quot;ini&quot;>' +
-      escapeHtml((nick || "?").charAt(0).toUpperCase()) + '</span>\'" />';
-  }
-  return '<span class="ini">' + escapeHtml((nick || "?").charAt(0).toUpperCase()) + "</span>";
 }
 
 function criarTileMulti(live) {
@@ -2784,8 +2772,10 @@ function criarTileMulti(live) {
 
   var rodape = document.createElement("div");
   rodape.className = "multi-tile-rodape";
-  rodape.innerHTML = avatarOuIni(nick, avatar) +
-    "<strong>" + escapeHtml(nick) + "</strong>" +
+  var cosmeticosLive = ehEu ? minhasCosmeticosAtuais() : live.cosmeticos;
+  var nomeLive = ehEu ? nomeUsuario() : live.host_nome;
+  rodape.innerHTML = avatarSalaHtml(avatar, nick, cosmeticosLive, nomeLive) +
+    "<strong>" + nickHtml(nick, cosmeticosLive, nomeLive) + "</strong>" +
     (ehEu ? '<span class="etiqueta-eu">Você</span>' : "");
 
   var btnVoltar = document.createElement("button");
@@ -3066,6 +3056,7 @@ function abrirWsViewerMulti(tile) {
     "&nick=" + encodeURIComponent(nick) +
     "&avatar=" + encodeURIComponent(avatar) +
     "&logado=" + logado +
+    (usuarioDiscord ? "&nome=" + encodeURIComponent(nomeUsuario()) : "") +
     (tile.relay ? "&transporte=relay" : "");
 
   var ws = new WebSocket(url);
@@ -3420,3 +3411,13 @@ function irParaMulti() {
 
 // ---------------------------------------------------------------------------
 
+
+/** Espectador vê quem está transmitindo (foto com decoração + nick com
+ *  cor/fonte) e pode clicar pra abrir o perfil. */
+function mostrarHostTransmissao(dados) {
+  var el = document.querySelector("#transmissao-host-info");
+  if (!el || telaEhHost) return;
+  el.innerHTML = avatarSalaHtml(dados.avatar, dados.nick, dados.cosmeticos, dados.host_nome) +
+    "<span>Transmitindo: <strong>" + nickHtml(dados.nick, dados.cosmeticos, dados.host_nome) + "</strong></span>";
+  el.style.display = "";
+}

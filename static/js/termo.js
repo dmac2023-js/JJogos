@@ -329,11 +329,10 @@ function termoFinalizarSolo(dados) {
   if (termoVenceu) {
     termoMsg("🎉 Você acertou! " + termoTentativasUsadas + "/" + termoMaxTentativas + " tentativas.", "sucesso");
     termoRegistrarVitoria();
-    registrarHistoricoGeral(NOMES_TERMO_DIFICULDADE[termoDificuldade],
-      termoTentativasUsadas + "/" + termoMaxTentativas + " tentativas");
   } else {
     var reveladas = (dados.palavras || []).join(", ");
     termoMsg("Suas tentativas acabaram. Era: " + reveladas, "erro");
+    jogoRegistrarTempo("termo_solo", false);
   }
   document.querySelector("#termo-solo-acoes").style.display = "flex";
 }
@@ -375,14 +374,10 @@ async function carregarRankingTermo() {
     lista.forEach(function (r, i) {
       var el = document.createElement("div");
       el.className = "registro-recorde";
-      var avatarHtml = r.avatar
-        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
-        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + '</span>';
-      el.innerHTML =
-        '<span class="recorde-posicao">' + (medalhas[i] || "") + '</span>' + avatarHtml +
-        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + '</strong>' +
-        '<small>' + r.vitorias + ' vitória' + (r.vitorias === 1 ? '' : 's') + '</small></span>' +
-        '<span class="recorde-tempo">' + (r.melhor_tempo ? r.melhor_tempo + ' tent.' : '') + '</span>';
+      el.innerHTML = linhaRecordeHtml(medalhas[i] || "", r,
+        r.vitorias + " vitória" + (r.vitorias === 1 ? "" : "s"),
+        r.melhor_tempo ? r.melhor_tempo + " tent." : "");
+      marcarPerfilEl(el, r.nome);
       container.appendChild(el);
     });
   } catch (e) {
@@ -544,10 +539,12 @@ function termoAtualizarStatusOponente() {
     el.textContent = "Aguardando oponente...";
     return;
   }
+  var quem = avatarSalaHtml(outro.avatar, outro.nick, outro.cosmeticos, outro.nome) +
+    "<strong>" + nickHtml(outro.nick || "Oponente", outro.cosmeticos, outro.nome) + "</strong>&nbsp;";
   if (outro.completou) {
-    el.textContent = (outro.nick || "Oponente") + (outro.venceu ? " já acertou a palavra." : " já usou todas as tentativas.");
+    el.innerHTML = quem + (outro.venceu ? "já acertou a palavra." : "já usou todas as tentativas.");
   } else {
-    el.textContent = (outro.nick || "Oponente") + " está jogando (" + (outro.tentativas_usadas || 0) + "/" + termoMaxTentativas + ")";
+    el.innerHTML = quem + "está jogando (" + (outro.tentativas_usadas || 0) + "/" + termoMaxTentativas + ")";
   }
 }
 

@@ -11,7 +11,7 @@ function jogoIniciarTimer() {
   _jogoTempoInicioMs = Date.now();
 }
 
-function jogoRegistrarTempo(jogoNome, venceu) {
+function jogoRegistrarTempo(jogoNome, venceu, resultado) {
   var seg = _jogoTempoInicioMs ? Math.round((Date.now() - _jogoTempoInicioMs) / 1000) : 0;
   _jogoTempoInicioMs = null;
   if (!usuarioDiscord || !nomeUsuario()) return;
@@ -27,12 +27,13 @@ function jogoRegistrarTempo(jogoNome, venceu) {
       segundos: Math.max(seg, 0),
       jogo: jogoNome || "",
       venceu: venceu === true,
+      resultado: resultado || "",
     }),
   }).catch(function () {});
 }
 
 let lojaCatalogo = null;
-let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], equipado: { decoracao: null, cor_nick: null } };
+let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], fontes_nick: [], historico: [], equipado: { decoracao: null, cor_nick: null, fonte_nick: null } };
 let lojaPaginaDecoracoes = 0;
 let lojaCorSelecionada = null;
 let lojaDecoracaoSelecionadaSku = null;
@@ -84,12 +85,13 @@ function aplicarCorEmElemento(el, cor) {
  *  servidor confirmar quem é quem (ex: sala "esperando oponente"). */
 function minhasCosmeticosAtuais() {
   if (!minhaCarteira) return null;
-  return { decoracao: minhaCarteira.decoracao_imagem || null, cor_nick: (minhaCarteira.equipado || {}).cor_nick || null };
+  var equipado = minhaCarteira.equipado || {};
+  return { decoracao: minhaCarteira.decoracao_imagem || null, cor_nick: equipado.cor_nick || null, fonte_nick: equipado.fonte_nick || null };
 }
 
 function aplicarCosmeticosHeader() {
   var nomeEl = document.querySelector("#auth-nome");
-  if (nomeEl) aplicarCorEmElemento(nomeEl, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
+  if (nomeEl) aplicarCorNickEl(nomeEl, minhasCosmeticosAtuais());
 
   var decoImg = document.querySelector("#auth-avatar-decoracao");
   if (decoImg) {
@@ -123,32 +125,33 @@ function ordenarPossuidosPrimeiro(lista, chaveDe, possuidos) {
 // ---------------------------------------------------------------------------
 // Navegação: menu principal <-> nametags / decorações
 // ---------------------------------------------------------------------------
+function lojaMostrarSomente(id) {
+  ["#loja-menu", "#loja-secao-cores", "#loja-secao-fontes", "#loja-secao-decoracoes", "#loja-secao-roleta"].forEach(function (sel) {
+    document.querySelector(sel).style.display = sel === id ? "" : "none";
+  });
+}
+
 function lojaMostrarMenu() {
-  document.querySelector("#loja-menu").style.display = "";
-  document.querySelector("#loja-secao-cores").style.display = "none";
-  document.querySelector("#loja-secao-decoracoes").style.display = "none";
-  document.querySelector("#loja-secao-roleta").style.display = "none";
+  lojaMostrarSomente("#loja-menu");
 }
 
 function lojaMostrarSecaoCores() {
-  document.querySelector("#loja-menu").style.display = "none";
-  document.querySelector("#loja-secao-cores").style.display = "";
-  document.querySelector("#loja-secao-decoracoes").style.display = "none";
+  lojaMostrarSomente("#loja-secao-cores");
   renderLojaCores();
 }
 
+function lojaMostrarSecaoFontes() {
+  lojaMostrarSomente("#loja-secao-fontes");
+  renderLojaFontes();
+}
+
 function lojaMostrarSecaoDecoracoes() {
-  document.querySelector("#loja-menu").style.display = "none";
-  document.querySelector("#loja-secao-cores").style.display = "none";
-  document.querySelector("#loja-secao-decoracoes").style.display = "";
+  lojaMostrarSomente("#loja-secao-decoracoes");
   renderLojaDecoracoes();
 }
 
 async function lojaMostrarSecaoRoleta() {
-  document.querySelector("#loja-menu").style.display = "none";
-  document.querySelector("#loja-secao-cores").style.display = "none";
-  document.querySelector("#loja-secao-decoracoes").style.display = "none";
-  document.querySelector("#loja-secao-roleta").style.display = "";
+  lojaMostrarSomente("#loja-secao-roleta");
   await carregarRoleta();
   lojaRoletaAtualizarValor();
 }
@@ -164,6 +167,7 @@ async function abrirLoja() {
   document.querySelector("#loja-saldo").textContent = minhaCarteira.saldo;
   document.querySelector("#loja-preco-decoracao").textContent = lojaCatalogo.preco_decoracao;
   document.querySelector("#loja-preco-cor").textContent = lojaCatalogo.preco_cor_nick;
+  document.querySelector("#loja-preco-fonte").textContent = lojaCatalogo.preco_fonte_nick;
   lojaMostrarMenu();
 }
 
@@ -182,8 +186,90 @@ function lojaPreviewCor(cor) {
   var caixa = document.querySelector("#loja-preview-cor");
   var texto = document.querySelector("#loja-preview-cor-texto");
   texto.textContent = nomeExibicao();
-  aplicarCorEmElemento(texto, cor);
+  aplicarCorNickEl(texto, { cor_nick: cor, fonte_nick: minhasCosmeticosAtuais().fonte_nick });
   caixa.style.display = "";
+}
+
+// ---------------------------------------------------------------------------
+// Fontes do nick
+// ---------------------------------------------------------------------------
+function lojaPreviewFonte(fonte) {
+  var texto = document.querySelector("#loja-preview-fonte-texto");
+  texto.textContent = nomeExibicao();
+  aplicarCorNickEl(texto, { cor_nick: minhasCosmeticosAtuais().cor_nick, fonte_nick: fonte });
+  document.querySelector("#loja-preview-fonte").style.display = "";
+}
+
+function renderLojaFontes() {
+  var alvo = document.querySelector("#loja-fontes");
+  if (!alvo) return;
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar fontes.</p>';
+    return;
+  }
+  alvo.innerHTML = "";
+  var possuidas = minhaCarteira.fontes_nick || [];
+  var equipadaAtual = (minhaCarteira.equipado || {}).fonte_nick;
+  ordenarPossuidosPrimeiro(lojaCatalogo.fontes_nick, function (f) { return f.id; }, possuidas).forEach(function (fonte) {
+    var possui = possuidas.indexOf(fonte.id) !== -1;
+    var equipada = equipadaAtual === fonte.id;
+    var card = document.createElement("div");
+    card.className = "loja-item" + (equipada ? " equipado" : "");
+    card.addEventListener("click", function () {
+      lojaPreviewFonte(fonte.id);
+      if (possui && !equipada) equiparItem("fonte_nick", fonte.id);
+    });
+
+    var moldura = document.createElement("span");
+    moldura.className = "loja-cor-amostra-box loja-fonte-amostra";
+    var amostra = document.createElement("span");
+    amostra.textContent = "Aa";
+    aplicarFonteNickEl(amostra, fonte.id);
+    moldura.appendChild(amostra);
+    if (equipada) moldura.appendChild(lojaBadgeEquipado());
+    card.appendChild(moldura);
+
+    var label = document.createElement("span");
+    label.className = "loja-item-nome";
+    label.textContent = fonte.nome;
+    card.appendChild(label);
+
+    if (!possui) {
+      card.appendChild(lojaBotaoPreco(lojaCatalogo.preco_fonte_nick, possui, equipada, function (ev) {
+        ev.stopPropagation();
+        lojaPreviewFonte(fonte.id);
+        comprarFonte(fonte.id);
+      }));
+    }
+    alvo.appendChild(card);
+  });
+
+  if (equipadaAtual) {
+    var limpar = document.createElement("button");
+    limpar.className = "botao-copiar";
+    limpar.textContent = "Voltar à fonte padrão";
+    limpar.addEventListener("click", function () { equiparItem("fonte_nick", null); });
+    alvo.appendChild(limpar);
+  }
+}
+
+async function comprarFonte(fonte) {
+  try {
+    var resp = await fetch("./economia/comprar/fonte", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), fonte: fonte }),
+    });
+    if (!resp.ok) {
+      var erro = await resp.json().catch(function () { return {}; });
+      alert(erro.detail || "Não foi possível comprar.");
+      return;
+    }
+    minhaCarteira = await resp.json();
+    aplicarCosmeticosHeader();
+    lojaAtualizarSaldoTelas();
+    renderLojaFontes();
+  } catch (e) { alert("Não foi possível comprar agora."); }
 }
 
 function renderLojaCores() {
@@ -429,6 +515,8 @@ async function equiparItem(tipo, valor) {
     if (tipo === "decoracao") {
       lojaPaginaDecoracoes = 0;
       renderLojaDecoracoes();
+    } else if (tipo === "fonte_nick") {
+      renderLojaFontes();
     } else {
       renderLojaCores();
     }
@@ -472,7 +560,7 @@ function lojaRoletaRenderLabels() {
     label.className = "loja-roleta-label";
     label.style.left = "calc(50% + " + x + "px)";
     label.style.top = "calc(50% + " + y + "px)";
-    label.textContent = fatia.tipo === "decoracao" ? "🎁" : fatia.label;
+    label.textContent = fatia.tipo === "presente" ? "🎁" : fatia.label;
     roda.appendChild(label);
   });
 }
@@ -509,10 +597,12 @@ function lojaRoletaMensagemResultado(dados) {
     }
     return { texto: "😬 Caiu " + resultado.label + ". Você recebeu " + dados.premio_moedas + " moedas de volta.", perda: true };
   }
-  if (dados.decoracao) {
-    return { texto: "🎁 Você ganhou a decoração \"" + dados.decoracao.nome + "\" de graça!", perda: false };
+  var presente = dados.presente;
+  if (presente) {
+    var tipos = { decoracao: "a decoração", cor_nick: "a cor de nick", fonte_nick: "a fonte de nick" };
+    return { texto: "🎁 Presente! Você ganhou " + tipos[presente.tipo] + " \"" + presente.nome + "\" de graça — já está na sua loja.", perda: false };
   }
-  return { texto: "🎁 Você já tem todas as decorações! Recebeu " + dados.premio_moedas + " moedas.", perda: false };
+  return { texto: "🎁 Você já tem tudo da loja! Recebeu " + dados.premio_moedas + " moedas.", perda: false };
 }
 
 async function girarRoleta() {
@@ -577,6 +667,7 @@ async function tentarBonusAtividade() {
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
 document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);
 document.querySelector("#loja-btn-decoracoes").addEventListener("click", lojaMostrarSecaoDecoracoes);
+document.querySelector("#loja-btn-fontes").addEventListener("click", lojaMostrarSecaoFontes);
 document.querySelector("#loja-btn-roleta").addEventListener("click", lojaMostrarSecaoRoleta);
 document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
   botao.addEventListener("click", lojaMostrarMenu);

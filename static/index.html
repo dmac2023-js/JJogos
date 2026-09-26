@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/ranking.css?v=20260926-01" />
-    <link rel="stylesheet" href="./css/clickj.css?v=20260926-01" />
+    <link rel="stylesheet" href="./css/base.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/ranking.css?v=20260926-02" />
+    <link rel="stylesheet" href="./css/clickj.css?v=20260926-02" />
   </head>
   <body>
     <main class="aplicacao">
@@ -862,6 +862,7 @@
         </div>
 
         <div id="mensagem-transmissao" class="mensagem">Conectando...</div>
+        <div id="transmissao-host-info" class="transmissao-host-info" style="display:none;"></div>
 
         <div id="qualidade-badge" class="qualidade-badge" style="display:none;" title="Qualidade atual da transmissão"></div>
 
@@ -973,7 +974,7 @@
         <button class="voltar" data-tela="tela-jogos">&larr; Voltar</button>
         <div class="titulo-tela">
           <h2>Loja</h2>
-          <p>Troque suas moedas por decorações de perfil e cores de nick. Saldo: <strong id="loja-saldo">0</strong> moedas.</p>
+          <p>Troque suas moedas por decorações de perfil, cores e fontes de nick. Saldo: <strong id="loja-saldo">0</strong> moedas.</p>
         </div>
 
         <!-- Menu principal: escolher entre nametags (cor do nick) e decorações -->
@@ -982,6 +983,11 @@
             <span class="icone">🏷️</span>
             <strong>Nametags</strong>
             <small>Cor do nick, pra você e pra todo mundo</small>
+          </button>
+          <button id="loja-btn-fontes" class="botao-modo">
+            <span class="icone">🔤</span>
+            <strong>Fontes do nick</strong>
+            <small>Negrito, itálico, monoespaçada e mais</small>
           </button>
           <button id="loja-btn-decoracoes" class="botao-modo">
             <span class="icone">🖼️</span>
@@ -1006,6 +1012,19 @@
           </div>
 
           <div id="loja-cores" class="loja-grade"></div>
+        </div>
+
+        <!-- Seção Fontes do nick -->
+        <div id="loja-secao-fontes" class="loja-secao loja-subsecao" style="display:none;">
+          <button class="loja-sub-voltar" data-alvo="loja-menu">&larr; Voltar à loja</button>
+          <h3>Fonte do nick (<span id="loja-preco-fonte">60</span> moedas)</h3>
+
+          <div id="loja-preview-fonte" class="loja-preview" style="display:none;">
+            <span class="loja-preview-titulo">Prévia</span>
+            <span id="loja-preview-fonte-texto" class="perfil-nome"></span>
+          </div>
+
+          <div id="loja-fontes" class="loja-grade"></div>
         </div>
 
         <!-- Seção Decorações de perfil -->
@@ -1042,7 +1061,7 @@
             <li><span class="loja-roleta-cor" style="background:#ffd36a;"></span> 2x moedas — 15% (2 fatias)</li>
             <li><span class="loja-roleta-cor" style="background:#7ddea3;"></span> 1.5x moedas — 10% (2 fatias)</li>
             <li><span class="loja-roleta-cor" style="background:#ff8a8a;"></span> Metade da aposta — 20% (2 fatias)</li>
-            <li><span class="loja-roleta-cor" style="background:#c9a6ff;"></span> Decoração grátis — 10%</li>
+            <li><span class="loja-roleta-cor" style="background:#c9a6ff;"></span> 🎁 Presente: decoração, cor ou fonte grátis — 10%</li>
           </ul>
 
           <div class="loja-roleta-aposta">
@@ -1194,16 +1213,16 @@
       </footer>
     </main>
 
-    <script src="./js/perfil.js?v=20260926-01"></script>
-    <script src="./js/loja.js?v=20260926-01"></script>
-    <script src="./js/ranking.js?v=20260926-01"></script>
-    <script src="./js/core.js?v=20260926-01"></script>
-    <script src="./js/sudoku.js?v=20260926-01"></script>
-    <script src="./js/velha.js?v=20260926-01"></script>
-    <script src="./js/ludo.js?v=20260926-01"></script>
-    <script src="./js/campo.js?v=20260926-01"></script>
-    <script src="./js/termo.js?v=20260926-01"></script>
-    <script src="./js/tela.js?v=20260926-01"></script>
-    <script src="./js/clickj.js?v=20260926-01"></script>
+    <script src="./js/perfil.js?v=20260926-02"></script>
+    <script src="./js/loja.js?v=20260926-02"></script>
+    <script src="./js/ranking.js?v=20260926-02"></script>
+    <script src="./js/core.js?v=20260926-02"></script>
+    <script src="./js/sudoku.js?v=20260926-02"></script>
+    <script src="./js/velha.js?v=20260926-02"></script>
+    <script src="./js/ludo.js?v=20260926-02"></script>
+    <script src="./js/campo.js?v=20260926-02"></script>
+    <script src="./js/termo.js?v=20260926-02"></script>
+    <script src="./js/tela.js?v=20260926-02"></script>
+    <script src="./js/clickj.js?v=20260926-02"></script>
   </body>
 </html>

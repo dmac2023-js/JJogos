@@ -368,18 +368,10 @@ function ludoRenderJogadores() {
     var status = !j.conectado ? " · off" : (j.venceu ? " · venceu" : "");
     div.innerHTML = avatarHtml +
       '<span class="cor-bolinha ' + (j.cor || "") + '"></span>' +
-      "<strong>" + escapeHtml(j.nick || "—") + status + "</strong>";
+      "<strong>" + nickHtml(j.nick || "—", j.cosmeticos) + status + "</strong>";
+    marcarPerfilEl(div, j.nome);
     box.appendChild(div);
   });
-}
-
-function preencherAvatarPlacarLudo(el, nick, avatar) {
-  if (!el) return;
-  if (avatar) {
-    el.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="" />';
-  } else {
-    el.textContent = (nick || "?").charAt(0).toUpperCase();
-  }
 }
 
 function ludoRenderPlacar() {
@@ -391,12 +383,12 @@ function ludoRenderPlacar() {
   ["p1", "p2", "p3", "p4"].forEach(function (slot, i) {
     var j = null;
     js.forEach(function (x) { if (x.slot === slot) j = x; });
-    preencherAvatarPlacarLudo(
+    preencherAvatarPlacar(
       document.querySelector("#placar-ludo-avatar-" + slot),
-      j ? j.nick : "?", j ? j.avatar : null);
+      j ? j.nick : "?", j ? j.avatar : null, j && j.cosmeticos, j && j.nome);
     var nick = document.querySelector("#placar-ludo-nick-" + slot);
     var gol = document.querySelector("#placar-ludo-gol-" + slot);
-    if (nick) nick.textContent = j ? j.nick : "—";
+    if (nick) { nick.textContent = j ? j.nick : "—"; aplicarCorNickEl(nick, j && j.cosmeticos, j && j.nome); }
     if (gol) gol.textContent = String(placar[slot] || 0);
     var lado = box.querySelector('.placar-lado[data-slot="' + slot + '"]');
     if (lado) lado.style.display = j ? "" : "none";
@@ -422,17 +414,10 @@ async function carregarRankingLudo() {
     }
     container.innerHTML = "";
     lista.slice(0, 3).forEach(function (r, i) {
-      var img = r.avatar
-        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
-        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + '</span>';
       var el = document.createElement("div");
       el.className = "registro-recorde";
-      el.innerHTML =
-        '<span class="recorde-posicao">' + (medallas[i] || (i + 1)) + "</span>" +
-        img +
-        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + "</strong>" +
-        "<small>" + escapeHtml(r.nome || "") + "</small></span>" +
-        '<span class="recorde-tempo">' + (r.vitorias || 0) + "v</span>";
+      el.innerHTML = linhaRecordeHtml(medallas[i] || (i + 1), r, escapeHtml(r.nome || ""), (r.vitorias || 0) + "v");
+      marcarPerfilEl(el, r.nome);
       container.appendChild(el);
     });
   } catch (e) {

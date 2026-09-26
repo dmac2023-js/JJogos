@@ -14,7 +14,7 @@
 }
 
 /* Menu principal da loja: Nametags / Decorações de perfil / Roleta. */
-.loja-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 8px; }
+.loja-menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 8px; }
 @media (max-width: 720px) {
   .loja-menu { grid-template-columns: 1fr 1fr; }
 }
@@ -36,7 +36,7 @@
 #loja-preview-cor-texto { font-size: 22px; font-weight: bold; }
 .loja-preview-avatar-box { position: relative; width: 96px; height: 96px; display: inline-block; }
 .loja-preview-avatar-img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: #1c2c4a; }
-.loja-preview-decoracao-img { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: contain; pointer-events: none; }
+.loja-preview-decoracao-img { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain; pointer-events: none; }
 .loja-preview-nome { color: #c9ccda; font-size: 13px; }
 
 /* Cards de item (cor ou decoração). */
@@ -63,6 +63,7 @@
 .loja-item-nome { font-size: 12px; color: #c9ccda; }
 .loja-cor-amostra-box { position: relative; display: inline-block; width: 32px; height: 32px; }
 .loja-cor-amostra { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2d4470; display: inline-block; }
+.loja-fonte-amostra { display: grid; place-items: center; min-height: 32px; font-size: 20px; color: #f4f6ff; }
 
 /* Selo "Em uso" sobre a miniatura de quem está equipado no momento. */
 .loja-badge-equipado {
@@ -128,9 +129,23 @@
   background-size: 300% auto;
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  /* !important: cabeçalho (#auth-nome), ranking e placares definem cor fixa
+     com prioridade maior e apagavam o gradiente. */
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
   animation: loja-arco-iris 4s linear infinite;
 }
+
+/* Fontes do nick (loja). Só famílias de sistema/genéricas: fontes externas
+   não carregam dentro da Activity do Discord. */
+.nick-fonte-negrito { font-weight: 900 !important; }
+.nick-fonte-italico { font-style: italic !important; }
+.nick-fonte-mono { font-family: "Courier New", Consolas, monospace !important; }
+.nick-fonte-serifa { font-family: Georgia, "Times New Roman", serif !important; }
+.nick-fonte-cursiva { font-family: "Segoe Script", "Brush Script MT", "Comic Sans MS", cursive !important; }
+.nick-fonte-impacto { font-family: Impact, "Arial Black", sans-serif !important; letter-spacing: .02em; }
+.nick-fonte-versalete { font-variant: small-caps !important; letter-spacing: .05em; }
+.nick-fonte-espacada { letter-spacing: .18em !important; text-transform: uppercase; }
 @keyframes loja-arco-iris {
   0% { background-position: 0% 50%; }
   100% { background-position: 300% 50%; }

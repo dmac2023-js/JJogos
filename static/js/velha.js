@@ -126,16 +126,16 @@ function atualizarPlacarVelha() {
   mostrarPlacarVelha(velhaModo !== null);
   preencherAvatarPlacar(
     document.querySelector("#placar-velha-avatar-x"),
-    velhaJogadores.X.nick, velhaJogadores.X.avatar, velhaJogadores.X.cosmeticos);
+    velhaJogadores.X.nick, velhaJogadores.X.avatar, velhaJogadores.X.cosmeticos, velhaJogadores.X.nome);
   preencherAvatarPlacar(
     document.querySelector("#placar-velha-avatar-o"),
-    velhaJogadores.O.nick, velhaJogadores.O.avatar, velhaJogadores.O.cosmeticos);
+    velhaJogadores.O.nick, velhaJogadores.O.avatar, velhaJogadores.O.cosmeticos, velhaJogadores.O.nome);
   var nx = document.querySelector("#placar-velha-nick-x");
   var no = document.querySelector("#placar-velha-nick-o");
   var gx = document.querySelector("#placar-velha-gol-x");
   var go = document.querySelector("#placar-velha-gol-o");
-  if (nx) { nx.textContent = velhaJogadores.X.nick || "Aguardando..."; aplicarCorNickEl(nx, velhaJogadores.X.cosmeticos); }
-  if (no) { no.textContent = velhaJogadores.O.nick || "Aguardando..."; aplicarCorNickEl(no, velhaJogadores.O.cosmeticos); }
+  if (nx) { nx.textContent = velhaJogadores.X.nick || "Aguardando..."; aplicarCorNickEl(nx, velhaJogadores.X.cosmeticos, velhaJogadores.X.nome); }
+  if (no) { no.textContent = velhaJogadores.O.nick || "Aguardando..."; aplicarCorNickEl(no, velhaJogadores.O.cosmeticos, velhaJogadores.O.nome); }
   if (gx) gx.textContent = String(velhaPlacar.X || 0);
   if (go) go.textContent = String(velhaPlacar.O || 0);
 }
@@ -220,7 +220,7 @@ async function iniciarVelhaMaquina(dificuldade) {
   velhaEspectador = false;
   velhaPlacar = { X: 0, O: 0 };
   velhaJogadores = {
-    X: { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual() },
+    X: { nome: nomeUsuario(), nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() },
     O: { nick: "Máquina", avatar: null },
   };
   mostrarTela(telaVelha);
@@ -283,11 +283,13 @@ async function jogarVelhaMaquina(posicao) {
       document.querySelector("#reiniciar-velha").style.display = "";
       if (dados.resultado === "empate") {
         atualizarVelhaMensagem("Empate!", "");
+        velhaRegistrarFimSemVitoria("empate");
       } else if (dados.resultado === velhaMinhaPeca) {
         atualizarVelhaMensagem("Você venceu! Parabéns!", "sucesso");
         salvarRecordVelha();
       } else {
         atualizarVelhaMensagem("A máquina venceu!", "erro");
+        velhaRegistrarFimSemVitoria("derrota");
       }
     } else {
       atualizarVelhaMensagem("A máquina jogou. Sua vez!");
@@ -295,6 +297,14 @@ async function jogarVelhaMaquina(posicao) {
   } catch (erro) {
     atualizarVelhaMensagem(erro.message, "erro");
   }
+}
+
+/** Derrota ou empate: conta a partida no ranking/histórico (a vitória é
+ *  registrada por salvarRecordVelha, que usa a mesma trava). */
+function velhaRegistrarFimSemVitoria(resultado) {
+  if (velhaRecordSalvo || velhaEspectador) return;
+  velhaRecordSalvo = true;
+  jogoRegistrarTempo(velhaModo === "maquina" ? "velha_maquina" : "velha_online", false, resultado);
 }
 
 async function salvarRecordVelha() {
@@ -316,9 +326,7 @@ async function salvarRecordVelha() {
     });
     carregarRankingVelha();
     jogoRegistrarTempo(velhaModo === "maquina" ? "velha_maquina" : "velha_online", true);
-    atualizarMoedasHeader();
-    registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
-  } catch (e) { /* ignore */ }
+    atualizarMoedasHeader();  } catch (e) { /* ignore */ }
 }
 
 
@@ -342,17 +350,10 @@ async function carregarRankingVelha() {
     }
     container.innerHTML = "";
     lista.slice(0, 3).forEach(function (r, i) {
-      var img = r.avatar
-        ? '<img class="recorde-avatar" src="' + escapeHtml(r.avatar) + '" alt="" />'
-        : '<span class="recorde-avatar placeholder">' + escapeHtml((r.nick || "?").charAt(0).toUpperCase()) + '</span>';
       var el = document.createElement("div");
       el.className = "registro-recorde";
-      el.innerHTML =
-        '<span class="recorde-posicao">' + (medallas[i] || (i + 1)) + "</span>" +
-        img +
-        '<span class="recorde-info"><strong>' + escapeHtml(r.nick) + "</strong>" +
-        "<small>" + escapeHtml(r.nome || "") + "</small></span>" +
-        '<span class="recorde-tempo">' + (r.vitorias || 0) + "v</span>";
+      el.innerHTML = linhaRecordeHtml(medallas[i] || (i + 1), r, escapeHtml(r.nome || ""), (r.vitorias || 0) + "v");
+      marcarPerfilEl(el, r.nome);
       container.appendChild(el);
     });
   } catch (e) {
@@ -452,18 +453,17 @@ function processarMensagemVelha(dados) {
       if (!velhaEspectador) velhaMinhaPeca = dados.minha_peca;
       if (dados.placar) velhaPlacar = dados.placar;
       if (dados.jogador_x || dados.avatar_x) {
-        velhaJogadores.X = { nick: dados.jogador_x || velhaJogadores.X.nick, avatar: dados.avatar_x || velhaJogadores.X.avatar, cosmeticos: dados.cosmeticos_x || velhaJogadores.X.cosmeticos };
+        velhaJogadores.X = { nome: dados.nome_x || velhaJogadores.X.nome, nick: dados.jogador_x || velhaJogadores.X.nick, avatar: dados.avatar_x || velhaJogadores.X.avatar, cosmeticos: dados.cosmeticos_x || velhaJogadores.X.cosmeticos };
       }
       if (dados.jogador_o || dados.avatar_o) {
-        velhaJogadores.O = { nick: dados.jogador_o || velhaJogadores.O.nick, avatar: dados.avatar_o || velhaJogadores.O.avatar, cosmeticos: dados.cosmeticos_o || velhaJogadores.O.cosmeticos };
+        velhaJogadores.O = { nome: dados.nome_o || velhaJogadores.O.nome, nick: dados.jogador_o || velhaJogadores.O.nick, avatar: dados.avatar_o || velhaJogadores.O.avatar, cosmeticos: dados.cosmeticos_o || velhaJogadores.O.cosmeticos };
       }
       if (velhaModo) atualizarPlacarVelha();
       desenharTabuleiro(velhaTabuleiro);
       atualizarVelhaVez();
-      if (!dados.jogo_ativo && dados.resultado && dados.resultado !== "empate"
-          && velhaModo === "multiplayer" && !velhaEspectador
-          && dados.resultado === velhaMinhaPeca) {
-        salvarRecordVelha();
+      if (!dados.jogo_ativo && dados.resultado && velhaModo === "multiplayer" && !velhaEspectador) {
+        if (dados.resultado === velhaMinhaPeca) salvarRecordVelha();
+        else velhaRegistrarFimSemVitoria(dados.resultado === "empate" ? "empate" : "derrota");
       }
       break;
 
@@ -476,8 +476,8 @@ function processarMensagemVelha(dados) {
         dados.jogador_x + " (X) vs " + dados.jogador_o + " (O) — " + comeca + " começa!"
       );
       document.querySelector("#reiniciar-velha").style.display = "none";
-      if (dados.jogador_x) velhaJogadores.X = { nick: dados.jogador_x, avatar: dados.avatar_x || null, cosmeticos: dados.cosmeticos_x || null };
-      if (dados.jogador_o) velhaJogadores.O = { nick: dados.jogador_o, avatar: dados.avatar_o || null, cosmeticos: dados.cosmeticos_o || null };
+      if (dados.jogador_x) velhaJogadores.X = { nome: dados.nome_x, nick: dados.jogador_x, avatar: dados.avatar_x || null, cosmeticos: dados.cosmeticos_x || null };
+      if (dados.jogador_o) velhaJogadores.O = { nome: dados.nome_o, nick: dados.jogador_o, avatar: dados.avatar_o || null, cosmeticos: dados.cosmeticos_o || null };
       atualizarPlacarVelha();
       break;
 
@@ -487,9 +487,9 @@ function processarMensagemVelha(dados) {
       vezLabel.textContent = "Você é " + velhaMinhaPeca;
       vezLabel.className = "indicador-vez " + velhaMinhaPeca.toLowerCase();
       if (velhaMinhaPeca === "X" && velhaJogadores) {
-        velhaJogadores.X = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
+        velhaJogadores.X = { nome: nomeUsuario(), nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
       } else if (velhaMinhaPeca === "O") {
-        velhaJogadores.O = { nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
+        velhaJogadores.O = { nome: nomeUsuario(), nick: nomeExibicao() !== "Anônimo" ? nomeExibicao() : "Você", avatar: avatarAtual(), cosmeticos: minhasCosmeticosAtuais() };
       }
       atualizarPlacarVelha();
       break;
@@ -599,7 +599,7 @@ async function criarSalaVelha() {
     velhaReconnectAttempts = 0;
     velhaSala = dados.sala;
     velhaPlacar = { X: 0, O: 0 };
-    velhaJogadores = { X: { nick: nick, avatar: avatar }, O: { nick: "Aguardando...", avatar: null } };
+    velhaJogadores = { X: { nome: nomeUsuario(), nick: nick, avatar: avatar, cosmeticos: minhasCosmeticosAtuais() }, O: { nick: "Aguardando...", avatar: null } };
     mostrarTela(telaVelha);
     mostrarCodigoSala(dados.sala);
     atualizarPlacarVelha();

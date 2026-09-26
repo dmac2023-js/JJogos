@@ -368,7 +368,7 @@ function cjRenderJogo() {
   }
   var nickEl = document.querySelector("#cj-meu-nick");
   nickEl.textContent = cjEu.nick || nomeExibicao();
-  if (typeof aplicarCorEmElemento === "function") aplicarCorEmElemento(nickEl, cosm.cor_nick);
+  aplicarCorNickEl(nickEl, cosm);
   document.querySelector("#cj-meu-titulo").textContent = CJ_CLASSE_ICONES[cjEu.classe] + " " + cjEu.titulo;
   document.querySelector("#cj-meu-nivel").textContent = "Nível " + cjEu.nivel + "/" + cjEu.nivel_max;
   document.querySelector("#cj-meus-rebirths").textContent = cjEu.rebirths ? "🔁 " + cjEu.rebirths + " rebirth" + (cjEu.rebirths > 1 ? "s" : "") : "";
@@ -444,9 +444,9 @@ function cjRenderOnline() {
       (!cjEu || emLuta ? " disabled" : "") + ">Desafiar</button>";
     html +=
       '<div class="cj-online-item">' +
-      avatarSalaHtml(j.avatar, j.nick, j.cosmeticos) +
+      avatarSalaHtml(j.avatar, j.nick, j.cosmeticos, j.nome) +
       '<div class="cj-online-info">' +
-      "<strong>" + cjNickHtml(j.nick, j.cosmeticos) + "</strong>" +
+      "<strong>" + nickHtml(j.nick, j.cosmeticos, j.nome) + "</strong>" +
       "<small>" + CJ_CLASSE_ICONES[j.classe] + " Nv " + j.nivel + " · 🔁 " + j.rebirths + "</small>" +
       '<span class="cj-online-jcoins">' + cjMoedaHtml(j.jcoins) + "</span>" +
       "</div>" + acao + "</div>";
@@ -697,14 +697,14 @@ function cjNomesLuta() {
   return { eu: eu, outro: outro };
 }
 
-function cjMontarLutador(el, l) {
+function cjMontarLutador(el, l, nome) {
   el.innerHTML =
     '<div class="cj-lutador-av">' +
     cjAvatarHtml({ avatar: l.avatar, nick: l.nick, classe: l.classe, genero: l.genero, arma: l.arma }, 104) +
     CJ_ESCUDO_SVG +
     '<span class="cj-cruz">✚</span><span class="cj-mao">✋</span><div class="cj-numeros"></div>' +
     "</div>" +
-    '<strong class="cj-lutador-nick">' + cjNickHtml(l.nick, l.cosmeticos) + "</strong>" +
+    '<strong class="cj-lutador-nick">' + nickHtml(l.nick, l.cosmeticos, nome) + "</strong>" +
     '<small class="cj-lutador-titulo">' + CJ_CLASSE_ICONES[l.classe] + " " + escapeHtml(l.titulo) + "</small>" +
     '<div class="cj-hp"><div class="cj-hp-barra"></div><span class="cj-hp-texto"></span></div>' +
     '<div class="cj-lutador-status"></div>';
@@ -739,8 +739,8 @@ function cjReceberLuta(luta) {
     var tela = document.querySelector("#tela-clickj");
     if (!tela.classList.contains("ativa")) mostrarTela(tela);
     document.querySelector("#cj-resultado").style.display = "none";
-    cjMontarLutador(document.querySelector("#cj-lutador-eu"), luta.lutadores[n.eu]);
-    cjMontarLutador(document.querySelector("#cj-lutador-outro"), luta.lutadores[n.outro]);
+    cjMontarLutador(document.querySelector("#cj-lutador-eu"), luta.lutadores[n.eu], n.eu);
+    cjMontarLutador(document.querySelector("#cj-lutador-outro"), luta.lutadores[n.outro], n.outro);
     cjRenderOnline();
   }
   cjMostrarView("luta");

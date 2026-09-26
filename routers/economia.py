@@ -7,8 +7,10 @@ from pydantic import BaseModel
 from shared.economia import (
     CATALOGO_DECORACOES,
     CORES_NICK,
+    FONTES_NICK,
     PRECO_COR_NICK,
     PRECO_DECORACAO,
+    PRECO_FONTE_NICK,
     ROLETA_APOSTA_MINIMA,
     ROLETA_APOSTA_MULTIPLO,
     ROLETA_FATIAS,
@@ -17,6 +19,7 @@ from shared.economia import (
     decoracao_existe,
     girar_roleta,
     obter_carteira,
+    perfil_publico,
     registrar_fim_partida,
     salvar_economia,
     tentar_reclamar_bonus,
@@ -45,10 +48,16 @@ class CompraCor(BaseModel):
     cor: str
 
 
+class CompraFonte(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    fonte: str
+
+
 class EquiparRequest(BaseModel):
     nome: str
     nick: str = "Anônimo"
-    tipo: str  # "decoracao" | "cor_nick"
+    tipo: str  # "decoracao" | "cor_nick" | "fonte_nick"
     valor: Optional[str] = None
 
 
@@ -62,13 +71,15 @@ class TempoJogo(BaseModel):
     nome: str
     nick: str = "Anônimo"
     avatar: str = ""
-    segundos: int
+    segundos: int = 0
     jogo: str = ""
     venceu: bool = False
+    resultado: str = ""
 
 
 def _carteira_vazia() -> dict:
-    return {"saldo": 0, "decoracoes": [], "cores_nick": [], "equipado": {"decoracao": None, "cor_nick": None}}
+    return {"saldo": 0, "decoracoes": [], "cores_nick": [], "fontes_nick": [], "historico": [],
+            "equipado": {"decoracao": None, "cor_nick": None, "fonte_nick": None}}
 
 
 @router.get("/economia/carteira")
@@ -91,6 +102,8 @@ def obter_loja():
         "cores_nick": [c for c in CORES_NICK if c != "arco-iris"],
         "tem_arco_iris": True,
         "preco_cor_nick": PRECO_COR_NICK,
+        "fontes_nick": [{"id": k, "nome": v} for k, v in FONTES_NICK.items()],
+        "preco_fonte_nick": PRECO_FONTE_NICK,
     }
 
 
@@ -141,16 +154,37 @@ def comprar_cor(dados: CompraCor):
     return carteira_publica(carteira)
 
 
+@router.post("/economia/comprar/fonte")
+def comprar_fonte(dados: CompraFonte):
+    if eh_anonimo(dados.nick) or not dados.nome:
+        raise HTTPException(status_code=400, detail="Entre com Discord pra comprar.")
+    if dados.fonte not in FONTES_NICK:
+        raise HTTPException(status_code=400, detail="Fonte inválida.")
+
+    economia = carregar_economia()
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+    if dados.fonte in carteira["fontes_nick"]:
+        raise HTTPException(status_code=409, detail="Você já tem essa fonte.")
+    if carteira["saldo"] < PRECO_FONTE_NICK:
+        raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+
+    carteira["saldo"] -= PRECO_FONTE_NICK
+    carteira["fontes_nick"].append(dados.fonte)
+    salvar_economia(economia)
+    return carteira_publica(carteira)
+
+
 @router.post("/economia/equipar")
 def equipar(dados: EquiparRequest):
     if eh_anonimo(dados.nick) or not dados.nome:
         raise HTTPException(status_code=400, detail="Entre com Discord.")
-    if dados.tipo not in ("decoracao", "cor_nick"):
+    listas = {"decoracao": "decoracoes", "cor_nick": "cores_nick", "fonte_nick": "fontes_nick"}
+    if dados.tipo not in listas:
         raise HTTPException(status_code=400, detail="Tipo inválido.")
 
     economia = carregar_economia()
     carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
-    lista = carteira["decoracoes"] if dados.tipo == "decoracao" else carteira["cores_nick"]
+    lista = carteira[listas[dados.tipo]]
     if dados.valor is not None and dados.valor not in lista:
         raise HTTPException(status_code=403, detail="Você não tem esse item.")
 
@@ -182,11 +216,11 @@ def girar(dados: GirarRoleta):
 
 @router.post("/economia/tempo")
 def registrar_tempo(dados: TempoJogo):
-    if eh_anonimo(dados.nick) or not dados.nome or dados.segundos <= 0:
+    if eh_anonimo(dados.nick) or not dados.nome or (not dados.jogo and dados.segundos <= 0):
         return {"ok": False}
-    registrar_fim_partida(dados.nome, dados.nick, dados.segundos,
+    registrar_fim_partida(dados.nome, dados.nick, max(0, dados.segundos),
                           jogo=dados.jogo, avatar=dados.avatar or None,
-                          venceu=dados.venceu)
+                          venceu=dados.venceu, resultado=dados.resultado)
     return {"ok": True}
 
 
@@ -194,3 +228,13 @@ def registrar_tempo(dados: TempoJogo):
 def obter_ranking(limit: int = 10):
     limit = max(1, min(limit, 50))
     return top_ranking(limit)
+
+
+@router.get("/economia/jogador")
+def obter_perfil_jogador(nome: str = ""):
+    """Perfil público (mesmo formato do ranking) — usado ao clicar no avatar/nick
+    de alguém em salas, placares e tabelas de vitórias."""
+    perfil = perfil_publico(nome) if nome and not eh_anonimo(nome) else None
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Jogador sem perfil ainda.")
+    return perfil

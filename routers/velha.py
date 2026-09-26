@@ -190,7 +190,9 @@ def estado_para_cliente(jogo: dict, jogador: str = "X") -> dict:
         "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
         "avatar_o": (jogo["jogador_o"] or {}).get("avatar"),
         "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
+        "nome_x": (jogo["jogador_x"] or {}).get("nome", ""),
         "cosmeticos_o": cosmeticos_equipados((jogo["jogador_o"] or {}).get("nome", "")),
+        "nome_o": (jogo["jogador_o"] or {}).get("nome", ""),
         "placar": jogo.get("placar", {"X": 0, "O": 0}),
         "jogo_ativo": jogo["jogo_ativo"],
         "resultado": jogo["resultado"],
@@ -225,6 +227,7 @@ async def transmitir_salas_lobby():
             "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
             "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
             "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
+            "nome_x": (jogo["jogador_x"] or {}).get("nome", ""),
             "jogadores": jogadores,
             "espectadores": max(0, conns - jogadores),
             "em_andamento": jogo["jogo_ativo"] and jogo["jogador_o"] is not None,
@@ -366,6 +369,7 @@ def listar_salas():
             "jogador_o": jogo["jogador_o"]["nick"] if jogo["jogador_o"] else None,
             "avatar_x": (jogo["jogador_x"] or {}).get("avatar"),
             "cosmeticos_x": cosmeticos_equipados((jogo["jogador_x"] or {}).get("nome", "")),
+            "nome_x": (jogo["jogador_x"] or {}).get("nome", ""),
             "jogadores": jogadores,
             "espectadores": max(0, conns - jogadores),
             "em_andamento": jogo["jogo_ativo"] and jogo["jogador_o"] is not None,
@@ -582,7 +586,9 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "avatar_x": jogo["jogador_x"].get("avatar"),
                 "avatar_o": jogo["jogador_o"].get("avatar"),
                 "cosmeticos_x": cosmeticos_equipados(jogo["jogador_x"].get("nome", "")),
+                "nome_x": jogo["jogador_x"].get("nome", ""),
                 "cosmeticos_o": cosmeticos_equipados(jogo["jogador_o"].get("nome", "")),
+                "nome_o": jogo["jogador_o"].get("nome", ""),
                 "quem_comeca": jogo["jogador_atual"],
             })
             await websocket.send_json(estado_para_cliente(jogo, my_piece))
@@ -595,7 +601,9 @@ async def ws_velha(websocket: WebSocket, sala: str):
                 "avatar_x": jogo["jogador_x"].get("avatar"),
                 "avatar_o": jogo["jogador_o"].get("avatar"),
                 "cosmeticos_x": cosmeticos_equipados(jogo["jogador_x"].get("nome", "")),
+                "nome_x": jogo["jogador_x"].get("nome", ""),
                 "cosmeticos_o": cosmeticos_equipados(jogo["jogador_o"].get("nome", "")),
+                "nome_o": jogo["jogador_o"].get("nome", ""),
                 "quem_comeca": primeiro,
             })
             # Cada conexão recebe a própria peça; quem não é jogador mantém

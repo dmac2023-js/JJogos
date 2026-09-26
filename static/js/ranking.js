@@ -13,6 +13,7 @@ var RANKING_JOGO_LABELS = {
   termo_solo: "Termo Solo",
   termo_online: "Termo Online",
   ludo: "Ludo",
+  clickj_pvp: "ClickJ PvP",
 };
 
 // ---------------------------------------------------------------------------
@@ -28,9 +29,21 @@ function formatarHoras(seg) {
   return h + "h" + (m > 0 ? " " + m + "min" : "");
 }
 
-function rankingCorNick(jogador) {
-  var cor = (typeof LOJA_CORES_HEX !== "undefined" && LOJA_CORES_HEX[jogador.cor_nick]) || null;
-  return { estilo: cor ? 'style="color:' + cor + '"' : "", classe: jogador.cor_nick === "arco-iris" ? " nick-arco-iris" : "" };
+function rankingNickHtml(jogador) {
+  return nickHtml(jogador.nick || jogador.nome || "?", { cor_nick: jogador.cor_nick, fonte_nick: jogador.fonte_nick });
+}
+
+/** Abre o perfil de qualquer jogador pelo nome (username) — usado quando se
+ *  clica em alguém numa sala, placar ou tabela de vitórias. */
+async function abrirPerfilJogador(nome) {
+  try {
+    var resp = await fetch("./economia/jogador?nome=" + encodeURIComponent(nome));
+    if (resp.ok) {
+      abrirPerfilRanking(await resp.json());
+      return;
+    }
+  } catch (e) { /* cai no perfil mínimo abaixo */ }
+  abrirPerfilRanking({ nome: nome, nick: nome });
 }
 
 function rankingAvatarHtml(jogador, tamanho) {
@@ -83,19 +96,19 @@ function renderizarRanking(dados) {
 
     var posHtml = '<span class="ranking-pos">' + (medalhas[i] || "#" + (i + 1)) + "</span>";
     var avatarHtml = rankingAvatarHtml(jogador, 38);
-    var nc = rankingCorNick(jogador);
-    var nickHtml = '<span class="ranking-nick' + nc.classe + '" ' + nc.estilo + ">" +
-      escapeHtml(jogador.nick || jogador.nome || "?") + "</span>";
+    var nickLinha = '<span class="ranking-nick">' + rankingNickHtml(jogador) + "</span>";
 
     var valorHtml;
     if (rankingTabAtiva === "moedas") {
       valorHtml = '<span class="ranking-valor"><span class="loja-moeda-icone">🪙</span> ' +
         (jogador.saldo || 0).toLocaleString("pt-BR") + "</span>";
     } else {
-      valorHtml = '<span class="ranking-valor">🎮 ' + (jogador.total_partidas || 0).toLocaleString("pt-BR") + " partidas</span>";
+      var total = jogador.total_partidas || 0;
+      valorHtml = '<span class="ranking-valor">🎮 ' + total.toLocaleString("pt-BR") +
+        " partida" + (total === 1 ? "" : "s") + "</span>";
     }
 
-    btn.innerHTML = posHtml + avatarHtml + nickHtml + valorHtml;
+    btn.innerHTML = posHtml + avatarHtml + nickLinha + valorHtml;
     btn.addEventListener("click", function () { abrirPerfilRanking(jogador); });
     tabela.appendChild(btn);
   });
@@ -174,18 +187,15 @@ async function abrirPerfilRanking(jogador) {
   var card = document.createElement("div");
   card.className = "rmodal-card";
 
-  var nc = rankingCorNick(jogador);
   var avatarHtml = rankingAvatarHtml(jogador, 72);
-  var nickDisplay = escapeHtml(jogador.nick || jogador.nome || "?");
   var usernameExtra = (jogador.nome && jogador.nome !== jogador.nick)
     ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>"
     : "";
-  var nickHtml = '<span class="rmodal-nick' + nc.classe + '" ' + nc.estilo + ">" +
-    nickDisplay + "</span>" + usernameExtra;
+  var cabecalhoNick = '<span class="rmodal-nick">' + rankingNickHtml(jogador) + "</span>" + usernameExtra;
 
   card.innerHTML =
     '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
-    '<div class="rmodal-cabecalho">' + avatarHtml + nickHtml + "</div>" +
+    '<div class="rmodal-cabecalho">' + avatarHtml + cabecalhoNick + "</div>" +
     '<div id="rmodal-conteudo"><p class="vazio">Carregando...</p></div>';
 
   overlay.appendChild(card);
