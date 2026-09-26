@@ -520,6 +520,14 @@ function renderAuth() {
     // Na Activity a identidade vem do SDK — logout local não faria sentido.
     document.querySelector("#btn-logout-discord").style.display = dentroDaActivity() ? "none" : "";
     if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
+    // Identidade confirmada por QUALQUER caminho (SDK, OAuth do site ou
+    // sessão restaurada do localStorage) — limpa qualquer erro de login
+    // anterior que tenha ficado preso no status (ex: uma tentativa da
+    // Activity que rate-limitou antes da sessão salva ser restaurada).
+    if (elementoStatus) {
+      elementoStatus.textContent = "Conectado ao Discord";
+      elementoStatus.classList.add("conectado");
+    }
   } else {
     caixa.style.display = "none";
     botaoLogin.style.display = dentroDaActivity() ? "none" : "";
