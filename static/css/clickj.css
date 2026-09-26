@@ -98,6 +98,9 @@
 
 /* Loja */
 .cj-loja-overlay { position: fixed; inset: 0; z-index: 1500; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .7); }
+/* Popup de confirmação (ex: vender pet) tem que ficar acima da loja —
+   .popup-overlay sozinho (z-index 100) renderizava atrás dela. */
+#cj-popup { z-index: 1600; }
 .cj-loja-overlay.ativa { display: flex; }
 .cj-loja { position: relative; display: flex; flex-direction: column; width: 100%; max-width: 620px; max-height: 88vh; padding: 18px; border: 1px solid #26314f; border-radius: 16px; background: #141c30; }
 .cj-loja-topo { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; padding-right: 30px; }

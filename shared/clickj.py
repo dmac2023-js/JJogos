@@ -655,15 +655,23 @@ def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
 # Pets
 # ---------------------------------------------------------------------------
 
+def preco_pet(tier: str, rebirths: int) -> int:
+    info = PET_TIERS.get(tier)
+    if not info:
+        return 0
+    return info["preco"] * mult_preco_equip(rebirths)
+
+
 def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dict]]:
     info = PET_TIERS.get(tier)
     if not info:
         return False, "Roleta inválida.", None
     if len(j.get("pets", [])) >= PET_MAX_MOCHILA:
         return False, "Sua mochila de pets está cheia (máx. %d) — venda algum antes de rolar de novo." % PET_MAX_MOCHILA, None
-    if j["jcoins"] < info["preco"]:
+    preco = preco_pet(tier, j.get("rebirths", 0))
+    if j["jcoins"] < preco:
         return False, "Jcoins insuficientes.", None
-    j["jcoins"] -= info["preco"]
+    j["jcoins"] -= preco
     rng = random.Random()
     nome = rng.choice(PET_NOMES[tier])
     if tier == "basica":
@@ -683,7 +691,7 @@ def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dic
         "tier": tier,
         "nome": nome,
         "mult": mult,
-        "preco_pago": info["preco"],
+        "preco_pago": preco,
         "skill_extra": skill_extra,
     }
     j.setdefault("pets", []).append(pet)

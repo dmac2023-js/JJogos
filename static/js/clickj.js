@@ -764,17 +764,22 @@ function cjRenderPets() {
   var jcoins = cjJcoinsAtuais();
   var meusPets = cjEu.pets || [];
   var equipados = cjEu.pets_equipados || [];
+  var mult = cjEu.equip_preco_mult || 1;
   var mochilaCheia = meusPets.length >= pets.max_mochila;
   var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + pets.max_equipados +
     " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Mochila com espaço pra até " +
     pets.max_mochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
     "% do preço pago. Pets somem no rebirth.</p>";
+  if (mult > 1) {
+    html += '<p style="color:#ff9a9a;font-size:12px;margin:0 0 8px;">Rebirth encareceu as roletas em ' + cjFmt(mult) + "x.</p>";
+  }
 
   ["basica", "epica", "divina"].forEach(function (tier) {
     var info = pets.tiers[tier];
+    var preco = info.preco * mult;
     html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
       '<div class="cj-item-info"><strong>' + info.nome + "</strong><small>" + CJ_PET_DESCRICAO[tier] + "</small></div>" +
-      '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', info.preco, "Rolar", jcoins < info.preco || mochilaCheia) +
+      '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', preco, "Rolar", jcoins < preco || mochilaCheia) +
       "</div></div>";
   });
   if (mochilaCheia) {
