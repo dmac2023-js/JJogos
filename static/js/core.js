@@ -18,6 +18,10 @@ const nomesDificuldade = { facil: "Fácil", medio: "Médio", dificil: "Difícil"
 // Identidade Discord (site OAuth + Activity SDK) — evita "Anônimo" por corrida
 // ---------------------------------------------------------------------------
 var conexaoDiscordPromise = null;
+// Discord às vezes limita /oauth2/token por um tempo — enquanto isso não
+// passa, nem tenta de novo (evita reforçar o rate limit chamando de novo
+// de qualquer uma das 20+ telas que esperam identidade).
+var discordLoginBloqueadoAte = 0;
 
 function escapeHtml(texto) {
   return String(texto == null ? "" : texto)
@@ -56,6 +60,7 @@ async function garantirIdentidade() {
   if (dentroDaActivity()) {
     // OAuth completo (authorize+token+@me) pode levar ~2-4s — dá tempo real.
     for (var i = 0; i < 3 && !usuarioDiscord; i++) {
+      if (Date.now() < discordLoginBloqueadoAte) break; // Discord rate-limitou — não insiste
       try {
         await Promise.race([
           conectarAoDiscord(),
@@ -63,7 +68,7 @@ async function garantirIdentidade() {
         ]);
       } catch (e) { /* segue sem identidade */ }
       if (!usuarioDiscord) {
-        await new Promise(function (r) { setTimeout(r, 250); });
+        await new Promise(function (r) { setTimeout(r, 1500); });
       }
     }
   }
@@ -302,6 +307,13 @@ document.addEventListener("click", function (ev) {
 // ---------------------------------------------------------------------------
 async function conectarAoDiscord() {
   if (conexaoDiscordPromise) return conexaoDiscordPromise;
+  if (Date.now() < discordLoginBloqueadoAte) {
+    if (dentroDaActivity()) {
+      elementoStatus.textContent = "Discord limitou o login — aguardando um pouco antes de tentar de novo.";
+      elementoStatus.classList.remove("conectado");
+    }
+    return;
+  }
   conexaoDiscordPromise = (async function () {
     try {
       var respostaConfiguracao = await fetch("./config");
@@ -365,7 +377,16 @@ async function conectarAoDiscord() {
           body: JSON.stringify({ code: codigo, activity: true }),
         });
         var token = await resTroca.json();
-        if (!resTroca.ok) throw new Error(token.detail || "Falha ao trocar o code.");
+        if (!resTroca.ok) {
+          var detalhe = token.detail;
+          if (resTroca.status === 429 && detalhe && typeof detalhe === "object") {
+            var espera = Number(detalhe.retry_after) || 5;
+            // Margem de segurança em cima do retry_after do Discord.
+            discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
+            throw new Error(detalhe.mensagem || "Discord limitou os logins.");
+          }
+          throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o code.");
+        }
 
         // O @me já vem pronto do backend (buscado lá) — dentro da Activity um
         // fetch do cliente direto para discord.com fica preso pelo sandbox do
@@ -570,7 +591,15 @@ async function processarCallbackOAuth() {
       body: JSON.stringify({ code: code, redirect_uri: redirectGuardado }),
     });
     var token = await res.json();
-    if (!res.ok) throw new Error(token.detail || "Falha ao trocar o código.");
+    if (!res.ok) {
+      var detalhe = token.detail;
+      if (res.status === 429 && detalhe && typeof detalhe === "object") {
+        var espera = Number(detalhe.retry_after) || 5;
+        discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
+        throw new Error(detalhe.mensagem || "Discord limitou os logins.");
+      }
+      throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o código.");
+    }
 
     var user = token.user;
     if (!user || !user.id) throw new Error("Falha ao obter o perfil.");

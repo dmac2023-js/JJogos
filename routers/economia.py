@@ -8,6 +8,7 @@ from shared.economia import (
     CATALOGO_DECORACOES,
     CORES_NICK,
     FONTES_NICK,
+    LOCK_ECONOMIA,
     PRECO_COR_NICK,
     PRECO_DECORACAO,
     PRECO_FONTE_NICK,
@@ -16,11 +17,14 @@ from shared.economia import (
     ROLETA_FATIAS,
     carregar_economia,
     carteira_publica,
+    creditar_moedas,
     decoracao_existe,
+    eh_admin_discord_id,
     girar_roleta,
     obter_carteira,
     perfil_publico,
     registrar_fim_partida,
+    resolver_nome_por_discord_id,
     salvar_economia,
     tentar_reclamar_bonus,
     top_ranking,
@@ -67,6 +71,12 @@ class GirarRoleta(BaseModel):
     aposta: int
 
 
+class DoarMoedas(BaseModel):
+    admin_id: str
+    alvo_id: str
+    quantidade: int
+
+
 class TempoJogo(BaseModel):
     nome: str
     nick: str = "Anônimo"
@@ -83,15 +93,19 @@ def _carteira_vazia() -> dict:
 
 
 @router.get("/economia/carteira")
-def obter_minha_carteira(nome: str = "", nick: str = "", avatar: str = ""):
+def obter_minha_carteira(nome: str = "", nick: str = "", avatar: str = "", discord_id: str = ""):
     if not nome or eh_anonimo(nick):
         return _carteira_vazia()
-    dados = carregar_economia()
-    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar or None)
-    # Salva nick+avatar sempre que chamado — garante que o ranking
-    # exibe o display name atual mesmo que o usuário nunca tenha comprado nada.
-    salvar_economia(dados)
-    return carteira_publica(carteira)
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar or None,
+                                  discord_id=discord_id or None)
+        # Salva nick+avatar sempre que chamado — garante que o ranking
+        # exibe o display name atual mesmo que o usuário nunca tenha comprado nada.
+        salvar_economia(dados)
+        resposta = carteira_publica(carteira)
+        resposta["eh_admin"] = eh_admin_discord_id(discord_id)
+        return resposta
 
 
 @router.get("/economia/loja")
@@ -121,17 +135,18 @@ def comprar_decoracao(dados: CompraDecoracao):
     if not decoracao_existe(dados.sku_id):
         raise HTTPException(status_code=404, detail="Decoração não encontrada.")
 
-    economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
-    if dados.sku_id in carteira["decoracoes"]:
-        raise HTTPException(status_code=409, detail="Você já tem essa decoração.")
-    if carteira["saldo"] < PRECO_DECORACAO:
-        raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+        if dados.sku_id in carteira["decoracoes"]:
+            raise HTTPException(status_code=409, detail="Você já tem essa decoração.")
+        if carteira["saldo"] < PRECO_DECORACAO:
+            raise HTTPException(status_code=402, detail="Moedas insuficientes.")
 
-    carteira["saldo"] -= PRECO_DECORACAO
-    carteira["decoracoes"].append(dados.sku_id)
-    salvar_economia(economia)
-    return carteira_publica(carteira)
+        carteira["saldo"] -= PRECO_DECORACAO
+        carteira["decoracoes"].append(dados.sku_id)
+        salvar_economia(economia)
+        return carteira_publica(carteira)
 
 
 @router.post("/economia/comprar/cor")
@@ -141,17 +156,18 @@ def comprar_cor(dados: CompraCor):
     if dados.cor not in CORES_NICK:
         raise HTTPException(status_code=400, detail="Cor inválida.")
 
-    economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
-    if dados.cor in carteira["cores_nick"]:
-        raise HTTPException(status_code=409, detail="Você já tem essa cor.")
-    if carteira["saldo"] < PRECO_COR_NICK:
-        raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+        if dados.cor in carteira["cores_nick"]:
+            raise HTTPException(status_code=409, detail="Você já tem essa cor.")
+        if carteira["saldo"] < PRECO_COR_NICK:
+            raise HTTPException(status_code=402, detail="Moedas insuficientes.")
 
-    carteira["saldo"] -= PRECO_COR_NICK
-    carteira["cores_nick"].append(dados.cor)
-    salvar_economia(economia)
-    return carteira_publica(carteira)
+        carteira["saldo"] -= PRECO_COR_NICK
+        carteira["cores_nick"].append(dados.cor)
+        salvar_economia(economia)
+        return carteira_publica(carteira)
 
 
 @router.post("/economia/comprar/fonte")
@@ -161,17 +177,18 @@ def comprar_fonte(dados: CompraFonte):
     if dados.fonte not in FONTES_NICK:
         raise HTTPException(status_code=400, detail="Fonte inválida.")
 
-    economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
-    if dados.fonte in carteira["fontes_nick"]:
-        raise HTTPException(status_code=409, detail="Você já tem essa fonte.")
-    if carteira["saldo"] < PRECO_FONTE_NICK:
-        raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+        if dados.fonte in carteira["fontes_nick"]:
+            raise HTTPException(status_code=409, detail="Você já tem essa fonte.")
+        if carteira["saldo"] < PRECO_FONTE_NICK:
+            raise HTTPException(status_code=402, detail="Moedas insuficientes.")
 
-    carteira["saldo"] -= PRECO_FONTE_NICK
-    carteira["fontes_nick"].append(dados.fonte)
-    salvar_economia(economia)
-    return carteira_publica(carteira)
+        carteira["saldo"] -= PRECO_FONTE_NICK
+        carteira["fontes_nick"].append(dados.fonte)
+        salvar_economia(economia)
+        return carteira_publica(carteira)
 
 
 @router.post("/economia/equipar")
@@ -182,15 +199,16 @@ def equipar(dados: EquiparRequest):
     if dados.tipo not in listas:
         raise HTTPException(status_code=400, detail="Tipo inválido.")
 
-    economia = carregar_economia()
-    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
-    lista = carteira[listas[dados.tipo]]
-    if dados.valor is not None and dados.valor not in lista:
-        raise HTTPException(status_code=403, detail="Você não tem esse item.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+        lista = carteira[listas[dados.tipo]]
+        if dados.valor is not None and dados.valor not in lista:
+            raise HTTPException(status_code=403, detail="Você não tem esse item.")
 
-    carteira["equipado"][dados.tipo] = dados.valor
-    salvar_economia(economia)
-    return carteira_publica(carteira)
+        carteira["equipado"][dados.tipo] = dados.valor
+        salvar_economia(economia)
+        return carteira_publica(carteira)
 
 
 @router.get("/economia/roleta")
@@ -238,3 +256,24 @@ def obter_perfil_jogador(nome: str = ""):
     if not perfil:
         raise HTTPException(status_code=404, detail="Jogador sem perfil ainda.")
     return perfil
+
+
+@router.post("/economia/admin/doar")
+def admin_doar_moedas(dados: DoarMoedas):
+    """Só o(s) ID(s) em ADMIN_DISCORD_IDS conseguem creditar moedas pra
+    qualquer jogador (inclusive pra si mesmo, usando o próprio ID). Nunca
+    confia num "sou admin" mandado pelo cliente — o ID é checado aqui."""
+    if not eh_admin_discord_id(dados.admin_id):
+        raise HTTPException(status_code=403, detail="Você não tem permissão para isso.")
+    if dados.quantidade <= 0 or dados.quantidade > 1_000_000_000:
+        raise HTTPException(status_code=400, detail="Quantidade inválida.")
+
+    nome_alvo = resolver_nome_por_discord_id(dados.alvo_id)
+    if not nome_alvo:
+        raise HTTPException(
+            status_code=404,
+            detail="Esse ID ainda não tem carteira (a pessoa precisa abrir o site logada com Discord pelo menos uma vez).",
+        )
+
+    novo_saldo = creditar_moedas(nome_alvo, dados.quantidade)
+    return {"nome": nome_alvo, "saldo": novo_saldo}

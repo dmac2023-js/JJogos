@@ -101,6 +101,17 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
         timeout=15,
     )
 
+    if resposta.status_code == 429:
+        try:
+            corpo = resposta.json()
+            retry_after = float(corpo.get("retry_after", 5))
+        except Exception:
+            retry_after = 5.0
+        raise HTTPException(
+            status_code=429,
+            detail={"mensagem": "Discord limitou os logins por um instante.", "retry_after": retry_after},
+        )
+
     if resposta.status_code != 200:
         try:
             corpo = resposta.json()

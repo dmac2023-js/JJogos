@@ -63,11 +63,14 @@ async function atualizarMoedasHeader() {
   try {
     var params = "nome=" + encodeURIComponent(nomeUsuario()) +
       "&nick=" + encodeURIComponent(nomeExibicao()) +
-      "&avatar=" + encodeURIComponent(avatarAtual() || "");
+      "&avatar=" + encodeURIComponent(avatarAtual() || "") +
+      "&discord_id=" + encodeURIComponent(usuarioDiscord.id || "");
     var resp = await fetch("./economia/carteira?" + params);
     minhaCarteira = await resp.json();
     if (badge) badge.textContent = minhaCarteira.saldo;
     aplicarCosmeticosHeader();
+    var btnAdmin = document.querySelector("#loja-btn-admin-doar");
+    if (btnAdmin) btnAdmin.style.display = minhaCarteira.eh_admin ? "" : "none";
   } catch (e) { /* ignore */ }
 }
 
@@ -661,6 +664,84 @@ async function tentarBonusAtividade() {
     }
   } catch (e) { /* ignore */ }
 }
+
+// ---------------------------------------------------------------------------
+// Admin: doar/gerar moedas (só aparece pra quem o servidor reconhece como
+// admin — o botão em si não dá acesso a nada, o endpoint checa o ID de novo).
+// ---------------------------------------------------------------------------
+function fecharModalAdminDoar() {
+  var overlay = document.querySelector("#admin-doar-modal");
+  if (overlay) overlay.remove();
+}
+
+function abrirModalAdminDoar() {
+  fecharModalAdminDoar();
+
+  var overlay = document.createElement("div");
+  overlay.id = "admin-doar-modal";
+  overlay.className = "rmodal-overlay";
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) fecharModalAdminDoar();
+  });
+
+  var card = document.createElement("div");
+  card.className = "rmodal-card";
+  card.innerHTML =
+    '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
+    "<h3>💰 Doar/Gerar moedas</h3>" +
+    '<p style="color:#aeb2c7;font-size:13px;">Credita moedas (Jogos7, não Jcoins do ClickJ) na conta de quem você quiser, pelo ID do Discord.</p>' +
+    '<label style="display:block;margin-top:10px;">ID do usuário (Discord)' +
+    '<input id="admin-doar-id" type="text" inputmode="numeric" placeholder="Ex: 1527038915628761110"' +
+    ' style="width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;"></label>' +
+    '<label style="display:block;margin-top:10px;">Quantidade de moedas' +
+    '<input id="admin-doar-qtd" type="number" min="1" step="1" value="100"' +
+    ' style="width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;"></label>' +
+    '<p id="admin-doar-erro" class="mensagem erro" style="display:none;margin-top:8px;"></p>' +
+    '<button id="admin-doar-confirmar" type="button" class="botao-copiar" style="margin-top:14px;width:100%;">Doar/Gerar</button>';
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  card.querySelector(".rmodal-fechar").addEventListener("click", fecharModalAdminDoar);
+  card.querySelector("#admin-doar-confirmar").addEventListener("click", confirmarAdminDoar);
+}
+
+async function confirmarAdminDoar() {
+  var idInput = document.querySelector("#admin-doar-id");
+  var qtdInput = document.querySelector("#admin-doar-qtd");
+  var erroEl = document.querySelector("#admin-doar-erro");
+  var alvoId = (idInput.value || "").trim();
+  var quantidade = parseInt(qtdInput.value, 10);
+  erroEl.style.display = "none";
+  if (!alvoId || !quantidade || quantidade <= 0) {
+    erroEl.textContent = "Preencha o ID e uma quantidade válida.";
+    erroEl.style.display = "";
+    return;
+  }
+  try {
+    var resp = await fetch("./economia/admin/doar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId, quantidade: quantidade }),
+    });
+    var dados = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) {
+      erroEl.textContent = dados.detail || "Não foi possível doar.";
+      erroEl.style.display = "";
+      return;
+    }
+    fecharModalAdminDoar();
+    alert("Creditado! Novo saldo de " + dados.nome + ": " + dados.saldo + " moedas.");
+    if (dados.nome === nomeUsuario()) {
+      minhaCarteira.saldo = dados.saldo;
+      lojaAtualizarSaldoTelas();
+    }
+  } catch (e) {
+    erroEl.textContent = "Não foi possível doar agora.";
+    erroEl.style.display = "";
+  }
+}
+
+document.querySelector("#loja-btn-admin-doar").addEventListener("click", abrirModalAdminDoar);
 
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
 document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);

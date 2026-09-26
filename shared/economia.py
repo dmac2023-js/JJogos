@@ -6,6 +6,7 @@ Discord (anônimo) não ganha nem gasta moeda nenhuma.
 """
 import json
 import secrets
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,14 @@ from shared.db import carregar_json, salvar_json
 from shared.recordes import eh_anonimo
 
 CHAVE_ECONOMIA = "jjogos:economia"
+
+# Toda leitura+alteração+gravação da carteira (o blob inteiro de TODOS os
+# jogadores) precisa passar por aqui. carregar_economia()/salvar_economia()
+# leem e reescrevem o dicionário inteiro sem merge — duas gravações
+# concorrentes (ex: comprar na loja enquanto converte Jcoins no ClickJ, ou
+# duas pessoas comprando ao mesmo tempo) faziam uma sobrescrever a outra e
+# "sumir" moedas/itens. Um único lock global serializa todo write.
+LOCK_ECONOMIA = threading.Lock()
 
 BONUS_INTERVALO_SEGUNDOS = 15 * 60
 BONUS_QUANTIDADE = 5
@@ -149,7 +158,8 @@ def _carteiras_recentes() -> dict:
     return _cache_carteiras["carteiras"]
 
 
-def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None) -> dict:
+def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None,
+                   discord_id: str = None) -> dict:
     carteira = dados["carteiras"].setdefault(nome, {})
     carteira.setdefault("saldo", 0)
     carteira.setdefault("ultimo_bonus", 0)
@@ -163,11 +173,36 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None)
     carteira.setdefault("partidas", {})
     carteira.setdefault("vitorias", {})
     carteira.setdefault("historico", [])
+    carteira.setdefault("discord_id", None)
     if nick:
         carteira["nick"] = nick
     if avatar:
         carteira["avatar"] = avatar
+    if discord_id:
+        carteira["discord_id"] = discord_id
     return carteira
+
+
+# ID(s) do Discord com acesso ao botão "Doar/Gerar moedas" da loja. Nunca
+# confiar num "sou admin" mandado pelo cliente — só esse ID é aceito.
+ADMIN_DISCORD_IDS = {"1527038915628761110"}
+
+
+def eh_admin_discord_id(discord_id: str) -> bool:
+    return bool(discord_id) and discord_id in ADMIN_DISCORD_IDS
+
+
+def resolver_nome_por_discord_id(discord_id: str) -> Optional[str]:
+    """Acha o 'nome' (chave da carteira) de quem tem esse ID do Discord.
+    Só funciona pra quem já abriu o site logado ao menos uma vez (é quando
+    o discord_id é gravado na carteira)."""
+    if not discord_id:
+        return None
+    carteiras = carregar_economia().get("carteiras", {})
+    for nome, carteira in carteiras.items():
+        if carteira.get("discord_id") == discord_id:
+            return nome
+    return None
 
 
 def _imagem_decoracao(sku: Optional[str], animada: bool) -> Optional[str]:
@@ -224,22 +259,23 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
     vitórias por jogo e guarda no histórico das últimas partidas."""
     if eh_anonimo(nome) or not nome:
         return
-    dados = carregar_economia()
-    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
-    if segundos > 0:
-        carteira["segundos_jogados"] = carteira.get("segundos_jogados", 0) + segundos
-    if jogo in PARTIDAS_JOGOS:
-        partidas = carteira.setdefault("partidas", {})
-        partidas[jogo] = partidas.get(jogo, 0) + 1
-        if venceu:
-            vitorias = carteira.setdefault("vitorias", {})
-            vitorias[jogo] = vitorias.get(jogo, 0) + 1
-        if resultado not in ("vitoria", "derrota", "empate"):
-            resultado = "vitoria" if venceu else "derrota"
-        historico = carteira.setdefault("historico", [])
-        historico.insert(0, {"jogo": jogo, "resultado": resultado, "em": int(time.time())})
-        del historico[HISTORICO_MAXIMO:]
-    salvar_economia(dados)
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
+        if segundos > 0:
+            carteira["segundos_jogados"] = carteira.get("segundos_jogados", 0) + segundos
+        if jogo in PARTIDAS_JOGOS:
+            partidas = carteira.setdefault("partidas", {})
+            partidas[jogo] = partidas.get(jogo, 0) + 1
+            if venceu:
+                vitorias = carteira.setdefault("vitorias", {})
+                vitorias[jogo] = vitorias.get(jogo, 0) + 1
+            if resultado not in ("vitoria", "derrota", "empate"):
+                resultado = "vitoria" if venceu else "derrota"
+            historico = carteira.setdefault("historico", [])
+            historico.insert(0, {"jogo": jogo, "resultado": resultado, "em": int(time.time())})
+            del historico[HISTORICO_MAXIMO:]
+        salvar_economia(dados)
 
 
 def _entrada_publica(nome: str, carteira: dict) -> dict:
@@ -281,11 +317,12 @@ def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:
     novo saldo, ou None se não creditou nada."""
     if eh_anonimo(nome) or not nome or quantidade <= 0:
         return None
-    dados = carregar_economia()
-    carteira = obter_carteira(dados, nome)
-    carteira["saldo"] = carteira.get("saldo", 0) + quantidade
-    salvar_economia(dados)
-    return carteira["saldo"]
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        carteira["saldo"] = carteira.get("saldo", 0) + quantidade
+        salvar_economia(dados)
+        return carteira["saldo"]
 
 
 def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> dict:
@@ -296,22 +333,23 @@ def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> di
     if eh_anonimo(nome) or not nome:
         return {"creditado": False, "saldo": 0, "proximo_em_segundos": BONUS_INTERVALO_SEGUNDOS}
 
-    dados = carregar_economia()
-    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
-    agora = time.time()
-    passado = agora - carteira.get("ultimo_bonus", 0)
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
+        agora = time.time()
+        passado = agora - carteira.get("ultimo_bonus", 0)
 
-    if passado >= BONUS_INTERVALO_SEGUNDOS:
-        carteira["saldo"] = carteira.get("saldo", 0) + BONUS_QUANTIDADE
-        carteira["ultimo_bonus"] = agora
-        salvar_economia(dados)
-        return {"creditado": True, "saldo": carteira["saldo"], "proximo_em_segundos": BONUS_INTERVALO_SEGUNDOS}
+        if passado >= BONUS_INTERVALO_SEGUNDOS:
+            carteira["saldo"] = carteira.get("saldo", 0) + BONUS_QUANTIDADE
+            carteira["ultimo_bonus"] = agora
+            salvar_economia(dados)
+            return {"creditado": True, "saldo": carteira["saldo"], "proximo_em_segundos": BONUS_INTERVALO_SEGUNDOS}
 
-    return {
-        "creditado": False,
-        "saldo": carteira["saldo"],
-        "proximo_em_segundos": int(BONUS_INTERVALO_SEGUNDOS - passado),
-    }
+        return {
+            "creditado": False,
+            "saldo": carteira["saldo"],
+            "proximo_em_segundos": int(BONUS_INTERVALO_SEGUNDOS - passado),
+        }
 
 
 def sortear_fatia_roleta() -> dict:
@@ -356,31 +394,32 @@ def girar_roleta(nome: str, aposta: int) -> dict:
             f"Aposta mínima é {ROLETA_APOSTA_MINIMA} moedas, sempre em múltiplos de {ROLETA_APOSTA_MULTIPLO}."
         )
 
-    dados = carregar_economia()
-    carteira = obter_carteira(dados, nome)
-    if carteira["saldo"] < aposta:
-        raise ValueError("Moedas insuficientes.")
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        if carteira["saldo"] < aposta:
+            raise ValueError("Moedas insuficientes.")
 
-    carteira["saldo"] -= aposta
-    fatia = sortear_fatia_roleta()
-    premio_moedas = 0
-    presente = None
+        carteira["saldo"] -= aposta
+        fatia = sortear_fatia_roleta()
+        premio_moedas = 0
+        presente = None
 
-    if fatia["tipo"] == "multiplicador":
-        premio_moedas = int(aposta * fatia["valor"])
-        carteira["saldo"] += premio_moedas
-    elif fatia["tipo"] == "presente":
-        presente = sortear_presente(carteira)
-        if not presente:
-            # já tem tudo da loja — credita o preço de uma decoração em moedas.
-            premio_moedas = PRECO_DECORACAO
+        if fatia["tipo"] == "multiplicador":
+            premio_moedas = int(aposta * fatia["valor"])
             carteira["saldo"] += premio_moedas
+        elif fatia["tipo"] == "presente":
+            presente = sortear_presente(carteira)
+            if not presente:
+                # já tem tudo da loja — credita o preço de uma decoração em moedas.
+                premio_moedas = PRECO_DECORACAO
+                carteira["saldo"] += premio_moedas
 
-    salvar_economia(dados)
-    return {
-        "fatia_indice": fatia["indice"],
-        "resultado": fatia,
-        "premio_moedas": premio_moedas,
-        "presente": presente,
-        "carteira": carteira_publica(carteira),
-    }
+        salvar_economia(dados)
+        return {
+            "fatia_indice": fatia["indice"],
+            "resultado": fatia,
+            "premio_moedas": premio_moedas,
+            "presente": presente,
+            "carteira": carteira_publica(carteira),
+        }
