@@ -26,6 +26,8 @@
 .cj-classe strong { margin-top: 6px; font-size: 15px; }
 .cj-classe small { color: #aeb2c7; font-size: 12px; line-height: 1.3; }
 .cj-classe .cj-classe-bonus { color: #85e0ae; font-weight: bold; }
+.cj-classe-pontos { list-style: none; margin: 6px 0 0; padding: 0; text-align: left; width: 100%; }
+.cj-classe-pontos li { font-size: 11px; line-height: 1.4; color: #c9ccda; }
 .cj-criar-btn { width: 100%; margin-top: 16px; padding: 13px; font-size: 15px; }
 .cj-criar-btn:disabled { opacity: .5; cursor: not-allowed; }
 

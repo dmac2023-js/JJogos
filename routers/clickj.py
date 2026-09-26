@@ -674,8 +674,10 @@ class ResetarProgresso(BaseModel):
 
 @router.post("/clickj/admin/resetar-progresso")
 async def admin_resetar_progresso(dados: ResetarProgresso):
-    """Ação única: zera nível, cliques e rebirths de TODOS os jogadores
-    salvos do ClickJ. Não mexe em jcoins, equipamento, pets, títulos etc."""
+    """Ação única: apaga TODOS os personagens do ClickJ por completo (nível,
+    cliques, rebirths, jcoins, equipamento, poções, maestria, títulos, pets —
+    tudo). Cada jogador volta pra tela de criar personagem, como se nunca
+    tivesse jogado."""
     if not eh_admin_discord_id(dados.admin_id):
         raise HTTPException(status_code=403, detail="Você não tem permissão para isso.")
     try:
@@ -683,21 +685,23 @@ async def admin_resetar_progresso(dados: ResetarProgresso):
     except Exception as erro:
         raise HTTPException(status_code=500, detail="Não consegui carregar os dados: " + str(erro))
 
-    afetados = 0
-    for j in _dados["jogadores"].values():
-        j["cliques"] = 0
-        j["nivel"] = 1
-        j["rebirths"] = 0
-        afetados += 1
+    afetados = len(_dados["jogadores"])
+    _dados["jogadores"] = {}
     _marcar_sujo()
     await _salvar_se_sujo()
 
     for nome in list(conexoes):
-        if _jogador(nome):
-            await _enviar_estado(nome, {"aviso": "Um administrador resetou nível e rebirths de todos os jogadores."})
+        await websocket_bem_vindo_reset(nome)
     await _transmitir_online(forcar=True)
 
     return {"ok": True, "jogadores_afetados": afetados}
+
+
+async def websocket_bem_vindo_reset(nome: str) -> None:
+    """Reenvia 'bem_vindo' sem personagem — o cliente já sabe voltar pra tela
+    de criação sozinho quando recebe isso (mesmo tratamento do 1º login)."""
+    await _enviar(nome, {"tipo": "bem_vindo", "catalogo": regras.catalogo(), "tem_personagem": False})
+    await _enviar(nome, {"tipo": "aviso", "mensagem": "Um administrador resetou o ClickJ — crie seu personagem de novo."})
 
 
 @router.websocket("/ws/clickj")

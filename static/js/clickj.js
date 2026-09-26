@@ -36,6 +36,22 @@ var CJ_CLASSE_DESC = {
   curandeiro: "Aguenta mais pancada.",
   monge: "Esquiva com facilidade.",
 };
+// Pontos fortes/fracos de cada classe em combate — mostrado na criação do
+// personagem, antes de escolher (espelha RESISTENCIA_CLASSE do backend).
+var CJ_CLASSE_FORCAS = {
+  mago: ["Ataque e cura fortes em Magia"],
+  arqueiro: ["Defende bem de ataques físicos (Força)"],
+  guerreiro: ["Sem fraquezas nem resistências — equilibrado"],
+  curandeiro: ["Resiste bem a ataques mágicos"],
+  monge: ["Resiste a ataques físicos e mágicos"],
+};
+var CJ_CLASSE_FRAQUEZAS = {
+  mago: ["Fraco contra ataques físicos", "Toma dano extra de quem tem muita Precisão"],
+  arqueiro: ["Pode sofrer \"crítico mágico\" (dano mágico ampliado)"],
+  guerreiro: [],
+  curandeiro: ["Fraco contra ataques físicos (Força)"],
+  monge: ["Pouco ágil — esquiva pior que as outras classes"],
+};
 var CJ_SKILL_ICONES = { magia: "🔮", precisao: "🎯", forca: "💪", resistencia: "🛡️", agilidade: "💨" };
 var CJ_CATEGORIAS = { basico: "Básico", medio: "Médio", avancado: "Avançado", lendario: "Lendário" };
 var CJ_PALETA = {
@@ -313,12 +329,15 @@ function cjRenderCriar() {
   var html = "";
   Object.keys(cjCatalogo.classes).forEach(function (classe) {
     var info = cjCatalogo.classes[classe];
+    var fortes = (CJ_CLASSE_FORCAS[classe] || []).map(function (t) { return "<li>✅ " + t + "</li>"; }).join("");
+    var fracas = (CJ_CLASSE_FRAQUEZAS[classe] || []).map(function (t) { return "<li>⚠️ " + t + "</li>"; }).join("");
     html +=
       '<button type="button" class="cj-classe' + (cjClasseEscolhida === classe ? " selecionada" : "") + '" data-classe="' + classe + '">' +
       cjAvatarHtml({ avatar: avatarAtual(), nick: nomeExibicao(), classe: classe, genero: cjGenero, arma: -1 }, 72) +
       "<strong>" + info.titulo[cjGenero] + "</strong>" +
       '<small class="cj-classe-bonus">+5 ' + cjCatalogo.skill_nomes[info.skill] + "</small>" +
       "<small>" + CJ_CLASSE_DESC[classe] + "</small>" +
+      '<ul class="cj-classe-pontos">' + fortes + fracas + "</ul>" +
       "</button>";
   });
   document.querySelector("#cj-classes").innerHTML = html;
