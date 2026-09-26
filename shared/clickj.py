@@ -432,6 +432,29 @@ def comprar(j: dict, item_id: str) -> Tuple[bool, str]:
     return True, "Comprou: " + nome_item(j, slot, idx) + "."
 
 
+def comprar_maximo_equip(j: dict, slot: str) -> Tuple[bool, str, int]:
+    """Compra todos os materiais consecutivos acessíveis no slot."""
+    if not _slot_valido(slot):
+        return False, "Slot inválido.", 0
+    comprados = 0
+    ultimo = ""
+    while True:
+        atual = j["equip"].get(slot, -1)
+        prox = atual + 1
+        if prox >= len(MATERIAIS):
+            break
+        m = MATERIAIS[prox]
+        if j["jcoins"] < m["preco"]:
+            break
+        j["jcoins"] -= m["preco"]
+        j["equip"][slot] = prox
+        ultimo = nome_item(j, slot, prox)
+        comprados += 1
+    if comprados == 0:
+        return False, "Jcoins insuficientes para o próximo item.", 0
+    return True, "Comprou %d item(ns) — equipado: %s." % (comprados, ultimo), comprados
+
+
 def usar_pocao(j: dict, pocao_id: str, agora: float) -> Tuple[bool, str]:
     """Só poções de clique passam por aqui — as de skill só valem em combate
     (ver usar_pocao_luta), então nunca consomem/expiram fora de uma luta."""

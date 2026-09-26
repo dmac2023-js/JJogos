@@ -570,6 +570,16 @@ async def _tratar(nome: str, dados: dict) -> None:
         await _enviar_estado(nome, {"aviso": "Converteu %dT em %d moedas!" % (trilhoes, moedas)})
         return
 
+    if tipo == "comprar_maximo_equip":
+        slot = str(dados.get("slot", ""))
+        ok, msg, _ = regras.comprar_maximo_equip(j, slot)
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": msg})
+        return
+
     if tipo == "usar_pocao_luta":
         luta = lutas.get(luta_de.get(nome, ""))
         if not luta or luta["fim"]:

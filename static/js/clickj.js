@@ -547,7 +547,14 @@ function cjLinhasEquip(slot) {
   var atual = cjEu.equip[slot] != null ? cjEu.equip[slot] : -1;
   var jcoins = cjJcoinsAtuais();
   var skill = cjSkillDoSlot(slot);
-  var html = "";
+  var podeMax = 0;
+  var tempJcoins = jcoins;
+  for (var ci = atual + 1; ci < cjCatalogo.materiais.length; ci++) {
+    if (tempJcoins >= cjCatalogo.materiais[ci].preco) { tempJcoins -= cjCatalogo.materiais[ci].preco; podeMax++; } else break;
+  }
+  var html = podeMax >= 2
+    ? '<div class="cj-comprar-max-wrap"><button type="button" class="cj-comprar" data-comprar-max="' + slot + '">Comprar máximo (' + podeMax + ')</button></div>'
+    : "";
   cjCatalogo.materiais.forEach(function (m, idx) {
     var estado = idx <= atual ? "comprado" : idx === atual + 1 ? "disponivel" : "bloqueado";
     var acao;
@@ -1156,11 +1163,13 @@ function cjSair() {
     // recebeu (o lote só sai a cada 250ms), e a compra podia ser recusada
     // por "Jcoins insuficientes" mesmo com o botão parecendo liberado.
     var acaoComPreco = ev.target.closest(
-      "[data-comprar], [data-auto], [data-maestria-melhorar], [data-titulo-comprar], [data-respec-confirmar]");
+      "[data-comprar], [data-comprar-max], [data-auto], [data-maestria-melhorar], [data-titulo-comprar], [data-respec-confirmar]");
     if (acaoComPreco && !acaoComPreco.disabled && cjPendentes > 0) {
       clearTimeout(cjEnvioTimer);
       cjEnviarLote();
     }
+    var comprarMax = ev.target.closest("[data-comprar-max]");
+    if (comprarMax && !comprarMax.disabled) { comprarMax.disabled = true; cjEnviarLote(); cjEnviar({ tipo: "comprar_maximo_equip", slot: comprarMax.dataset.comprarMax }); return; }
     var comprar = ev.target.closest("[data-comprar]");
     if (comprar && !comprar.disabled) { comprar.disabled = true; cjEnviar({ tipo: "comprar", item: comprar.dataset.comprar }); return; }
     var usar = ev.target.closest("[data-usar]");
