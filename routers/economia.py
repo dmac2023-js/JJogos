@@ -64,6 +64,7 @@ class TempoJogo(BaseModel):
     avatar: str = ""
     segundos: int
     jogo: str = ""
+    venceu: bool = False
 
 
 def _carteira_vazia() -> dict:
@@ -184,7 +185,8 @@ def registrar_tempo(dados: TempoJogo):
     if eh_anonimo(dados.nick) or not dados.nome or dados.segundos <= 0:
         return {"ok": False}
     registrar_fim_partida(dados.nome, dados.nick, dados.segundos,
-                          jogo=dados.jogo, avatar=dados.avatar or None)
+                          jogo=dados.jogo, avatar=dados.avatar or None,
+                          venceu=dados.venceu)
     return {"ok": True}
 
 

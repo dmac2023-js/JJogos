@@ -354,7 +354,7 @@ async function termoRegistrarVitoria() {
       }),
     });
     carregarRankingTermo();
-    jogoRegistrarTempo("termo_solo");
+    jogoRegistrarTempo("termo_solo", true);
     atualizarMoedasHeader();
   } catch (e) { /* ignore */ }
 }
@@ -637,7 +637,7 @@ function processarMensagemTermo(dados) {
       } else {
         termoMsg("Suas tentativas acabaram. Palavra(s): " + palavrasTexto, "erro");
       }
-      jogoRegistrarTempo("termo_online");
+      jogoRegistrarTempo("termo_online", euVenci);
       atualizarMoedasHeader();
       termoMostrarBotao("#termo-pedir-revanche", true);
       break;

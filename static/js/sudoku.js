@@ -198,7 +198,7 @@ async function salvarRecorde() {
       }),
     });
     carregarRecordes(dificuldadeAtual);
-    jogoRegistrarTempo(sudokuOnlineAtivo ? "sudoku_online" : "sudoku_solo");
+    jogoRegistrarTempo(sudokuOnlineAtivo ? "sudoku_online" : "sudoku_solo", true);
     if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
   } catch (erro) {
     console.warn("Erro ao salvar recorde:", erro);

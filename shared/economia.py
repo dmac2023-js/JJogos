@@ -129,6 +129,7 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None)
     carteira.setdefault("equipado", {"decoracao": None, "cor_nick": None})
     carteira.setdefault("segundos_jogados", 0)
     carteira.setdefault("partidas", {})
+    carteira.setdefault("vitorias", {})
     if nick:
         carteira["nick"] = nick
     if avatar:
@@ -166,8 +167,9 @@ def cosmeticos_equipados(nome: str) -> dict:
 
 
 def registrar_fim_partida(nome: str, nick: str, segundos: int,
-                          jogo: str = "", avatar: str = None) -> None:
-    """Registra fim de partida: acumula segundos e incrementa contador por jogo."""
+                          jogo: str = "", avatar: str = None,
+                          venceu: bool = False) -> None:
+    """Registra fim de partida: acumula segundos, incrementa partidas e vitórias por jogo."""
     if eh_anonimo(nome) or not nome:
         return
     dados = carregar_economia()
@@ -177,6 +179,9 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
     if jogo in PARTIDAS_JOGOS:
         partidas = carteira.setdefault("partidas", {})
         partidas[jogo] = partidas.get(jogo, 0) + 1
+        if venceu:
+            vitorias = carteira.setdefault("vitorias", {})
+            vitorias[jogo] = vitorias.get(jogo, 0) + 1
     salvar_economia(dados)
 
 
@@ -201,6 +206,7 @@ def top_ranking(limit: int = 10) -> dict:
         segundos = carteira.get("segundos_jogados", 0)
         partidas_dict = carteira.get("partidas", {})
         total_partidas = sum(partidas_dict.values())
+        vitorias_dict = carteira.get("vitorias", {})
         entrada = {
             "nome": nome,
             "nick": nick,
@@ -209,6 +215,7 @@ def top_ranking(limit: int = 10) -> dict:
             "decoracao_imagem": decoracao_imagem,
             "segundos": segundos,
             "partidas": partidas_dict,
+            "vitorias": vitorias_dict,
             "total_partidas": total_partidas,
         }
         top_moedas.append({**entrada, "saldo": saldo})

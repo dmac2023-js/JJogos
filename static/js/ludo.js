@@ -554,7 +554,7 @@ function processarMensagemLudo(d) {
       }
       if (d.fase === "fim") {
         carregarRankingLudo();
-        jogoRegistrarTempo("ludo");
+        jogoRegistrarTempo("ludo", d.vencedor === ludoSlot);
         atualizarMoedasHeader();
       }
       // Só 1 movimento possível e já rolou o dado → move sozinho.

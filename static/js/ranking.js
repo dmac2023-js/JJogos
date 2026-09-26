@@ -111,15 +111,16 @@ function fecharModalRanking() {
   if (modal) modal.remove();
 }
 
-function _formatarTempoRec(seg) {
-  if (!seg) return "";
-  var m = Math.floor(seg / 60);
-  var s = seg % 60;
-  return (m > 0 ? m + "min " : "") + (s > 0 ? s + "s" : "");
-}
+// Grupos de jogo para exibição no modal: cada item tem título, variantes [chave, rótulo].
+var RANKING_GRUPOS_JOGO = [
+  { titulo: "Sudoku",        variantes: [["sudoku_solo", "Solo"], ["sudoku_online", "Online"]] },
+  { titulo: "Velha",         variantes: [["velha_maquina", "vs Máquina"], ["velha_online", "Online"]] },
+  { titulo: "Campo Minado",  variantes: [["campo_solo", "Solo"], ["campo_online", "Online"]] },
+  { titulo: "Termo",         variantes: [["termo_solo", "Solo"], ["termo_online", "Online"]] },
+  { titulo: "Ludo",          variantes: [["ludo", "Online"]] },
+];
 
 function _renderizarConteudoModal(container, jogador, perfil) {
-  var nomes = { facil: "Fácil", medio: "Médio", dificil: "Difícil" };
   var html = "";
 
   // Stats principais
@@ -131,83 +132,29 @@ function _renderizarConteudoModal(container, jogador, perfil) {
   }
   html += "</div>";
 
-  // Partidas por jogo
   var partidas = jogador.partidas || {};
-  var jogosComPartidas = Object.keys(RANKING_JOGO_LABELS).filter(function (k) { return (partidas[k] || 0) > 0; });
-  if (jogosComPartidas.length > 0) {
-    html += '<div class="rmodal-jogo"><h4>Partidas jogadas</h4>';
-    jogosComPartidas.forEach(function (k) {
-      html += '<div class="rmodal-linha"><span>' + RANKING_JOGO_LABELS[k] + "</span><strong>" +
-        partidas[k].toLocaleString("pt-BR") + "</strong></div>";
+  var vitorias = jogador.vitorias || {};
+  var temDados = false;
+
+  RANKING_GRUPOS_JOGO.forEach(function (grupo) {
+    var variantesComDados = grupo.variantes.filter(function (v) {
+      return (partidas[v[0]] || 0) > 0;
+    });
+    if (variantesComDados.length === 0) return;
+    temDados = true;
+    html += '<div class="rmodal-jogo"><h4>' + grupo.titulo + "</h4>";
+    variantesComDados.forEach(function (v) {
+      var chave = v[0], rotulo = v[1];
+      var nPart = (partidas[chave] || 0).toLocaleString("pt-BR");
+      var nVit  = (vitorias[chave] || 0).toLocaleString("pt-BR");
+      html += '<div class="rmodal-linha"><span>' + rotulo + "</span><strong>" +
+        nPart + " partidas, " + nVit + " vitórias</strong></div>";
     });
     html += "</div>";
-  }
+  });
 
-  // Recordes por jogo (do endpoint /perfil/recordes)
-  var temRecordes = false;
-
-  if (perfil.sudoku && Object.keys(perfil.sudoku).length > 0) {
-    temRecordes = true;
-    html += '<div class="rmodal-jogo"><h4>Sudoku — recordes</h4>';
-    ["facil", "medio", "dificil"].forEach(function (dif) {
-      var r = perfil.sudoku[dif];
-      if (r) html += '<div class="rmodal-linha"><span>' + nomes[dif] + "</span><strong>" +
-        _formatarTempoRec(r.tempo_segundos) + "</strong></div>";
-    });
-    html += "</div>";
-  }
-
-  if (perfil.velha && Object.keys(perfil.velha).length > 0) {
-    temRecordes = true;
-    html += '<div class="rmodal-jogo"><h4>Velha — recordes</h4>';
-    Object.entries(perfil.velha).forEach(function (kv) {
-      var dif = kv[0], r = kv[1];
-      html += '<div class="rmodal-linha"><span>' + (nomes[dif] || dif) + "</span><strong>" +
-        (r.vitorias || 0) + " vitórias</strong></div>";
-    });
-    html += "</div>";
-  }
-
-  var cm = perfil.campo_minado;
-  if (cm) {
-    var temV = cm.vitorias && Object.keys(cm.vitorias).length > 0;
-    var temT = cm.tempos && Object.keys(cm.tempos).length > 0;
-    if (temV || temT) {
-      temRecordes = true;
-      html += '<div class="rmodal-jogo"><h4>Campo Minado — recordes</h4>';
-      var difs = new Set([].concat(Object.keys(cm.vitorias || {}), Object.keys(cm.tempos || {})));
-      difs.forEach(function (dif) {
-        var vit = (cm.vitorias || {})[dif];
-        var tmp = (cm.tempos || {})[dif];
-        var val = "";
-        if (vit) val += vit.vitorias + "v";
-        if (tmp) val += (val ? " · " : "") + _formatarTempoRec(tmp.tempo_segundos);
-        if (val) html += '<div class="rmodal-linha"><span>' + (nomes[dif] || dif) + "</span><strong>" + val + "</strong></div>";
-      });
-      html += "</div>";
-    }
-  }
-
-  if (perfil.termo && Object.keys(perfil.termo).length > 0) {
-    temRecordes = true;
-    html += '<div class="rmodal-jogo"><h4>Termo — recordes</h4>';
-    Object.entries(perfil.termo).forEach(function (kv) {
-      var dif = kv[0], r = kv[1];
-      html += '<div class="rmodal-linha"><span>' + (nomes[dif] || dif) + "</span><strong>" +
-        (r.vitorias || 0) + " vitórias</strong></div>";
-    });
-    html += "</div>";
-  }
-
-  if (perfil.ludo && perfil.ludo.vitorias > 0) {
-    temRecordes = true;
-    html += '<div class="rmodal-jogo"><h4>Ludo — recordes</h4>' +
-      '<div class="rmodal-linha"><span>Online</span><strong>' + perfil.ludo.vitorias + " vitórias</strong></div>" +
-      "</div>";
-  }
-
-  if (!temRecordes && jogosComPartidas.length === 0) {
-    html += '<p class="vazio" style="margin-top:14px;">Nenhum dado registrado ainda.</p>';
+  if (!temDados) {
+    html += '<p class="vazio" style="margin-top:14px;">Nenhuma partida registrada ainda.</p>';
   }
 
   container.innerHTML = html;

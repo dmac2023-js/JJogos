@@ -11,7 +11,7 @@ function jogoIniciarTimer() {
   _jogoTempoInicioMs = Date.now();
 }
 
-function jogoRegistrarTempo(jogoNome) {
+function jogoRegistrarTempo(jogoNome, venceu) {
   var seg = _jogoTempoInicioMs ? Math.round((Date.now() - _jogoTempoInicioMs) / 1000) : 0;
   _jogoTempoInicioMs = null;
   if (!usuarioDiscord || !nomeUsuario()) return;
@@ -26,6 +26,7 @@ function jogoRegistrarTempo(jogoNome) {
       avatar: avatarAtual() || "",
       segundos: Math.max(seg, 0),
       jogo: jogoNome || "",
+      venceu: venceu === true,
     }),
   }).catch(function () {});
 }

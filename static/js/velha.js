@@ -315,7 +315,7 @@ async function salvarRecordVelha() {
       body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar, modo: velhaModo }),
     });
     carregarRankingVelha();
-    jogoRegistrarTempo(velhaModo === "maquina" ? "velha_maquina" : "velha_online");
+    jogoRegistrarTempo(velhaModo === "maquina" ? "velha_maquina" : "velha_online", true);
     atualizarMoedasHeader();
     registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
   } catch (e) { /* ignore */ }

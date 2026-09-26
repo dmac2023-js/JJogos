@@ -293,7 +293,7 @@ async function campoVitoriaSolo() {
       }),
     });
     carregarRankingCampo();
-    jogoRegistrarTempo("campo_solo");
+    jogoRegistrarTempo("campo_solo", true);
     atualizarMoedasHeader();
     registrarHistoricoGeral("Campo Minado", "Vitória · " + formatarTempo(campoTempoFinal));
   } catch (e) { /* ignore */ }
@@ -717,7 +717,7 @@ function processarMensagemCampo(dados) {
       campoMostrarBotao("#campo-pedir-revanche", true);
       campoMostrarBotao("#campo-reiniciar", false);
       carregarRankingCampo();
-      jogoRegistrarTempo("campo_online");
+      jogoRegistrarTempo("campo_online", !!(dados.desistencia || dados.slot === campoSlot));
       atualizarMoedasHeader();
       break;
     case "ambos_perderam":
