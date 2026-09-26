@@ -40,8 +40,10 @@
 .cj-badge:empty { display: none; }
 
 .cj-recursos { padding: 12px 14px; border: 1px solid #20293f; border-radius: 14px; background: #111a2e; }
-.cj-jcoins { display: flex; align-items: center; font-size: 28px; font-weight: bold; color: #ffd36a; font-variant-numeric: tabular-nums; word-break: break-all; }
+.cj-jcoins { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 28px; font-weight: bold; color: #ffd36a; font-variant-numeric: tabular-nums; word-break: break-all; }
 .cj-jcoins-pequeno { font-size: 16px; }
+.cj-converter-btn { padding: 5px 12px; border: 1px solid #2d4470; border-radius: 999px; background: #1c2c4a; color: #9dc2ff; font-size: 14px; font-weight: normal; cursor: pointer; }
+.cj-converter-btn:hover { background: #24365c; }
 .cj-progresso { height: 10px; margin: 10px 0 6px; border-radius: 999px; background: #1c2c4a; overflow: hidden; }
 #cj-progresso-barra { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #2f6fe0, #85e0ae); transition: width .25s; }
 #cj-progresso-texto { color: #aeb2c7; font-size: 12px; }
