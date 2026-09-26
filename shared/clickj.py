@@ -54,8 +54,8 @@ NIVEL_MAX = len(NIVEIS)
 
 NIVEL_AUTOCLICKER = 5  # nível do personagem em que o autoclicker libera de graça (nível 1 dele)
 AUTO_CPS = {
-    1: 100, 2: 500, 3: 1_000, 4: 2_000, 5: 3_000,
-    6: 5_000, 7: 8_000, 8: 13_000, 9: 20_000, 10: 30_000,
+    1: 50, 2: 100, 3: 200, 4: 500, 5: 750,
+    6: 1_000, 7: 2_000, 8: 3_000, 9: 4_000, 10: 5_000,
 }
 AUTO_PRECO_UPGRADE = {
     2: 1_000_000, 3: 5_000_000, 4: 10_000_000, 5: 50_000_000,
@@ -118,7 +118,7 @@ for _s in SKILLS:
 # Títulos — um por skill, específico de cada classe (comprado uma vez,
 # depois é só trocar de equipado). Persistem entre rebirths de propósito:
 # são o único "prestígio" permanente do jogo, resto reseta.
-PRECO_TITULO = 10_000_000_000
+PRECO_TITULO = 1_000_000_000_000
 TITULO_HP_BONUS = 5
 TITULO_SKILL_BONUS = 500
 TITULOS = {
@@ -291,7 +291,9 @@ def nivel_por_cliques(cliques: int) -> int:
 
 
 def _mult_rebirth(j: dict) -> int:
-    # 1º rebirth = 10x as Jcoins do clique, 2º = 20x... (sem rebirth = 1x).
+    # 1º rebirth = conta 10x mais cliques por clique, 2º = 20x... (sem
+    # rebirth = 1x). Os Jcoins por clique NÃO mudam com rebirth — só o
+    # progresso de nível anda mais rápido.
     return max(1, 10 * j.get("rebirths", 0))
 
 
@@ -313,7 +315,7 @@ def valores_clique(j: dict, agora: float) -> Tuple[int, int]:
     """(quanto 1 clique conta pro nível, quantos Jcoins 1 clique dá)."""
     _, cpc, jpc = NIVEIS[j["nivel"] - 1]
     mult = _efeito(j, "clique", agora) or 1
-    return cpc * mult, jpc * _mult_rebirth(j) * mult
+    return cpc * _mult_rebirth(j) * mult, jpc * mult
 
 
 def _atualizar_nivel(j: dict) -> int:
@@ -340,8 +342,8 @@ def recompensa_pvp(j: dict, venceu: bool) -> dict:
     (poção de clique não conta aqui)."""
     n = RECOMPENSA_VITORIA if venceu else RECOMPENSA_DERROTA
     _, cpc, jpc = NIVEIS[j["nivel"] - 1]
-    cliques = n * cpc
-    jcoins = n * jpc * _mult_rebirth(j)
+    cliques = n * cpc * _mult_rebirth(j)
+    jcoins = n * jpc
     j["cliques"] += cliques
     j["jcoins"] += jcoins
     subiu = _atualizar_nivel(j)
@@ -574,7 +576,7 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
         "equip": {}, "pocoes": {}, "efeitos": {},
         "maestria_skill": None, "maestria_nivel": 0,
     })
-    return True, "Rebirth %d feito! Agora cada clique dá %dx Jcoins e você tem %d de vida." % (
+    return True, "Rebirth %d feito! Agora cada clique conta %dx mais pro nível e você tem %d de vida." % (
         j["rebirths"], _mult_rebirth(j), hp_max(j))
 
 

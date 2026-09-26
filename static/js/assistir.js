@@ -22,7 +22,7 @@ function assistirTelaQualifica() {
     case "tela-velha": return typeof velhaModo !== "undefined" && velhaModo === "maquina";
     case "tela-campo": return typeof campoOnlineAtivo !== "undefined" && !campoOnlineAtivo;
     case "tela-termo": return typeof termoOnlineAtivo !== "undefined" && !termoOnlineAtivo;
-    case "tela-clickj": return typeof cjView !== "undefined" && cjView !== "luta";
+    case "tela-clickj": return true;
     default: return false;
   }
 }

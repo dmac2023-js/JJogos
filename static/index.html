@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/ranking.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/clickj.css?v=20260926-04" />
-    <link rel="stylesheet" href="./css/assistir.css?v=20260926-04" />
+    <link rel="stylesheet" href="./css/base.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/ranking.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/clickj.css?v=20260926-05" />
+    <link rel="stylesheet" href="./css/assistir.css?v=20260926-05" />
   </head>
   <body>
     <div id="app-split">
@@ -1171,13 +1171,16 @@
             <div id="cj-lutador-outro" class="cj-lutador"></div>
           </div>
           <p id="cj-turno-msg" class="cj-turno-msg"></p>
+          <div id="cj-pocoes-luta-bloco" class="cj-pocoes-luta-bloco" style="display:none;">
+            <small class="cj-pocoes-luta-titulo">🧪 Poções de atributo — não gastam turno, 1x por skill</small>
+            <div id="cj-pocoes-luta" class="cj-pocoes-luta"></div>
+          </div>
           <div class="cj-acoes-luta">
             <button type="button" class="cj-acao" data-acao="atacar">⚔️ <span>Atacar</span><small>Força/Magia + Precisão</small></button>
             <button type="button" class="cj-acao" data-acao="esquivar">💨 <span>Esquivar</span><small id="cj-esquiva-info">Agilidade</small></button>
             <button type="button" class="cj-acao" data-acao="defender">🛡️ <span>Defender</span><small>Resistência</small></button>
             <button type="button" class="cj-acao" data-acao="curar">✚ <span>Curar</span><small id="cj-cura-info">Magia</small></button>
           </div>
-          <div id="cj-pocoes-luta" class="cj-pocoes-luta"></div>
           <div id="cj-resultado" class="cj-resultado" style="display:none;"></div>
           <div id="cj-log" class="cj-log"></div>
           <button id="cj-desistir" type="button" class="botao-copiar cj-desistir">Desistir da luta</button>
@@ -1249,17 +1252,17 @@
     </aside>
     </div>
 
-    <script src="./js/perfil.js?v=20260926-04"></script>
-    <script src="./js/loja.js?v=20260926-04"></script>
-    <script src="./js/ranking.js?v=20260926-04"></script>
-    <script src="./js/core.js?v=20260926-04"></script>
-    <script src="./js/sudoku.js?v=20260926-04"></script>
-    <script src="./js/velha.js?v=20260926-04"></script>
-    <script src="./js/ludo.js?v=20260926-04"></script>
-    <script src="./js/campo.js?v=20260926-04"></script>
-    <script src="./js/termo.js?v=20260926-04"></script>
-    <script src="./js/tela.js?v=20260926-04"></script>
-    <script src="./js/clickj.js?v=20260926-04"></script>
-    <script src="./js/assistir.js?v=20260926-04"></script>
+    <script src="./js/perfil.js?v=20260926-05"></script>
+    <script src="./js/loja.js?v=20260926-05"></script>
+    <script src="./js/ranking.js?v=20260926-05"></script>
+    <script src="./js/core.js?v=20260926-05"></script>
+    <script src="./js/sudoku.js?v=20260926-05"></script>
+    <script src="./js/velha.js?v=20260926-05"></script>
+    <script src="./js/ludo.js?v=20260926-05"></script>
+    <script src="./js/campo.js?v=20260926-05"></script>
+    <script src="./js/termo.js?v=20260926-05"></script>
+    <script src="./js/tela.js?v=20260926-05"></script>
+    <script src="./js/clickj.js?v=20260926-05"></script>
+    <script src="./js/assistir.js?v=20260926-05"></script>
   </body>
 </html>

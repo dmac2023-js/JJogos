@@ -149,11 +149,12 @@
 .cj-vs { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .cj-vs span { font-size: 26px; font-weight: 900; color: #ff8a8a; }
 .cj-vs small { color: #ffd36a; font-variant-numeric: tabular-nums; }
-.cj-pocoes-luta { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 12px; }
-.cj-pocoes-luta:empty { display: none; }
-.cj-pocao-luta { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #6c4ab6; border-radius: 999px; background: #2a1f45; color: #d5c4ff; font-size: 12px; cursor: pointer; }
+.cj-pocoes-luta-bloco { margin: 0 0 14px; padding: 10px 12px; border: 1px dashed #6c4ab6; border-radius: 12px; background: #1d1533; }
+.cj-pocoes-luta-titulo { display: block; margin-bottom: 8px; color: #c9a6ff; text-align: center; font-weight: 600; }
+.cj-pocoes-luta { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.cj-pocao-luta { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border: 1.5px solid #9d6aff; border-radius: 10px; background: #3a2564; color: #ecdcff; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 0 #6c4ab6; }
 .cj-pocao-luta:hover:not(:disabled) { background: #4b2f86; }
-.cj-pocao-luta:disabled { opacity: .45; cursor: not-allowed; border-style: dashed; }
+.cj-pocao-luta:disabled { opacity: .4; cursor: not-allowed; border-style: dashed; box-shadow: none; }
 .cj-turno-msg { margin: 8px 0 12px; text-align: center; font-weight: bold; color: #9dc2ff; }
 .cj-turno-msg.minha { color: #ffd36a; }
 .cj-acoes-luta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

@@ -815,7 +815,7 @@ function cjConfirmarRebirth() {
   var mult = 10 * (cjEu.rebirths + 1);
   cjPopup("🔁 Rebirth",
     "<p>Você volta ao nível 1 e perde Jcoins, cliques, armas, armaduras, livros, poções e a maestria.</p>" +
-    "<p>Em troca: cada clique passa a dar <strong>" + mult + "x</strong> Jcoins, o autoclicker já vem no nível 1 e sua vida no PvP vai para <strong>" +
+    "<p>Em troca: cada clique passa a contar <strong>" + mult + "x</strong> mais pro nível (os Jcoins por clique continuam os mesmos), o autoclicker já vem no nível 1 e sua vida no PvP vai para <strong>" +
     (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong>.</p>",
     [
       { texto: "Fazer rebirth", principal: true, acao: function () { cjEnviar({ tipo: "rebirth" }); cjFecharPopup(); } },
@@ -922,8 +922,9 @@ function cjRenderLuta() {
 
 function cjRenderPocoesLuta(eu, fim) {
   var el = document.querySelector("#cj-pocoes-luta");
-  if (!el) return;
-  if (fim) { el.innerHTML = ""; return; }
+  var bloco = document.querySelector("#cj-pocoes-luta-bloco");
+  if (!el || !bloco) return;
+  if (fim) { el.innerHTML = ""; bloco.style.display = "none"; return; }
   var usadas = eu.pocoes_usadas || [];
   var html = "";
   Object.keys(cjEu.pocoes || {}).forEach(function (id) {
@@ -935,6 +936,7 @@ function cjRenderPocoesLuta(eu, fim) {
       (usada ? " (usada)" : "") + "</button>";
   });
   el.innerHTML = html;
+  bloco.style.display = html ? "" : "none";
 }
 
 function cjAtualizarRelogioTurno() {
