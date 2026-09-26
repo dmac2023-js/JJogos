@@ -483,15 +483,15 @@ def usar_pocao_luta(j: dict, lutador: dict, pocao_id: str) -> Tuple[bool, str]:
 
 def mult_preco_autoclicker(rebirths: int) -> int:
     """Cada rebirth encarece MUITO o autoclicker (todos os níveis, não só o
-    10) — no 3º rebirth o nível 10 (base 5B) vira exatamente 100T; da 4ª
-    rebirth em diante continua multiplicando por 10x a cada uma."""
+    10) — no 3º rebirth o nível 10 (base 5B) vira 1T, no 4º vira 10T, no 5º
+    100T e por aí vai (×10 a cada rebirth a partir do 3º)."""
     if rebirths <= 0:
         return 1
     if rebirths == 1:
         return 10
     if rebirths == 2:
-        return 100
-    return 20_000 * (10 ** (rebirths - 3))
+        return 50
+    return 200 * (10 ** (rebirths - 3))
 
 
 def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
