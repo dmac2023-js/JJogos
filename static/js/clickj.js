@@ -18,6 +18,7 @@ var cjEnvioTimer = null;
 var cjPingTimer = null;
 var cjRelogio = null;
 var cjReconectarTimer = null;
+var cjHandshakeTimer = null;
 var cjGenero = "m";
 var cjClasseEscolhida = null;
 var cjLojaAba = "armas";
@@ -207,13 +208,31 @@ function cjConectar() {
     (avatar ? "&avatar=" + encodeURIComponent(avatar) : "");
   var ws = new WebSocket(url);
   cjWs = ws;
+  var recebeuBemVindo = false;
+  // O socket pode "abrir" (nível TCP/HTTP) e o servidor nunca mandar o
+  // primeiro "bem_vindo" (proxy engolindo a mensagem, servidor travado
+  // etc.) — sem prazo, a tela de "Conectando..." ficava presa pra sempre,
+  // sem nenhum onclose/onerror disparar pra tentar de novo.
+  clearTimeout(cjHandshakeTimer);
+  cjHandshakeTimer = setTimeout(function () {
+    if (cjWs !== ws || recebeuBemVindo) return;
+    try { ws.close(); } catch (e) { /* ignore */ }
+  }, 8000);
   ws.onmessage = function (ev) {
     if (typeof ev.data !== "string") return;
-    try { cjProcessar(JSON.parse(ev.data)); } catch (e) { console.warn(e); }
+    try {
+      var dados = JSON.parse(ev.data);
+      if (dados.tipo === "bem_vindo") {
+        recebeuBemVindo = true;
+        clearTimeout(cjHandshakeTimer);
+      }
+      cjProcessar(dados);
+    } catch (e) { console.warn(e); }
   };
   ws.onclose = function () {
     if (cjWs !== ws) return;
     cjWs = null;
+    clearTimeout(cjHandshakeTimer);
     if (cjAtivo && !cjBloqueado) {
       cjMsg("Conexão perdida. Reconectando...", "erro");
       clearTimeout(cjReconectarTimer);

@@ -547,13 +547,16 @@ async def ws_velha(websocket: WebSocket, sala: str):
     # Verifica primeiro se o nick já ocupa um lugar (reconexão), ANTES de
     # preencher vagas livres. Com o criador pré-atribuído como "X" na criação,
     # o criador deve voltar a ser "X" e não virar "O" acidentalmente.
-    if jogo["jogador_x"] and jogo["jogador_x"]["nick"] == nick:
+    # "Anônimo" nunca conta como reconexão — é o nick de QUALQUER visitante
+    # sem login, então dois anônimos entrando na mesma sala têm o mesmo nick
+    # e o segundo virava "reconexão" do primeiro, roubando a vaga dele.
+    if not eh_anonimo(nick) and jogo["jogador_x"] and jogo["jogador_x"]["nick"] == nick:
         my_piece = "X"
         is_reconnect = True
         t = _reconnect_timers.pop(f"{sala}:X", None)
         if t:
             t.cancel()
-    elif jogo["jogador_o"] and jogo["jogador_o"]["nick"] == nick:
+    elif not eh_anonimo(nick) and jogo["jogador_o"] and jogo["jogador_o"]["nick"] == nick:
         my_piece = "O"
         is_reconnect = True
         t = _reconnect_timers.pop(f"{sala}:O", None)

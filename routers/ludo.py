@@ -487,12 +487,15 @@ async def ws_ludo(websocket: WebSocket, sala: str):
         return
 
     slot = None
-    # Reconexão: mesmo nick em slot sem WS vivo.
-    for cand in ("p1", "p2", "p3", "p4"):
-        p = s["slots"].get(cand)
-        if p and not p.get("ws") and p.get("nick") == nick:
-            slot = cand
-            break
+    # Reconexão: mesmo nick em slot sem WS vivo. "Anônimo" nunca reconecta
+    # (é o nick de todo mundo sem login — vários anônimos colidiriam no
+    # mesmo slot).
+    if not eh_anonimo(nick):
+        for cand in ("p1", "p2", "p3", "p4"):
+            p = s["slots"].get(cand)
+            if p and not p.get("ws") and p.get("nick") == nick:
+                slot = cand
+                break
 
     if slot is None:
         for cand in ("p1", "p2", "p3", "p4"):

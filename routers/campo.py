@@ -485,11 +485,12 @@ async def ws_campo(websocket: WebSocket, sala: str):
         return
 
     slot = None
-    for cand in ("p1", "p2"):
-        p = s["slots"].get(cand)
-        if p and not p.get("ws") and p.get("nick") == nick:
-            slot = cand
-            break
+    if not eh_anonimo(nick):
+        for cand in ("p1", "p2"):
+            p = s["slots"].get(cand)
+            if p and not p.get("ws") and p.get("nick") == nick:
+                slot = cand
+                break
 
     if slot is None:
         p1 = s["slots"].get("p1")

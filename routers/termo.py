@@ -463,11 +463,14 @@ async def ws_termo(websocket: WebSocket, sala: str):
         return
 
     slot = None
-    for cand in ("p1", "p2"):
-        p = s["slots"].get(cand)
-        if p and not p.get("ws") and p.get("nick") == nick:
-            slot = cand
-            break
+    # "Anônimo" nunca reconecta (é o nick de todo mundo sem login — dois
+    # anônimos colidiriam no mesmo slot).
+    if not eh_anonimo(nick):
+        for cand in ("p1", "p2"):
+            p = s["slots"].get(cand)
+            if p and not p.get("ws") and p.get("nick") == nick:
+                slot = cand
+                break
 
     if slot is None:
         p1 = s["slots"].get("p1")
