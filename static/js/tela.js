@@ -990,25 +990,16 @@ async function iniciarEncoderRelay() {
   document.addEventListener("visibilitychange", aoVoltarAba);
   relayEncoderVisibilityListener = aoVoltarAba;
 
+  // setTimeout recursivo: lê telaFps ao vivo e não acumula atraso como setInterval.
   var relayDrawRodando = false;
-  var relayUltimoFrame = 0;
-  var intervaloMinimo = Math.floor(1000 / telaFps) - 2;
-
   function agendarDraw() {
     if (!relayAtivo || relayDrawRodando) return;
     relayDrawRodando = true;
-    if (video && typeof video.requestVideoFrameCallback === "function") {
-      video.requestVideoFrameCallback(function () { drawTick(); });
-    } else {
-      requestAnimationFrame(function () { drawTick(); });
-    }
-  }
-
-  function drawTick() {
+    var intervalo = Math.max(16, Math.floor(1000 / telaFps));
+    relayDrawTimer = setTimeout(function () {
       relayDrawRodando = false;
       if (!relayAtivo || !relayEncoder || relayEncoder.state === "closed") return;
-      var agora = performance.now();
-      if (agora - relayUltimoFrame < intervaloMinimo) { agendarDraw(); return; }
+      // Multi: reavalia a fonte (tile.preview pode só existir depois do grid).
       if (multiSala) {
         var fonte = hostVideoEncoder();
         if (fonte && fonte !== video) video = fonte;
@@ -1033,7 +1024,6 @@ async function iniciarEncoderRelay() {
         agendarDraw();
         return;
       }
-      relayUltimoFrame = agora;
       var frame;
       try {
         // Usa o tamanho REAL do vídeo capturado (não força upscale do preset).
@@ -1059,7 +1049,7 @@ async function iniciarEncoderRelay() {
         return;
       }
       tsUs += Math.round(1000000 / telaFps);
-      agora = performance.now();
+      var agora = performance.now();
       var intervaloKey = multiSala ? 500 : 1000;
       var forcar = relayForcarKey || (agora - ultimoKey) >= intervaloKey;
       if (forcar) { ultimoKey = agora; relayForcarKey = false; }
@@ -1079,6 +1069,7 @@ async function iniciarEncoderRelay() {
         return;
       }
       agendarDraw();
+    }, intervalo);
   }
   agendarDraw();
 }
