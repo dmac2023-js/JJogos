@@ -177,10 +177,10 @@ MAESTRIA_MAX = 10
 # escolhida (base + classe + equipamento + livros + poção), aplicado por
 # cima de tudo isso. Só uma maestria ativa por vez — trocar de skill zera o nível.
 MAESTRIA_PRECO = {
-    1: 15_000_000, 2: 150_000_000, 3: 450_000_000, 4: 900_000_000, 5: 1_000_000_000,
-    6: 2_000_000_000, 7: 4_000_000_000, 8: 5_000_000_000, 9: 10_000_000_000, 10: 100_000_000_000,
+    1: 50_000_000, 2: 500_000_000, 3: 1_500_000_000, 4: 3_000_000_000, 5: 6_000_000_000,
+    6: 12_000_000_000, 7: 25_000_000_000, 8: 50_000_000_000, 9: 100_000_000_000, 10: 1_000_000_000_000,
 }
-MAESTRIA_BONUS_PCT = {1: 10, 2: 15, 3: 25, 4: 30, 5: 50, 6: 66, 7: 75, 8: 90, 9: 100, 10: 200}
+MAESTRIA_BONUS_PCT = {1: 20, 2: 40, 3: 80, 4: 150, 5: 250, 6: 400, 7: 600, 8: 900, 9: 1_300, 10: 2_000}
 
 # Nível necessário pra próxima rebirth, indexado pelo número de rebirths já
 # feitos (0 = ainda nenhuma). Da 3ª em diante sempre exige o nível máximo.
@@ -237,18 +237,21 @@ AGILIDADE_MULT_CLASSE = {"monge": 0.6}
 
 # ---------------------------------------------------------------------------
 # Pets — 3 roletas (básica, épica, divina). Guardados em j["pets"] (lista de
-# instâncias possuídas) e j["pets_equipados"] (até PET_MAX_EQUIPADOS ids).
-# Persistem entre rebirths de propósito (são caros demais pra resetar).
+# instâncias possuídas, até PET_MAX_MOCHILA) e j["pets_equipados"] (até
+# PET_MAX_EQUIPADOS ids). Somem no rebirth (caros, mas não são "prestígio"
+# como os títulos).
 # ---------------------------------------------------------------------------
 PET_MAX_EQUIPADOS = 3
+PET_MAX_MOCHILA = 5
 PET_TIERS = {
     "basica": {"nome": "Roleta Básica", "preco": 1_000_000},
     "epica": {"nome": "Roleta Épica", "preco": 10_000_000_000},
     "divina": {"nome": "Roleta Divina", "preco": 1_000_000_000_000},
 }
-PET_MULT_BASICA = (2.0, 5.0)  # sorteado uniformemente nesse intervalo
-PET_MULT_EPICA = 5
-PET_MULT_DIVINA = 10
+PET_VENDA_FATOR = 0.5  # vender devolve metade do preço pago na roleta
+PET_MULT_BASICA = (1.0, 2.0)  # sorteado uniformemente nesse intervalo
+PET_MULT_EPICA = (2.0, 2.5)   # idem
+PET_MULT_DIVINA = 3           # fixo
 PET_BONUS_EPICA = 1_000
 PET_BONUS_DIVINA_FOCO = 2_000
 PET_BONUS_DIVINA_RESTO = 1_000
@@ -279,7 +282,8 @@ def catalogo() -> dict:
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
         "pets": {
-            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS,
+            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS, "max_mochila": PET_MAX_MOCHILA,
+            "venda_fator": PET_VENDA_FATOR,
             "mult_basica": PET_MULT_BASICA, "mult_epica": PET_MULT_EPICA, "mult_divina": PET_MULT_DIVINA,
             "bonus_epica": PET_BONUS_EPICA,
             "bonus_divina_foco": PET_BONUS_DIVINA_FOCO, "bonus_divina_resto": PET_BONUS_DIVINA_RESTO,
@@ -352,6 +356,21 @@ def _mult_rebirth(j: dict) -> int:
     return max(1, 10 * j.get("rebirths", 0))
 
 
+SALDO_JCOINS_MAX_BASE = 200_000_000_000_000  # 200T sem rebirth
+SALDO_JCOINS_MAX_POR_REBIRTH = 100_000_000_000_000  # +100T por rebirth (300T no 1º, 400T no 2º...)
+
+
+def limite_jcoins(rebirths: int) -> int:
+    """Teto de jcoins guardados: 200T sem rebirth, +100T por rebirth (300T,
+    400T, 500T...)."""
+    return SALDO_JCOINS_MAX_BASE + max(0, rebirths) * SALDO_JCOINS_MAX_POR_REBIRTH
+
+
+def _adicionar_jcoins(j: dict, quantidade: int) -> None:
+    limite = limite_jcoins(j.get("rebirths", 0))
+    j["jcoins"] = min(limite, j.get("jcoins", 0) + quantidade)
+
+
 def limpar_efeitos(j: dict, agora: float) -> bool:
     vencidos = [k for k, ef in j["efeitos"].items() if ef.get("expira", 0) <= agora]
     for k in vencidos:
@@ -416,7 +435,7 @@ def aplicar_cliques(j: dict, n: int, agora: float) -> int:
         return 0
     cpc, jpc = valores_clique(j, agora)
     j["cliques"] += n * cpc
-    j["jcoins"] += n * jpc
+    _adicionar_jcoins(j, n * jpc)
     return _atualizar_nivel(j)
 
 
@@ -428,7 +447,7 @@ def recompensa_pvp(j: dict, venceu: bool) -> dict:
     cliques = n * cpc * _mult_rebirth(j)
     jcoins = n * jpc
     j["cliques"] += cliques
-    j["jcoins"] += jcoins
+    _adicionar_jcoins(j, jcoins)
     subiu = _atualizar_nivel(j)
     return {"cliques": cliques, "jcoins": jcoins, "subiu_nivel": subiu}
 
@@ -640,16 +659,18 @@ def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dic
     info = PET_TIERS.get(tier)
     if not info:
         return False, "Roleta inválida.", None
+    if len(j.get("pets", [])) >= PET_MAX_MOCHILA:
+        return False, "Sua mochila de pets está cheia (máx. %d) — venda algum antes de rolar de novo." % PET_MAX_MOCHILA, None
     if j["jcoins"] < info["preco"]:
         return False, "Jcoins insuficientes.", None
     j["jcoins"] -= info["preco"]
     rng = random.Random()
     nome = rng.choice(PET_NOMES[tier])
     if tier == "basica":
-        mult = round(rng.uniform(*PET_MULT_BASICA), 1)
+        mult = round(rng.uniform(*PET_MULT_BASICA), 2)
         skill_extra = None
     elif tier == "epica":
-        mult = PET_MULT_EPICA
+        mult = round(rng.uniform(*PET_MULT_EPICA), 2)
         skill_extra = {"tipo": "todas", "bonus": PET_BONUS_EPICA}
     else:  # divina
         mult = PET_MULT_DIVINA
@@ -662,6 +683,7 @@ def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dic
         "tier": tier,
         "nome": nome,
         "mult": mult,
+        "preco_pago": info["preco"],
         "skill_extra": skill_extra,
     }
     j.setdefault("pets", []).append(pet)
@@ -684,6 +706,20 @@ def equipar_pet(j: dict, pet_id: str, equipar: bool) -> Tuple[bool, str]:
         return False, "Esse pet não está equipado."
     equipados.remove(pet_id)
     return True, "Pet removido: %s." % por_id[pet_id]["nome"]
+
+
+def vender_pet(j: dict, pet_id: str) -> Tuple[bool, str]:
+    pets = j.get("pets", [])
+    pet = next((p for p in pets if p["id"] == pet_id), None)
+    if not pet:
+        return False, "Pet não encontrado."
+    reembolso = round(pet.get("preco_pago", 0) * PET_VENDA_FATOR)
+    pets.remove(pet)
+    equipados = j.get("pets_equipados", [])
+    if pet_id in equipados:
+        equipados.remove(pet_id)
+    _adicionar_jcoins(j, reembolso)
+    return True, "Vendeu %s por %s Jcoins." % (pet["nome"], format(reembolso, ",d").replace(",", "."))
 
 
 def titulos_da_classe(classe: str) -> list:
@@ -792,6 +828,7 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
         "equip": {}, "pocoes": {}, "efeitos": {},
         "maestria_skill": None, "maestria_nivel": 0,
         "respec_pontos": {},
+        "pets": [], "pets_equipados": [],
     })
     return True, "Rebirth %d feito! Agora cada clique conta %dx mais pro nível e você tem %d de vida." % (
         j["rebirths"], _mult_rebirth(j), hp_max(j))

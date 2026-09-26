@@ -143,6 +143,7 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "genero": j["genero"],
         "titulo": regras.titulo(j),
         "jcoins": j["jcoins"],
+        "jcoins_max": regras.limite_jcoins(j["rebirths"]),
         "cliques": j["cliques"],
         "nivel": nivel,
         "nivel_max": regras.NIVEL_MAX,
@@ -594,6 +595,16 @@ async def _tratar(nome: str, dados: dict) -> None:
         pet_id = str(dados.get("pet_id", ""))
         equipar = bool(dados.get("equipar"))
         ok, msg = regras.equipar_pet(j, pet_id, equipar)
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        _marcar_sujo()
+        await _enviar_estado(nome, {"aviso": msg})
+        return
+
+    if tipo == "pet_vender":
+        pet_id = str(dados.get("pet_id", ""))
+        ok, msg = regras.vender_pet(j, pet_id)
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return

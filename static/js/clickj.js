@@ -378,6 +378,8 @@ function cjAtualizarContadores() {
   document.querySelector("#cj-loja-jcoins").textContent = cjFmt(jcoins);
   var converterBtn = document.querySelector("#cj-converter");
   if (converterBtn) converterBtn.style.display = jcoins >= 1e12 ? "" : "none";
+  var cheioEl = document.querySelector("#cj-jcoins-cheio");
+  if (cheioEl) cheioEl.style.display = (cjEu.jcoins_max && cjEu.jcoins >= cjEu.jcoins_max) ? "" : "none";
   var barra = document.querySelector("#cj-progresso-barra");
   var texto = document.querySelector("#cj-progresso-texto");
   if (cjEu.cliques_proximo_nivel) {
@@ -725,9 +727,9 @@ function cjAtualizarRespecRestante() {
 }
 
 var CJ_PET_DESCRICAO = {
-  basica: "Multiplica seu clique (e o autoclicker) entre 2x e 5x, sorteado na hora — só depende do pet.",
-  epica: "Todo pet multiplica o clique por 5x e dá +1.000 em TODAS as suas skills.",
-  divina: "Todo pet multiplica o clique por 10x, dá +2.000 na sua skill mais fraca e +1.000 no resto.",
+  basica: "Multiplica seu clique (e o autoclicker) entre 1x e 2x, sorteado na hora — só depende do pet.",
+  epica: "Multiplica o clique entre 2x e 2,5x (sorteado) e dá +1.000 em TODAS as suas skills.",
+  divina: "Multiplica o clique por 3x e dá +2.000 na sua skill mais fraca e +1.000 no resto.",
 };
 
 function cjPetDescricaoInstancia(p) {
@@ -743,36 +745,44 @@ function cjRenderPets() {
   var jcoins = cjJcoinsAtuais();
   var meusPets = cjEu.pets || [];
   var equipados = cjEu.pets_equipados || [];
+  var mochilaCheia = meusPets.length >= pets.max_mochila;
   var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + pets.max_equipados +
-    " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Pets não somem no rebirth.</p>";
+    " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Mochila com espaço pra até " +
+    pets.max_mochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
+    "% do preço pago. Pets somem no rebirth.</p>";
 
   ["basica", "epica", "divina"].forEach(function (tier) {
     var info = pets.tiers[tier];
     html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
       '<div class="cj-item-info"><strong>' + info.nome + "</strong><small>" + CJ_PET_DESCRICAO[tier] + "</small></div>" +
-      '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', info.preco, "Rolar", jcoins < info.preco) +
+      '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', info.preco, "Rolar", jcoins < info.preco || mochilaCheia) +
       "</div></div>";
   });
+  if (mochilaCheia) {
+    html += '<p class="cj-dica" style="color:#ff9a9a;">Mochila cheia — venda um pet pra rolar de novo.</p>';
+  }
 
-  html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + ")</h4>";
+  html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + "/" + pets.max_mochila + ")</h4>";
   if (!meusPets.length) {
     html += '<p class="cj-dica">Você ainda não tem nenhum pet.</p>';
   }
   meusPets.forEach(function (p) {
     var estaEquipado = equipados.indexOf(p.id) !== -1;
-    var acao;
+    var reembolso = Math.round((p.preco_pago || 0) * pets.venda_fator);
+    var acaoEquip;
     if (estaEquipado) {
-      acao = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
+      acaoEquip = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
     } else if (equipados.length >= pets.max_equipados) {
-      acao = '<span class="cj-tag">Slots cheios</span>';
+      acaoEquip = '<span class="cj-tag">Slots cheios</span>';
     } else {
-      acao = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
+      acaoEquip = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
     }
+    var acaoVender = '<button type="button" class="cj-comprar" data-pet-vender="' + p.id + '">Vender (' + cjMoedaHtml(reembolso) + ")</button>";
     html += '<div class="cj-item' + (estaEquipado ? " equipado" : "") + '">' +
       '<span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
       '<div class="cj-item-info"><strong>' + escapeHtml(p.nome) + " (" + pets.tiers[p.tier].nome + ")</strong>" +
       "<small>" + cjPetDescricaoInstancia(p) + "</small></div>" +
-      '<div class="cj-item-acao">' + acao + "</div></div>";
+      '<div class="cj-item-acao" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">' + acaoEquip + acaoVender + "</div></div>";
   });
   return html;
 }
@@ -1291,6 +1301,15 @@ function cjSair() {
     if (petEquipar) { cjEnviar({ tipo: "pet_equipar", pet_id: petEquipar.dataset.petEquipar, equipar: true }); return; }
     var petDesequipar = ev.target.closest("[data-pet-desequipar]");
     if (petDesequipar) { cjEnviar({ tipo: "pet_equipar", pet_id: petDesequipar.dataset.petDesequipar, equipar: false }); return; }
+    var petVender = ev.target.closest("[data-pet-vender]");
+    if (petVender) {
+      var idVenda = petVender.dataset.petVender;
+      cjPopup("Vender pet?", "<p>Essa ação não pode ser desfeita.</p>", [
+        { texto: "Vender", principal: true, acao: function () { cjEnviar({ tipo: "pet_vender", pet_id: idVenda }); cjFecharPopup(); } },
+        { texto: "Cancelar", acao: cjFecharPopup },
+      ]);
+      return;
+    }
   });
   document.querySelector("#cj-loja").addEventListener("input", function (ev) {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
