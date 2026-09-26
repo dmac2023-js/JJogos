@@ -242,12 +242,13 @@ AGILIDADE_MULT_CLASSE = {"monge": 0.6}
 # como os títulos).
 # ---------------------------------------------------------------------------
 PET_MAX_EQUIPADOS = 3
-PET_MAX_MOCHILA = 5
+PET_MAX_MOCHILA = 9
 PET_TIERS = {
     "basica": {"nome": "Roleta Básica", "preco": 1_000_000},
     "epica": {"nome": "Roleta Épica", "preco": 10_000_000_000},
     "divina": {"nome": "Roleta Divina", "preco": 1_000_000_000_000},
 }
+PET_REBIRTH_MINIMO = {"basica": 0, "epica": 1, "divina": 3}  # rebirths mínimos p/ cada roleta
 PET_VENDA_FATOR = 0.5  # vender devolve metade do preço pago na roleta
 PET_MULT_BASICA = (1.0, 2.0)  # sorteado uniformemente nesse intervalo
 PET_MULT_EPICA = (2.0, 2.5)   # idem
@@ -283,6 +284,7 @@ def catalogo() -> dict:
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
         "pets": {
             "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS, "max_mochila": PET_MAX_MOCHILA,
+            "rebirth_minimo": PET_REBIRTH_MINIMO,
             "venda_fator": PET_VENDA_FATOR,
             "mult_basica": PET_MULT_BASICA, "mult_epica": PET_MULT_EPICA, "mult_divina": PET_MULT_DIVINA,
             "bonus_epica": PET_BONUS_EPICA,
@@ -655,20 +657,16 @@ def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
 # Pets
 # ---------------------------------------------------------------------------
 
-def preco_pet(tier: str, rebirths: int) -> int:
-    info = PET_TIERS.get(tier)
-    if not info:
-        return 0
-    return info["preco"] * mult_preco_equip(rebirths)
-
-
 def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dict]]:
     info = PET_TIERS.get(tier)
     if not info:
         return False, "Roleta inválida.", None
+    minimo = PET_REBIRTH_MINIMO.get(tier, 0)
+    if j.get("rebirths", 0) < minimo:
+        return False, "Essa roleta exige %d rebirth(s)." % minimo, None
     if len(j.get("pets", [])) >= PET_MAX_MOCHILA:
         return False, "Sua mochila de pets está cheia (máx. %d) — venda algum antes de rolar de novo." % PET_MAX_MOCHILA, None
-    preco = preco_pet(tier, j.get("rebirths", 0))
+    preco = info["preco"]  # preço fixo — não varia com rebirth
     if j["jcoins"] < preco:
         return False, "Jcoins insuficientes.", None
     j["jcoins"] -= preco

@@ -4,6 +4,7 @@ Carteira é indexada por "nome" (o username do Discord, já usado como chave
 única em todo o app pra recordes/vitórias) — quem não está logado com
 Discord (anônimo) não ganha nem gasta moeda nenhuma.
 """
+import hashlib
 import json
 import secrets
 import threading
@@ -27,9 +28,19 @@ LOCK_ECONOMIA = threading.Lock()
 
 BONUS_INTERVALO_SEGUNDOS = 15 * 60
 BONUS_QUANTIDADE = 5
-PRECO_DECORACAO = 70
-PRECO_COR_NICK = 30
-PRECO_FONTE_NICK = 60
+PRECO_DECORACAO = 400  # valor médio, usado só como prêmio de roleta (preço real varia por item)
+PRECOS_DECORACAO_NIVEIS = [300, 350, 400, 450, 500]
+PRECO_COR_NICK = 400
+PRECO_FONTE_NICK = 500
+
+
+def _preco_decoracao(sku_id: str) -> int:
+    # Preço fixo por item (determinístico a partir do sku_id), variando entre
+    # os níveis de PRECOS_DECORACAO_NIVEIS — não muda a cada carregamento.
+    indice = int(hashlib.md5(str(sku_id).encode("utf-8")).hexdigest(), 16) % len(PRECOS_DECORACAO_NIVEIS)
+    return PRECOS_DECORACAO_NIVEIS[indice]
+
+
 HISTORICO_MAXIMO = 10
 
 # id -> nome exibido na loja (o visual de cada uma fica em .nick-fonte-<id> no css).
@@ -118,6 +129,7 @@ def _carregar_catalogo_decoracoes() -> list:
         catalogo.append({
             "sku_id": sku_id,
             "nome": item.get("name") or sku_id,
+            "preco": _preco_decoracao(sku_id),
             # .webp = quadro parado (usado em repouso); .png = APNG animado
             # (o CDN da Discord só anima nesse formato) — trocado no hover.
             "imagem": f"https://cdn.discordapp.com/avatar-decoration-presets/{asset}.webp?size=96",
@@ -132,6 +144,11 @@ _DECORACOES_POR_SKU = {item["sku_id"]: item for item in CATALOGO_DECORACOES}
 
 def decoracao_existe(sku_id: str) -> bool:
     return sku_id in _DECORACOES_POR_SKU
+
+
+def preco_decoracao_item(sku_id: str) -> int:
+    item = _DECORACOES_POR_SKU.get(sku_id)
+    return item["preco"] if item else PRECO_DECORACAO
 
 
 _cache_carteiras = {"em": 0.0, "carteiras": None}

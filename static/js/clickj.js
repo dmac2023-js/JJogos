@@ -759,25 +759,34 @@ function cjPetDescricaoInstancia(p) {
   return "Multiplica clique em " + p.mult + "x · +2.000 em " + nomeFoco + " · +1.000 no resto";
 }
 
+var CJ_PET_ICONE = { basica: "🐾", epica: "🐉", divina: "✨" };
+
 function cjRenderPets() {
   var pets = cjCatalogo.pets;
   var jcoins = cjJcoinsAtuais();
   var meusPets = cjEu.pets || [];
   var equipados = cjEu.pets_equipados || [];
-  var mult = cjEu.equip_preco_mult || 1;
+  var rebirths = cjEu.rebirths || 0;
+  var minimos = pets.rebirth_minimo || {};
   var mochilaCheia = meusPets.length >= pets.max_mochila;
   var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + pets.max_equipados +
     " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Mochila com espaço pra até " +
     pets.max_mochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
     "% do preço pago. Pets somem no rebirth.</p>";
-  if (mult > 1) {
-    html += '<p style="color:#ff9a9a;font-size:12px;margin:0 0 8px;">Rebirth encareceu as roletas em ' + cjFmt(mult) + "x.</p>";
-  }
 
   ["basica", "epica", "divina"].forEach(function (tier) {
     var info = pets.tiers[tier];
-    var preco = info.preco * mult;
-    html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
+    var preco = info.preco;
+    var minimo = minimos[tier] || 0;
+    var bloqueadoPorRebirth = rebirths < minimo;
+    if (bloqueadoPorRebirth) {
+      html += '<div class="cj-item bloqueado"><span class="cj-swatch" style="background:#2a1f45">🔒</span>' +
+        '<div class="cj-item-info"><strong>' + info.nome + "</strong><small>Exige " + minimo +
+        " rebirth(s) — você tem " + rebirths + ".</small></div>" +
+        '<div class="cj-item-acao"><span class="cj-tag">Bloqueado</span></div></div>';
+      return;
+    }
+    html += '<div class="cj-item"><span class="cj-swatch" style="background:#2a1f45">' + CJ_PET_ICONE[tier] + "</span>" +
       '<div class="cj-item-info"><strong>' + info.nome + "</strong><small>" + CJ_PET_DESCRICAO[tier] + "</small></div>" +
       '<div class="cj-item-acao">' + cjBotaoComprar('data-pet-rolar="' + tier + '"', preco, "Rolar", jcoins < preco || mochilaCheia) +
       "</div></div>";
@@ -789,25 +798,29 @@ function cjRenderPets() {
   html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + "/" + pets.max_mochila + ")</h4>";
   if (!meusPets.length) {
     html += '<p class="cj-dica">Você ainda não tem nenhum pet.</p>';
+  } else {
+    html += '<div class="cj-pets-grade">';
+    meusPets.forEach(function (p) {
+      var estaEquipado = equipados.indexOf(p.id) !== -1;
+      var reembolso = Math.round((p.preco_pago || 0) * pets.venda_fator);
+      var acaoEquip;
+      if (estaEquipado) {
+        acaoEquip = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
+      } else if (equipados.length >= pets.max_equipados) {
+        acaoEquip = '<span class="cj-tag">Slots cheios</span>';
+      } else {
+        acaoEquip = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
+      }
+      var acaoVender = '<button type="button" class="cj-comprar" data-pet-vender="' + p.id + '">Vender (' + cjMoedaHtml(reembolso) + ")</button>";
+      html += '<div class="cj-pet-card' + (estaEquipado ? " equipado" : "") + '" title="' + escapeHtml(cjPetDescricaoInstancia(p)) + '">' +
+        '<span class="cj-pet-icone">' + CJ_PET_ICONE[p.tier] + "</span>" +
+        '<span class="cj-pet-nome">' + escapeHtml(p.nome) + "</span>" +
+        '<span class="cj-pet-tier">' + pets.tiers[p.tier].nome + "</span>" +
+        '<span class="cj-pet-mult">' + p.mult + "x</span>" +
+        '<div class="cj-pet-acoes">' + acaoEquip + acaoVender + "</div></div>";
+    });
+    html += "</div>";
   }
-  meusPets.forEach(function (p) {
-    var estaEquipado = equipados.indexOf(p.id) !== -1;
-    var reembolso = Math.round((p.preco_pago || 0) * pets.venda_fator);
-    var acaoEquip;
-    if (estaEquipado) {
-      acaoEquip = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
-    } else if (equipados.length >= pets.max_equipados) {
-      acaoEquip = '<span class="cj-tag">Slots cheios</span>';
-    } else {
-      acaoEquip = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
-    }
-    var acaoVender = '<button type="button" class="cj-comprar" data-pet-vender="' + p.id + '">Vender (' + cjMoedaHtml(reembolso) + ")</button>";
-    html += '<div class="cj-item' + (estaEquipado ? " equipado" : "") + '">' +
-      '<span class="cj-swatch" style="background:#2a1f45">🐾</span>' +
-      '<div class="cj-item-info"><strong>' + escapeHtml(p.nome) + " (" + pets.tiers[p.tier].nome + ")</strong>" +
-      "<small>" + cjPetDescricaoInstancia(p) + "</small></div>" +
-      '<div class="cj-item-acao" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">' + acaoEquip + acaoVender + "</div></div>";
-  });
   return html;
 }
 

@@ -168,7 +168,6 @@ async function abrirLoja() {
   lojaCorSelecionada = null;
   lojaDecoracaoSelecionadaSku = null;
   document.querySelector("#loja-saldo").textContent = minhaCarteira.saldo;
-  document.querySelector("#loja-preco-decoracao").textContent = lojaCatalogo.preco_decoracao;
   document.querySelector("#loja-preco-cor").textContent = lojaCatalogo.preco_cor_nick;
   document.querySelector("#loja-preco-fonte").textContent = lojaCatalogo.preco_fonte_nick;
   lojaMostrarMenu();
@@ -417,7 +416,7 @@ function renderLojaDecoracoes() {
     card.appendChild(nome);
 
     if (!possui) {
-      card.appendChild(lojaBotaoPreco(lojaCatalogo.preco_decoracao, possui, equipada, function (ev) {
+      card.appendChild(lojaBotaoPreco(item.preco || lojaCatalogo.preco_decoracao, possui, equipada, function (ev) {
         ev.stopPropagation();
         lojaPreviewDecoracao(item);
         comprarDecoracao(item.sku_id);

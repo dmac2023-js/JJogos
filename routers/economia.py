@@ -23,6 +23,7 @@ from shared.economia import (
     girar_roleta,
     obter_carteira,
     perfil_publico,
+    preco_decoracao_item,
     registrar_fim_partida,
     resolver_nome_alvo,
     salvar_economia,
@@ -140,10 +141,11 @@ def comprar_decoracao(dados: CompraDecoracao):
         carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
         if dados.sku_id in carteira["decoracoes"]:
             raise HTTPException(status_code=409, detail="Você já tem essa decoração.")
-        if carteira["saldo"] < PRECO_DECORACAO:
+        preco = preco_decoracao_item(dados.sku_id)
+        if carteira["saldo"] < preco:
             raise HTTPException(status_code=402, detail="Moedas insuficientes.")
 
-        carteira["saldo"] -= PRECO_DECORACAO
+        carteira["saldo"] -= preco
         carteira["decoracoes"].append(dados.sku_id)
         salvar_economia(economia)
         return carteira_publica(carteira)
