@@ -5,6 +5,7 @@
 async function abrirPerfil() {
   mostrarTela(document.querySelector("#tela-perfil"));
   await garantirIdentidade();
+  if (typeof atualizarMoedasHeader === "function") await atualizarMoedasHeader();
   renderPerfilIdentidade();
   renderPerfilHistorico();
   await renderPerfilRecordes();
@@ -26,6 +27,11 @@ function renderPerfilIdentidade() {
       ? "Conectado com Discord"
       : "Modo navegador — entre com Discord para registrar recordes") +
     "</div></span>";
+  // Aplica a cor do nick equipada
+  var nomeSpan = alvo.querySelector(".perfil-nome");
+  if (nomeSpan && typeof aplicarCorEmElemento === "function" && typeof minhaCarteira !== "undefined") {
+    aplicarCorEmElemento(nomeSpan, minhaCarteira.equipado && minhaCarteira.equipado.cor_nick);
+  }
 }
 
 function renderPerfilHistorico() {
