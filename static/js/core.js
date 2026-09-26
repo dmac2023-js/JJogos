@@ -399,7 +399,13 @@ async function conectarAoDiscord() {
             if (resTroca.status === 429 && detalhe && typeof detalhe === "object") {
               var espera = Number(detalhe.retry_after) || 5;
               // Margem de segurança em cima do retry_after do Discord.
-              discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
+              var esperaMs = Math.ceil(espera * 1000) + 1500;
+              discordLoginBloqueadoAte = Date.now() + esperaMs;
+              // Tenta de novo sozinho quando o cooldown passar — sem isso,
+              // quem cai no rate limit assim que abre a Activity ficava preso
+              // na tela "sem login" pra sempre, sem nenhuma ação disparar
+              // uma nova tentativa.
+              setTimeout(function () { conectarAoDiscord(); }, esperaMs + 300);
               throw new Error(detalhe.mensagem || "Discord limitou os logins.");
             }
             throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o code.");
