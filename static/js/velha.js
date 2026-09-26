@@ -212,6 +212,7 @@ function renderizarSalasEspectacao(salas) {
 async function iniciarVelhaMaquina(dificuldade) {
   await garantirIdentidade();
   jogoIniciarTimer();
+  velhaRecordSalvo = false;
   velhaModo = "maquina";
   velhaDificuldade = dificuldade;
   carregarRankingVelha();
@@ -314,7 +315,7 @@ async function salvarRecordVelha() {
       body: JSON.stringify({ dificuldade: dif, nome: nome, nick: nick, avatar: avatar, modo: velhaModo }),
     });
     carregarRankingVelha();
-    jogoRegistrarTempo();
+    jogoRegistrarTempo(velhaModo === "maquina" ? "velha_maquina" : "velha_online");
     atualizarMoedasHeader();
     registrarHistoricoGeral("Jogo da Velha", "Vitória · " + nomesDificuldade[dif]);
   } catch (e) { /* ignore */ }

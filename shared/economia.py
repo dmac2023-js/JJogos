@@ -56,6 +56,14 @@ CORES_NICK = {
 
 ARQUIVO_LOJA_DECORACOES = PASTA_BASE / "loja_decoracoes.json"
 
+PARTIDAS_JOGOS = [
+    "sudoku_solo", "sudoku_online",
+    "velha_maquina", "velha_online",
+    "campo_solo", "campo_online",
+    "termo_solo", "termo_online",
+    "ludo",
+]
+
 # Roleta da sorte — 7 fatias intercaladas (mesma categoria nunca é vizinha),
 # peso = tamanho da fatia em % (soma sempre 100). "indice" é preenchido em
 # sortear_fatia_roleta() e usado pelo front pra girar até a fatia certa.
@@ -112,7 +120,7 @@ def salvar_economia(dados: dict) -> None:
     salvar_json(CHAVE_ECONOMIA, dados, ARQUIVO_ECONOMIA)
 
 
-def obter_carteira(dados: dict, nome: str, nick: str = None) -> dict:
+def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None) -> dict:
     carteira = dados["carteiras"].setdefault(nome, {})
     carteira.setdefault("saldo", 0)
     carteira.setdefault("ultimo_bonus", 0)
@@ -120,8 +128,11 @@ def obter_carteira(dados: dict, nome: str, nick: str = None) -> dict:
     carteira.setdefault("cores_nick", [])
     carteira.setdefault("equipado", {"decoracao": None, "cor_nick": None})
     carteira.setdefault("segundos_jogados", 0)
+    carteira.setdefault("partidas", {})
     if nick:
         carteira["nick"] = nick
+    if avatar:
+        carteira["avatar"] = avatar
     return carteira
 
 
@@ -154,13 +165,18 @@ def cosmeticos_equipados(nome: str) -> dict:
     return {"decoracao": imagem, "cor_nick": equipado.get("cor_nick")}
 
 
-def registrar_tempo_jogo(nome: str, nick: str, segundos: int) -> None:
-    """Acumula segundos jogados na carteira do jogador (para o ranking de horas)."""
-    if eh_anonimo(nome) or not nome or segundos <= 0:
+def registrar_fim_partida(nome: str, nick: str, segundos: int,
+                          jogo: str = "", avatar: str = None) -> None:
+    """Registra fim de partida: acumula segundos e incrementa contador por jogo."""
+    if eh_anonimo(nome) or not nome:
         return
     dados = carregar_economia()
-    carteira = obter_carteira(dados, nome, nick=nick)
-    carteira["segundos_jogados"] = carteira.get("segundos_jogados", 0) + segundos
+    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
+    if segundos > 0:
+        carteira["segundos_jogados"] = carteira.get("segundos_jogados", 0) + segundos
+    if jogo in PARTIDAS_JOGOS:
+        partidas = carteira.setdefault("partidas", {})
+        partidas[jogo] = partidas.get(jogo, 0) + 1
     salvar_economia(dados)
 
 
@@ -174,15 +190,32 @@ def top_ranking(limit: int = 10) -> dict:
 
     for nome, carteira in carteiras.items():
         nick = carteira.get("nick") or nome
-        cor_nick = carteira.get("equipado", {}).get("cor_nick")
+        equipado = carteira.get("equipado") or {}
+        cor_nick = equipado.get("cor_nick")
+        decoracao_sku = equipado.get("decoracao")
+        decoracao_imagem = (
+            _DECORACOES_POR_SKU.get(decoracao_sku, {}).get("imagem_animada")
+            if decoracao_sku else None
+        )
         saldo = carteira.get("saldo", 0)
         segundos = carteira.get("segundos_jogados", 0)
-        entrada = {"nome": nome, "nick": nick, "cor_nick": cor_nick}
+        partidas_dict = carteira.get("partidas", {})
+        total_partidas = sum(partidas_dict.values())
+        entrada = {
+            "nome": nome,
+            "nick": nick,
+            "cor_nick": cor_nick,
+            "avatar": carteira.get("avatar"),
+            "decoracao_imagem": decoracao_imagem,
+            "segundos": segundos,
+            "partidas": partidas_dict,
+            "total_partidas": total_partidas,
+        }
         top_moedas.append({**entrada, "saldo": saldo})
-        top_horas.append({**entrada, "segundos": segundos})
+        top_horas.append({**entrada, "saldo": saldo})
 
     top_moedas.sort(key=lambda x: x["saldo"], reverse=True)
-    top_horas.sort(key=lambda x: x["segundos"], reverse=True)
+    top_horas.sort(key=lambda x: x["total_partidas"], reverse=True)
 
     return {
         "top_moedas": top_moedas[:limit],
@@ -202,7 +235,7 @@ def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:
     return carteira["saldo"]
 
 
-def tentar_reclamar_bonus(nome: str) -> dict:
+def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> dict:
     """Credita o bônus de atividade (5 moedas a cada 15 min), se já deu
     tempo desde o último. O cliente chama isso periodicamente enquanto a
     aba/Activity está aberta — o servidor decide, não confia no relógio do
@@ -211,7 +244,7 @@ def tentar_reclamar_bonus(nome: str) -> dict:
         return {"creditado": False, "saldo": 0, "proximo_em_segundos": BONUS_INTERVALO_SEGUNDOS}
 
     dados = carregar_economia()
-    carteira = obter_carteira(dados, nome)
+    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
     agora = time.time()
     passado = agora - carteira.get("ultimo_bonus", 0)
 

@@ -17,7 +17,7 @@ from shared.economia import (
     decoracao_existe,
     girar_roleta,
     obter_carteira,
-    registrar_tempo_jogo,
+    registrar_fim_partida,
     salvar_economia,
     tentar_reclamar_bonus,
     top_ranking,
@@ -30,6 +30,7 @@ router = APIRouter()
 class BonusRequest(BaseModel):
     nome: str
     nick: str = "Anônimo"
+    avatar: str = ""
 
 
 class CompraDecoracao(BaseModel):
@@ -60,7 +61,9 @@ class GirarRoleta(BaseModel):
 class TempoJogo(BaseModel):
     nome: str
     nick: str = "Anônimo"
+    avatar: str = ""
     segundos: int
+    jogo: str = ""
 
 
 def _carteira_vazia() -> dict:
@@ -68,11 +71,15 @@ def _carteira_vazia() -> dict:
 
 
 @router.get("/economia/carteira")
-def obter_minha_carteira(nome: str = "", nick: str = ""):
+def obter_minha_carteira(nome: str = "", nick: str = "", avatar: str = ""):
     if not nome or eh_anonimo(nick):
         return _carteira_vazia()
     dados = carregar_economia()
-    return carteira_publica(obter_carteira(dados, nome, nick=nick))
+    carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar or None)
+    # Salva nick+avatar sempre que chamado — garante que o ranking
+    # exibe o display name atual mesmo que o usuário nunca tenha comprado nada.
+    salvar_economia(dados)
+    return carteira_publica(carteira)
 
 
 @router.get("/economia/loja")
@@ -90,7 +97,7 @@ def obter_loja():
 def reclamar_bonus(dados: BonusRequest):
     if eh_anonimo(dados.nick) or not dados.nome:
         raise HTTPException(status_code=400, detail="Entre com Discord pra ganhar moedas.")
-    return tentar_reclamar_bonus(dados.nome)
+    return tentar_reclamar_bonus(dados.nome, nick=dados.nick, avatar=dados.avatar or None)
 
 
 @router.post("/economia/comprar/decoracao")
@@ -176,7 +183,8 @@ def girar(dados: GirarRoleta):
 def registrar_tempo(dados: TempoJogo):
     if eh_anonimo(dados.nick) or not dados.nome or dados.segundos <= 0:
         return {"ok": False}
-    registrar_tempo_jogo(dados.nome, dados.nick, dados.segundos)
+    registrar_fim_partida(dados.nome, dados.nick, dados.segundos,
+                          jogo=dados.jogo, avatar=dados.avatar or None)
     return {"ok": True}
 
 

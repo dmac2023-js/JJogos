@@ -43,14 +43,18 @@
   background: #1e2233;
   border-radius: 8px;
   border: 1px solid transparent;
-  transition: border-color 0.15s;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .ranking-linha:hover {
   border-color: #2f6fe044;
+  background: #232840;
 }
 
-.ranking-top1 { border-color: #ffd36a66; background: #1e2233; }
+.ranking-top1 { border-color: #ffd36a66; }
 .ranking-top2 { border-color: #adb5c088; }
 .ranking-top3 { border-color: #cd7f3288; }
 
@@ -83,6 +87,168 @@
   font-size: 14px;
 }
 
+/* Avatar box (avatar + deco overlay) */
+.ranking-avatar-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: visible;
+}
+
+.ranking-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.ranking-avatar-inicial {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #1c2c4a;
+  color: #9dc2ff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ranking-avatar-deco {
+  position: absolute;
+  inset: -20%;
+  width: 140%;
+  height: 140%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Modal de perfil                                                      */
+/* ------------------------------------------------------------------ */
+
+.rmodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.rmodal-card {
+  position: relative;
+  background: #141c30;
+  border: 1px solid #26314f;
+  border-radius: 16px;
+  padding: 28px 24px 24px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rmodal-fechar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: #9da3b4;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.rmodal-fechar:hover {
+  color: #e8eaf2;
+  background: #1e2233;
+}
+
+.rmodal-cabecalho {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #26314f;
+}
+
+.rmodal-nick {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8eaf2;
+  text-align: center;
+}
+
+.rmodal-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.rmodal-stats span {
+  background: #1e2233;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9dc2ff;
+  white-space: nowrap;
+}
+
+.rmodal-jogo {
+  background: #1a2135;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.rmodal-jogo h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7a85a8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 8px;
+}
+
+.rmodal-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  padding: 4px 0;
+  border-bottom: 1px solid #26314f44;
+  gap: 8px;
+}
+
+.rmodal-linha:last-child {
+  border-bottom: none;
+}
+
+.rmodal-linha span {
+  color: #aeb2c7;
+}
+
+.rmodal-linha strong {
+  color: #e8eaf2;
+  font-weight: 600;
+  text-align: right;
+}
+
 @media (max-width: 480px) {
   .ranking-tab {
     font-size: 12px;
@@ -97,5 +263,8 @@
   }
   .ranking-valor {
     font-size: 12px;
+  }
+  .rmodal-card {
+    padding: 22px 16px 18px;
   }
 }

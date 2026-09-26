@@ -11,18 +11,22 @@ function jogoIniciarTimer() {
   _jogoTempoInicioMs = Date.now();
 }
 
-function jogoRegistrarTempo() {
-  if (!_jogoTempoInicioMs || !usuarioDiscord || !nomeUsuario()) {
-    _jogoTempoInicioMs = null;
-    return;
-  }
-  var seg = Math.round((Date.now() - _jogoTempoInicioMs) / 1000);
+function jogoRegistrarTempo(jogoNome) {
+  var seg = _jogoTempoInicioMs ? Math.round((Date.now() - _jogoTempoInicioMs) / 1000) : 0;
   _jogoTempoInicioMs = null;
-  if (seg < 10) return;
+  if (!usuarioDiscord || !nomeUsuario()) return;
+  // Registra sempre que há um jogo identificado (mesmo que curto), ou quando durou > 10s
+  if (!jogoNome && seg < 10) return;
   fetch("./economia/tempo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), segundos: seg }),
+    body: JSON.stringify({
+      nome: nomeUsuario(),
+      nick: nomeExibicao(),
+      avatar: avatarAtual() || "",
+      segundos: Math.max(seg, 0),
+      jogo: jogoNome || "",
+    }),
   }).catch(function () {});
 }
 
@@ -55,7 +59,9 @@ async function atualizarMoedasHeader() {
   }
   if (botaoLoja) botaoLoja.style.display = "";
   try {
-    var params = "nome=" + encodeURIComponent(nomeUsuario()) + "&nick=" + encodeURIComponent(nomeExibicao());
+    var params = "nome=" + encodeURIComponent(nomeUsuario()) +
+      "&nick=" + encodeURIComponent(nomeExibicao()) +
+      "&avatar=" + encodeURIComponent(avatarAtual() || "");
     var resp = await fetch("./economia/carteira?" + params);
     minhaCarteira = await resp.json();
     if (badge) badge.textContent = minhaCarteira.saldo;
@@ -557,7 +563,7 @@ async function tentarBonusAtividade() {
     var resp = await fetch("./economia/bonus", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao() }),
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), avatar: avatarAtual() || "" }),
     });
     var dados = await resp.json();
     if (dados.creditado) {

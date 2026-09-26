@@ -1,7 +1,7 @@
 /* Jogo da Velha — tabuleiro 3x3, indicador de vez, convite de participantes. */
 
-.tabuleiro-velha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 320px; margin: 0 auto; }
-.casa-velha { width: 100%; aspect-ratio: 1; border: 2px solid #26314f; border-radius: 10px; background: #111a2e; color: #fff; font-size: clamp(32px, 8vw, 56px); font-weight: bold; cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
+.tabuleiro-velha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: min(360px, calc(100vw - 32px)); margin: 0 auto; }
+.casa-velha { width: 100%; aspect-ratio: 1; border: 2px solid #26314f; border-radius: 10px; background: #111a2e; color: #fff; font-size: clamp(36px, 10vw, 58px); font-weight: bold; cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
 .casa-velha:hover:not(.preenchida):not(.desabilitada) { border-color: #3b82f6; background: #16233d; }
 .casa-velha.preenchida { cursor: not-allowed; }
 .casa-velha.x { color: #9dc2ff; background: #16233d; }
