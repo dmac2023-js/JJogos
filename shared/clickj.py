@@ -380,14 +380,16 @@ def _mult_rebirth(j: dict) -> int:
     return max(1, 10 * j.get("rebirths", 0))
 
 
-SALDO_JCOINS_MAX_BASE = 200_000_000_000_000  # 200T sem rebirth
-SALDO_JCOINS_MAX_POR_REBIRTH = 100_000_000_000_000  # +100T por rebirth (300T no 1º, 400T no 2º...)
+LIMITE_JCOINS_MARGEM = 1.10  # teto = preço do autoclick nível 10 + 10%
 
 
 def limite_jcoins(rebirths: int) -> int:
-    """Teto de jcoins guardados: 200T sem rebirth, +100T por rebirth (300T,
-    400T, 500T...)."""
-    return SALDO_JCOINS_MAX_BASE + max(0, rebirths) * SALDO_JCOINS_MAX_POR_REBIRTH
+    """Teto de jcoins guardados: 10% a mais que o preço do autoclick nível 10
+    (do rebirth atual) — o autoclick nível 10 encarece MUITO a cada rebirth
+    (mult_preco_autoclicker), então o teto precisa acompanhar isso pra sempre
+    dar pra juntar o suficiente pra comprá-lo."""
+    preco_nivel_10 = AUTO_PRECO_UPGRADE[10] * mult_preco_autoclicker(max(0, rebirths))
+    return round(preco_nivel_10 * LIMITE_JCOINS_MARGEM)
 
 
 def _adicionar_jcoins(j: dict, quantidade: int) -> None:

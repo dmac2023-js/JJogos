@@ -35,6 +35,7 @@ function jogoRegistrarTempo(jogoNome, venceu, resultado) {
 let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], fontes_nick: [], historico: [], equipado: { decoracao: null, cor_nick: null, fonte_nick: null } };
 let lojaPaginaDecoracoes = 0;
+let lojaFiltroDecoracoes = "";
 let lojaCorSelecionada = null;
 let lojaDecoracaoSelecionadaSku = null;
 const LOJA_DECORACOES_POR_PAGINA = 12;
@@ -375,6 +376,15 @@ function renderLojaDecoracoes() {
   }
 
   var lista = ordenarPossuidosPrimeiro(lojaCatalogo.decoracoes, function (d) { return d.sku_id; }, minhaCarteira.decoracoes);
+  if (lojaFiltroDecoracoes) {
+    var termo = lojaFiltroDecoracoes.toLowerCase();
+    lista = lista.filter(function (d) { return (d.nome || "").toLowerCase().indexOf(termo) !== -1; });
+  }
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="perfil-vazio">Nenhuma decoração encontrada pra "' + escapeHtml(lojaFiltroDecoracoes) + '".</p>';
+    paginacaoAlvo.innerHTML = "";
+    return;
+  }
   var totalPaginas = Math.max(1, Math.ceil(lista.length / LOJA_DECORACOES_POR_PAGINA));
   if (lojaPaginaDecoracoes >= totalPaginas) lojaPaginaDecoracoes = totalPaginas - 1;
   var inicio = lojaPaginaDecoracoes * LOJA_DECORACOES_POR_PAGINA;
@@ -749,6 +759,11 @@ document.querySelector("#loja-btn-admin-doar").addEventListener("click", abrirMo
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
 document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);
 document.querySelector("#loja-btn-decoracoes").addEventListener("click", lojaMostrarSecaoDecoracoes);
+document.querySelector("#loja-decoracoes-busca").addEventListener("input", function (ev) {
+  lojaFiltroDecoracoes = ev.target.value.trim();
+  lojaPaginaDecoracoes = 0;
+  renderLojaDecoracoes();
+});
 document.querySelector("#loja-btn-fontes").addEventListener("click", lojaMostrarSecaoFontes);
 document.querySelector("#loja-btn-roleta").addEventListener("click", lojaMostrarSecaoRoleta);
 document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
