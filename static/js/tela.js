@@ -158,6 +158,19 @@ function bitrateEfetivo() {
 // teto mais alto e o pequeno bônus de 60fps abaixo.
 var TELA_RELAY_TETO_SEGURANCA = 7500000;
 
+// O relay nunca passa de 720p, mesmo com 1080p selecionado. Dois motivos:
+// 1080p são 2,25x mais pixels atravessando a RAM da VM (fragmentados em 12KB
+// por espectador) e contando no egress; e o ganho visual some na compressão
+// agressiva que o relay já aplica. O WebRTC direto continua em 1080p — ele é
+// P2P, não toca no servidor.
+function resolucaoRelay() {
+  return telaResolucao === "1080p" ? "720p" : telaResolucao;
+}
+
+function presetRelay() {
+  return TELA_PRESETS[resolucaoRelay()];
+}
+
 function bitrateRelay() {
   // 60fps ganha um pouco mais de bits (antes usava o mesmo budget do 30fps,
   // o que deixava a imagem mais "borrada" em 60fps por dividir o mesmo
@@ -167,10 +180,9 @@ function bitrateRelay() {
   if (multiSala) {
     return Math.min(Math.round(5500000 * fatorFps), TELA_RELAY_TETO_SEGURANCA);
   }
-  var base = TELA_PRESETS[telaResolucao].bitrate;
-  var teto = telaResolucao === "1080p" ? 7000000
-    : telaResolucao === "720p" ? 5500000 : 3000000;
-  var b = Math.min(base, teto);
+  var r = resolucaoRelay();
+  var teto = r === "720p" ? 5500000 : 3000000;
+  var b = Math.min(TELA_PRESETS[r].bitrate, teto);
   return Math.min(Math.round(b * fatorFps), TELA_RELAY_TETO_SEGURANCA);
 }
 
@@ -893,7 +905,10 @@ async function iniciarEncoderRelay() {
     return;
   }
   relayAtivo = true;
-  var preset = TELA_PRESETS[telaResolucao];
+  // presetRelay (e não TELA_PRESETS[telaResolucao]): governa o canvas do
+  // encoder e o reescalonamento do frame mais abaixo, então capar aqui capa
+  // o caminho inteiro do relay num ponto só.
+  var preset = presetRelay();
 
   var canvas = document.createElement("canvas");
   canvas.width = preset.largura;
