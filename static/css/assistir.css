@@ -2,14 +2,23 @@
    deixa acompanhar uma transmissão ou sala multi-tela enquanto se joga um
    jogo offline. O jogo continua rodando do lado — nada aqui usa mostrarTela(). */
 
+/* flex: 0 1 auto (e não 1 1 auto) pra .aplicacao manter a largura centralizada
+   de sempre — com grow ela esticava pra tela inteira e bagunçava o layout de
+   todos os jogos. Encolher, sim: é assim que ela abre espaço pro painel. */
 #app-split { display: flex; flex-direction: row; align-items: stretch; min-height: 100vh; }
-#app-split > .aplicacao { flex: 1 1 auto; min-width: 0; }
+#app-split > .aplicacao { flex: 0 1 auto; min-width: 0; }
 
 .botao-assistir-algo {
   position: fixed; top: 50%; right: 0; transform: translateY(-50%);
   z-index: 80; padding: 12px 16px 12px 20px; border: 1px solid #2d4470; border-right: 0;
   border-radius: 999px 0 0 999px; background: #141c30; color: #9dc2ff;
   font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: -4px 0 16px rgba(0, 0, 0, .35);
+}
+
+/* Em tela estreita o botão passaria por cima do conteúdo (tabelas, "Online
+   agora" do ClickJ...), então o conteúdo cede espaço pra ele enquanto aparece. */
+@media (max-width: 1120px) {
+  body.tem-botao-assistir #app-split > .aplicacao { padding-right: 152px; }
 }
 .botao-assistir-algo:hover { background: #1c2c4a; color: #fff; }
 
@@ -91,4 +100,5 @@ body.assistir-ativo .assistir-painel {
     top: auto; bottom: 14px; right: 50%; transform: translateX(50%);
     border-radius: 999px; border-right: 1px solid #2d4470;
   }
+  body.tem-botao-assistir #app-split > .aplicacao { padding-right: 0; padding-bottom: 76px; }
 }

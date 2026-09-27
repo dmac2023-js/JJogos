@@ -110,12 +110,13 @@
   #tela-ludo .ludo-jogadores { margin-bottom: 8px; }
   #tela-ludo .ludo-tabuleiro { width: min(400px, 52vh, 88vw); }
   #tela-ludo .ludo-dado { width: 56px; height: 56px; font-size: 28px; border-radius: 12px; }
-  #tela-ludo .ludo-painel { gap: 8px; width: 150px; }
-  #tela-ludo .ludo-lado { width: 150px; gap: 8px; }
+  #tela-ludo .ludo-painel { gap: 8px; width: 210px; }
+  #tela-ludo .ludo-lado { width: 210px; gap: 8px; }
   #tela-ludo .painel-recordes { padding: 10px; }
-  #tela-ludo .painel-recordes h2 { font-size: 13px; margin-bottom: 6px; }
-  #tela-ludo .registro-recorde { padding: 5px 7px; font-size: 11px; }
-  #tela-ludo .recorde-avatar { width: 22px; height: 22px; }
+  #tela-ludo .painel-recordes h2 { font-size: 14px; margin-bottom: 6px; }
+  #tela-ludo .registro-recorde { padding: 7px 8px; font-size: 13px; }
+  #tela-ludo .recorde-info strong { font-size: 13px; }
+  #tela-ludo .recorde-avatar { width: 24px; height: 24px; }
   #tela-ludo .placar-ludo .placar-avatar { width: 28px; height: 28px; font-size: 12px; }
   #tela-ludo .placar-ludo .placar-gol { font-size: 16px; }
   #tela-ludo .placar-ludo { margin-bottom: 8px; padding: 6px 8px; }

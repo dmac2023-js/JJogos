@@ -53,14 +53,16 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .registro { display: flex; justify-content: space-between; gap: 12px; }
 .jogo-conteudo { display: flex; gap: 24px; align-items: flex-start; }
 .jogo-grade-area { flex: 1; min-width: 0; }
-.painel-recordes { width: 220px; flex-shrink: 0; border: 1px solid #20293f; border-radius: 14px; padding: 16px; background: #111a2e; }
+.painel-recordes { width: 270px; flex-shrink: 0; border: 1px solid #20293f; border-radius: 14px; padding: 16px; background: #111a2e; }
 .painel-recordes h2 { font-size: 16px; margin-bottom: 12px; color: #9dc2ff; }
-.registro-recorde { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; background: #141c30; font-size: 13px; }
+/* flex-wrap: quando a coluna fica estreita, o valor (vitórias/tempo) desce pra
+   segunda linha em vez de espremer o nick até virar reticências. */
+.registro-recorde { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 9px 10px; margin-bottom: 6px; border-radius: 8px; background: #141c30; font-size: 14px; }
 .recorde-posicao { font-size: 18px; flex-shrink: 0; }
-.recorde-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.recorde-info strong { color: #f4f6ff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recorde-info small { color: #aeb2c7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recorde-tempo { color: #85e0ae; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recorde-info { flex: 1 1 96px; min-width: 0; display: flex; flex-direction: column; }
+.recorde-info strong { color: #f4f6ff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recorde-info small { color: #aeb2c7; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recorde-tempo { margin-left: auto; color: #85e0ae; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .recorde-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #1c2c4a; border: 1px solid #2d4470; }
 .recorde-avatar.placeholder { display: grid; place-items: center; color: #9dc2ff; font-weight: bold; font-size: 13px; }
 
@@ -158,5 +160,5 @@ footer a:hover { color: #9dc2ff; }
   .subtitulo { font-size: 14px; }
   .tela { margin-top: 18px; padding: 16px; }
   .jogo-conteudo { gap: 16px; }
-  .painel-recordes { padding: 12px; width: 180px; }
+  .painel-recordes { padding: 12px; width: 230px; }
 }

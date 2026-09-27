@@ -34,9 +34,14 @@ function atualizarBotaoAssistirAlgo() {
   if (!qualifica) {
     if (document.body.classList.contains("assistir-ativo")) assistirFecharPainel();
     btn.style.display = "none";
+    document.body.classList.remove("tem-botao-assistir");
     return;
   }
-  btn.style.display = document.body.classList.contains("assistir-ativo") ? "none" : "";
+  var visivel = !document.body.classList.contains("assistir-ativo");
+  btn.style.display = visivel ? "" : "none";
+  // A classe faz o conteúdo reservar espaço pro botão em telas estreitas,
+  // pra ele nunca cobrir tabela/painel lateral.
+  document.body.classList.toggle("tem-botao-assistir", visivel);
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +50,7 @@ function atualizarBotaoAssistirAlgo() {
 
 function assistirAbrirPainel() {
   document.body.classList.add("assistir-ativo");
+  document.body.classList.remove("tem-botao-assistir");
   document.querySelector("#btn-assistir-algo").style.display = "none";
   assistirMostrarLista();
   assistirCarregarListas();
