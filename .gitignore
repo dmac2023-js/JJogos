@@ -5,3 +5,4 @@ __pycache__/
 .vscode/
 economia.json
 clickj.json
+backup-antes-de-zerar-*.json

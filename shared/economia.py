@@ -18,6 +18,10 @@ from shared.recordes import eh_anonimo
 
 CHAVE_ECONOMIA = "jjogos:economia"
 
+# Todo mundo começa com esse saldo — quem entra pela primeira vez já tem com
+# que mexer na loja e na roleta sem precisar farmar do zero.
+SALDO_INICIAL = 100
+
 # Toda leitura+alteração+gravação da carteira (o blob inteiro de TODOS os
 # jogadores) precisa passar por aqui. carregar_economia()/salvar_economia()
 # leem e reescrevem o dicionário inteiro sem merge — duas gravações
@@ -273,7 +277,7 @@ def _carteiras_recentes() -> dict:
 def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None,
                    discord_id: str = None) -> dict:
     carteira = dados["carteiras"].setdefault(nome, {})
-    carteira.setdefault("saldo", 0)
+    carteira.setdefault("saldo", SALDO_INICIAL)
     carteira.setdefault("ultimo_bonus", 0)
     carteira.setdefault("decoracoes", [])
     carteira.setdefault("cores_nick", [])
