@@ -43,6 +43,10 @@ bash /opt/jjogos/deploy/atualizar.sh
   fora do SSH. Abrir 80/443 na Security List do painel **não basta** — o
   `setup.sh` insere as regras antes do REJECT e salva com
   `netfilter-persistent`.
+- **Shape**: a Ampere A1.Flex (4 OCPU/24 GB) é a preferível, mas a
+  E2.1.Micro (1 OCPU/1 GB) resolve: o gargalo é egress, e os 10 TB/mês são
+  cota da conta, não da máquina. Na Micro o `setup.sh` cria 2 GB de swap
+  pra um pico de espectadores não disparar o OOM killer.
 - **Capacidade ARM**: `sa-saopaulo-1` costuma responder "out of capacity" nas
   shapes Ampere. Insistir em horários diferentes ou trocar de região resolve.
 - **Não** adicionar `X-Frame-Options` no nginx: foi o `DENY` do proxy da

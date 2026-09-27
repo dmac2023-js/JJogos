@@ -33,6 +33,26 @@ for PORTA in 80 443; do
 done
 sudo netfilter-persistent save
 
+# ---------------------------------------------------------------------------
+# Swap — indispensável na shape gratuita E2.1.Micro (1 GB de RAM).
+# ---------------------------------------------------------------------------
+# Sem swap, um pico de espectadores no relay faz o OOM killer matar o uvicorn,
+# derrubando todas as transmissões de uma vez. Com swap o pico fica lento em
+# vez de fatal. Em máquina com 2 GB+ isso é desnecessário e pulamos.
+RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+if [ "$RAM_MB" -lt 2000 ] && [ ! -f /swapfile ]; then
+    echo "==> Criando swap de 2G (RAM detectada: ${RAM_MB}MB)"
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap -q /swapfile
+    sudo swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab ||         echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
+    # Só recorrer ao swap perto do aperto: disco é ordens de grandeza mais
+    # lento, e trocar página no meio de um stream vira travamento visível.
+    sudo sysctl -q -w vm.swappiness=10
+    grep -q '^vm.swappiness' /etc/sysctl.conf ||         echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf > /dev/null
+fi
+
 echo "==> Código em $ALVO"
 if [ -d "$ALVO/.git" ]; then
     sudo git -C "$ALVO" fetch --quiet origin master
