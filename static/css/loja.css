@@ -116,7 +116,7 @@
 .loja-roleta-legenda li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c9ccda; }
 .loja-roleta-cor { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
 
-.loja-roleta-aposta { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+.loja-roleta-aposta { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .loja-roleta-valor { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: bold; min-width: 90px; justify-content: center; }
 .loja-roleta-girar-btn { display: block; width: 100%; max-width: 260px; margin: 0 auto; padding: 12px; font-size: 15px; }
 .loja-roleta-girar-btn:disabled { opacity: 0.5; cursor: default; }

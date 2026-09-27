@@ -201,6 +201,10 @@ ACOES_LUTA = ("atacar", "esquivar", "defender", "curar")
 DANO_BASE = 14
 G_ATAQUE = 0.6
 G_RESISTENCIA = 0.8
+# Mesmo dominando MUITO a resistência, o atacante sempre causa pelo menos
+# essa fração do dano de ataque bruto — sem isso, empilhar resistência
+# reduzia o dano recebido a ~0 contra qualquer atacante.
+RESISTENCIA_DISPUTA_MIN = 0.25
 G_PRECISAO = 1.2
 G_AGILIDADE = 2.0
 ESQUIVA_PASSIVA = 0.2
@@ -233,9 +237,16 @@ PRECISAO_EXTRA_MAGO = 0.15
 # Arqueiro toma "crítico de magia": chance extra de dano mágico ampliado.
 CHANCE_CRITICO_MAGICO_ARQUEIRO = 0.38
 CRITICO_MAGICO_MULT = 1.72
+# Curandeiro é fraco contra força bruta: quanto mais o atacante domina em
+# força, mais dano extra o curandeiro toma (até +50%). Cobre monge e
+# guerreiro, as duas classes que vivem de força.
+FORCA_EXTRA_CURANDEIRO = 0.5
 # Monge é pouco ágil: sua agilidade em combate rende menos que a mostrada
 # na ficha (afeta esquiva, tanto passiva quanto ativa).
 AGILIDADE_MULT_CLASSE = {"monge": 0.6}
+# Guerreiro é ruim de cura: quando escolhe "curar", a cura rende bem menos
+# que a de qualquer outra classe com a mesma magia.
+HEALING_MULT_CLASSE = {"guerreiro": 0.5}
 
 
 # ---------------------------------------------------------------------------
@@ -924,6 +935,7 @@ def _cura(ator: dict, alvo: dict) -> int:
     # Cada cura rende menos que a anterior — sem isso, com muita magia, a luta
     # nunca acabava (a cura passava do dano).
     base = CURA_BASE + CURA_FATOR * _disputa(ator["stats"]["magia"], alvo["stats"]["magia"])
+    base *= HEALING_MULT_CLASSE.get(ator.get("classe"), 1.0)
     return max(1, round(base * CURA_DECAIMENTO ** ator["curas"]))
 
 
@@ -944,9 +956,15 @@ def _resolver_ataque(ator: dict, alvo: dict, rng: random.Random) -> dict:
     if rng.random() < chance_esquiva:
         return {"resultado": "esquivou", "dano": 0, "total": False}
 
+    # Piso na disputa de resistência: sem isso, quem empilha resistência (o
+    # próprio bônus de classe do curandeiro) reduzia o dano recebido a
+    # praticamente zero contra QUALQUER atacante — o floor de "1 de dano" no
+    # fim da conta virava o único dano possível, tornando o curandeiro
+    # invencível na prática, mesmo contra força bruta (monge/guerreiro).
+    resist_disputa = max(RESISTENCIA_DISPUTA_MIN, _disputa(a["resistencia"], d["resistencia"], G_RESISTENCIA))
     dano = (DANO_BASE
             * 2 * _disputa(_poder_ataque(a), _poder_ataque(d), G_ATAQUE)
-            * 2 * _disputa(a["resistencia"], d["resistencia"], G_RESISTENCIA))
+            * 2 * resist_disputa)
 
     # Fraquezas/resistências por classe, conforme o tipo do ataque.
     tipo = _tipo_ataque(a)
@@ -954,9 +972,17 @@ def _resolver_ataque(ator: dict, alvo: dict, rng: random.Random) -> dict:
     dano *= RESISTENCIA_CLASSE.get(classe_alvo, {}).get(tipo, 1.0)
 
     # Mago é fraco contra precisão: quanto mais o atacante domina em
-    # precisão, mais dano extra o mago toma (até +50%).
+    # precisão, mais dano extra o mago toma (até +15%).
     if classe_alvo == "mago":
         dano *= 1 + PRECISAO_EXTRA_MAGO * prec
+
+    # Curandeiro é fraco contra força bruta: quanto mais o atacante domina em
+    # força, mais dano extra o curandeiro toma — cobre monge e guerreiro, que
+    # vivem de força, sem depender só da resistência (que o curandeiro
+    # empilha como classe e o deixava praticamente invencível).
+    if classe_alvo == "curandeiro":
+        forca_dom = _disputa(a["forca"], d["forca"], G_ATAQUE)
+        dano *= 1 + FORCA_EXTRA_CURANDEIRO * forca_dom
 
     # Arqueiro toma "crítico de magia": chance extra de dano mágico ampliado.
     critico_magico = False

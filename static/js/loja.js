@@ -569,9 +569,13 @@ function lojaRoletaAtualizarValor() {
   document.querySelector("#loja-roleta-aposta-valor").textContent = lojaRoletaAposta;
   var botaoMenos = document.querySelector("#loja-roleta-menos");
   var botaoMais = document.querySelector("#loja-roleta-mais");
+  var botaoMenos100 = document.querySelector("#loja-roleta-menos100");
+  var botaoMais100 = document.querySelector("#loja-roleta-mais100");
   var botaoGirar = document.querySelector("#loja-roleta-girar");
   botaoMenos.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
   botaoMais.disabled = lojaRoletaAposta + lojaRoletaApostaMultiplo > minhaCarteira.saldo || lojaRoletaGirando;
+  botaoMenos100.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
+  botaoMais100.disabled = lojaRoletaAposta + 100 > minhaCarteira.saldo || lojaRoletaGirando;
   botaoGirar.textContent = lojaRoletaGirando ? "Girando..." : "Girar";
   botaoGirar.disabled = lojaRoletaGirando || lojaRoletaAposta > minhaCarteira.saldo || lojaRoletaAposta < lojaRoletaApostaMinima;
 }
@@ -761,6 +765,17 @@ document.querySelector("#loja-roleta-mais").addEventListener("click", function (
     lojaRoletaAposta += lojaRoletaApostaMultiplo;
     lojaRoletaAtualizarValor();
   }
+});
+document.querySelector("#loja-roleta-menos100").addEventListener("click", function () {
+  var novo = Math.max(lojaRoletaApostaMinima, lojaRoletaAposta - 100);
+  lojaRoletaAposta = novo - (novo % lojaRoletaApostaMultiplo);
+  lojaRoletaAtualizarValor();
+});
+document.querySelector("#loja-roleta-mais100").addEventListener("click", function () {
+  var novo = Math.min(minhaCarteira.saldo, lojaRoletaAposta + 100);
+  novo -= novo % lojaRoletaApostaMultiplo;
+  lojaRoletaAposta = Math.max(lojaRoletaApostaMinima, novo);
+  lojaRoletaAtualizarValor();
 });
 document.querySelector("#loja-roleta-girar").addEventListener("click", girarRoleta);
 setInterval(tentarBonusAtividade, 60 * 1000);
