@@ -20,6 +20,9 @@ nano /opt/jjogos/.env
 sudo systemctl restart jjogos
 ```
 
+Para operar a VM que já está no ar (SSH, logs, dados, firewall,
+diagnóstico), veja [ACESSO.md](ACESSO.md).
+
 ## Atualizar depois de um push
 
 ```bash
