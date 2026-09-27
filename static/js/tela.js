@@ -15,7 +15,6 @@ var telaFps = 30;
 var telaFonte = "tela";
 var cameraFacing = "environment";
 var telaOfertaTimer = null;
-var telaUltimaMsgEm = 0;
 // Relay de vídeo (Activity não suporta WebRTC — docs do Discord).
 var telaModoRelay = false;
 var telaRelayTimer = null;
@@ -1942,7 +1941,6 @@ function conectarWsTela(host, tentativa) {
   };
 
   ws.onmessage = function (evento) {
-    telaUltimaMsgEm = Date.now();
     if (typeof evento.data !== "string") {
       if (!host) receberRelay(evento.data);
       return;
@@ -1991,21 +1989,6 @@ function conectarWsTela(host, tentativa) {
 
   ws.onerror = function () {};
 }
-
-// Sair da Activity/aba e voltar pode deixar o WS "morto" sem nunca disparar
-// onclose (o SO/navegador suspende a conexão em segundo plano sem um close
-// limpo) — quem estava assistindo via relay ficava com a tela preta/travada
-// pra sempre, sem nada tentando reconectar. Ao voltar pra aba, se a conexão
-// parece ruim (fechada ou muito tempo sem nenhuma mensagem, mesmo com ping
-// a cada 20s), força uma reconexão do zero.
-document.addEventListener("visibilitychange", function () {
-  if (document.hidden || telaEhHost || !telaSala) return;
-  var semNoticiaHaMuito = telaUltimaMsgEm && (Date.now() - telaUltimaMsgEm) > 25000;
-  var conexaoRuim = !telaWs || telaWs.readyState !== WebSocket.OPEN;
-  if (conexaoRuim || semNoticiaHaMuito) {
-    conectarWsTela(false, 1);
-  }
-});
 
 // Fecha a conexão do espectador mostrando o erro sem voltar de tela antes da
 // hora (o onclose é ignorado porque limparConexaoTela desliga os handlers).
