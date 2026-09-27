@@ -435,8 +435,13 @@ async function conectarAoDiscord() {
             var detalhe = token.detail;
             if (resTroca.status === 429 && detalhe && typeof detalhe === "object") {
               var espera = Number(detalhe.retry_after) || 5;
-              // Margem de segurança em cima do retry_after do Discord.
-              var esperaMs = Math.ceil(espera * 1000) + 1500;
+              // Margem de segurança em cima do retry_after do Discord, mais um
+              // jitter aleatório (0-3s) — sem isso, todo mundo que caiu no
+              // rate limit no mesmo instante tenta de novo exatamente ao
+              // mesmo tempo quando a janela abre, recriando o mesmo pico que
+              // causou o 429 originalmente.
+              var jitterMs = Math.floor(Math.random() * 3000);
+              var esperaMs = Math.ceil(espera * 1000) + 1500 + jitterMs;
               discordLoginBloqueadoAte = Date.now() + esperaMs;
               // Tenta de novo sozinho quando o cooldown passar — sem isso,
               // quem cai no rate limit assim que abre a Activity ficava preso
