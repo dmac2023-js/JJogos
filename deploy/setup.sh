@@ -25,11 +25,17 @@ sudo apt-get install -y -qq python3 python3-venv python3-pip git nginx \
 # tudo que não é SSH, ANTES de qualquer coisa que você libere. Abrir as portas
 # só na Security List do painel não basta: o pacote chega na VM e morre aqui.
 echo "==> Liberando 80/443 no iptables"
+# A regra só vale se estiver ANTES do REJECT, e a posição dele varia conforme
+# a imagem (aqui veio na 5, não na 6). Descobrimos a linha em vez de chutar —
+# regra inserida depois do REJECT fica muda e o sintoma é idêntico a firewall
+# de nuvem fechado, o que custa horas pra diagnosticar.
 for PORTA in 80 443; do
-    if ! sudo iptables -C INPUT -p tcp --dport "$PORTA" -j ACCEPT 2>/dev/null; then
-        # -I INPUT 6 insere ANTES da regra REJECT do final da cadeia.
-        sudo iptables -I INPUT 6 -p tcp --dport "$PORTA" -m state --state NEW -j ACCEPT
-    fi
+    # Tira cópias antigas, inclusive as que ficaram na posição errada.
+    while sudo iptables -C INPUT -p tcp --dport "$PORTA" -m state --state NEW -j ACCEPT 2>/dev/null; do
+        sudo iptables -D INPUT -p tcp --dport "$PORTA" -m state --state NEW -j ACCEPT
+    done
+    LINHA_REJECT=$(sudo iptables -L INPUT -n --line-numbers | awk '$2=="REJECT"{print $1; exit}')
+    sudo iptables -I INPUT "${LINHA_REJECT:-1}" -p tcp --dport "$PORTA" -m state --state NEW -j ACCEPT
 done
 sudo netfilter-persistent save
 

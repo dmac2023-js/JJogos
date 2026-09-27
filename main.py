@@ -29,7 +29,8 @@ async def liberar_embed_discord(request: Request, call_next):
     # Activity. Não dá pra removê-lo daqui (ele é adicionado depois de nós), mas
     # o Chromium ignora XFO quando há CSP frame-ancestors — e o cliente do
     # Discord é Chromium. Então declaramos frame-ancestors explicitamente.
-    response.headers.pop("x-frame-options", None)
+    if "x-frame-options" in response.headers:
+        del response.headers["x-frame-options"]
     response.headers["Content-Security-Policy"] = (
         "frame-ancestors https://discord.com https://*.discord.com "
         "https://*.discordsays.com"
