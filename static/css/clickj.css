@@ -250,3 +250,6 @@
   .cj-item { flex-wrap: wrap; }
   .cj-item-acao { width: 100%; justify-content: flex-end; }
 }
+.cj-conversor { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 10px; color: #c9ccda; }
+.cj-conversor input { width: 120px; padding: 9px 11px; border: 1px solid #2d4470; border-radius: 10px; background: #0d1424; color: #f4f6ff; font-size: 16px; text-align: center; }
+#cj-conversor-resultado { color: #ffd36a; font-weight: bold; font-size: 15px; }
