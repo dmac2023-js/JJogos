@@ -26,7 +26,7 @@ DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY", "")
 # Origem pública do site. Trocar de host (Render -> Discloud -> etc.) é só
 # mudar SITE_URL na env; o redirect do OAuth acompanha. OAUTH_REDIRECT_URI
 # continua valendo como override direto do callback.
-SITE_URL = os.getenv("SITE_URL", "https://jogos7.discloud.dev").rstrip("/")
+SITE_URL = os.getenv("SITE_URL", "https://jogos7.duckdns.org").rstrip("/")
 OAUTH_REDIRECT_PADRAO = f"{SITE_URL}/auth/callback"
 
 # Upstash Redis (REST) — guarda recordes.json e economia.json fora do disco

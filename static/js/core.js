@@ -538,7 +538,7 @@ function obterInstanciaParam() {
 // Trocar de hospedagem = mudar só esta constante (e o URL mapping no portal
 // do Discord). Precisa ser literal: dentro da Activity não há como descobrir
 // a origem real, o iframe só vê o proxy.
-var SITE_ORIGIN = "https://jogos7.discloud.dev";
+var SITE_ORIGIN = "https://jogos7.duckdns.org";
 
 function appOrigin() {
   if (/\.discordsays\.com$/i.test(location.hostname)) return SITE_ORIGIN;
