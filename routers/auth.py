@@ -2,6 +2,8 @@
 endpoints utilitários (/saude, /config, /jogos)."""
 import json
 import os
+import threading
+import time
 from typing import Optional
 
 import requests
@@ -20,6 +22,36 @@ if HAS_CRYPTOGRAPHY:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Espaçamento mínimo entre chamadas ao /oauth2/token do Discord
+# ---------------------------------------------------------------------------
+# O Discord rate-limita trocas de code/refresh por client_id. Sem isso, vários
+# usuários (novos ou renovando sessão) que chegam ao mesmo tempo disparam a
+# chamada pro Discord todos juntos e estouram o limite deles quase na hora —
+# confirmado em produção mesmo sem nenhum retry duplicado do nosso lado (um
+# único processo uvicorn, então um lock em memória já serializa entre
+# requisições concorrentes). Isso não aumenta o limite do Discord, só evita
+# que a gente mesmo crie o pico que esbarra nele.
+_lock_token_discord = threading.Lock()
+_ultima_chamada_token_discord = 0.0
+_INTERVALO_MINIMO_TOKEN_DISCORD = 0.35  # segundos
+
+
+def _chamar_token_discord(payload: dict) -> requests.Response:
+    global _ultima_chamada_token_discord
+    with _lock_token_discord:
+        espera = _INTERVALO_MINIMO_TOKEN_DISCORD - (time.monotonic() - _ultima_chamada_token_discord)
+        if espera > 0:
+            time.sleep(espera)
+        resposta = requests.post(
+            "https://discord.com/api/oauth2/token",
+            data=payload,
+            timeout=15,
+        )
+        _ultima_chamada_token_discord = time.monotonic()
+    return resposta
 
 
 class CodigoAutorizacao(BaseModel):
@@ -95,11 +127,7 @@ def trocar_codigo_por_token(dados: CodigoAutorizacao):
                         or OAUTH_REDIRECT_PADRAO)
         payload["redirect_uri"] = redirect_uri
 
-    resposta = requests.post(
-        "https://discord.com/api/oauth2/token",
-        data=payload,
-        timeout=15,
-    )
+    resposta = _chamar_token_discord(payload)
 
     if resposta.status_code == 429:
         try:
@@ -145,16 +173,12 @@ def renovar_token(dados: RefreshTokenRequest):
     if not DISCORD_APPLICATION_ID or not DISCORD_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="As credenciais do Discord não foram configuradas.")
 
-    resposta = requests.post(
-        "https://discord.com/api/oauth2/token",
-        data={
-            "client_id": DISCORD_APPLICATION_ID,
-            "client_secret": DISCORD_CLIENT_SECRET,
-            "grant_type": "refresh_token",
-            "refresh_token": dados.refresh_token,
-        },
-        timeout=15,
-    )
+    resposta = _chamar_token_discord({
+        "client_id": DISCORD_APPLICATION_ID,
+        "client_secret": DISCORD_CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": dados.refresh_token,
+    })
 
     if resposta.status_code != 200:
         raise HTTPException(status_code=400, detail="Não foi possível renovar a sessão.")
