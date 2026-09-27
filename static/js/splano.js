@@ -400,7 +400,7 @@ function spPreencherSkin(ctx, skin, x, y, r, tempo) {
   var padrao = (skin && skin.padrao) || "solido";
 
   if (padrao === "imagem") {
-    var img = spImagem(skin.imagem);
+    var img = spImagem(urlImagemExterna(skin.imagem));
     if (spImagemPronta(img)) {
       ctx.save();
       ctx.beginPath();
@@ -474,7 +474,7 @@ function spDesenharCelula(ctx, celula, tempo) {
   // Foto do Discord no meio da bola (só quando cabe). Com skin de imagem
   // personalizada ela encolhe, senão tapava a arte que o jogador comprou.
   var arteDeFundo = !!(info.skin && info.skin.padrao === "imagem" &&
-    spImagemPronta(spImagem(info.skin.imagem)));
+    spImagemPronta(spImagem(urlImagemExterna(info.skin.imagem))));
   var raioFoto = r * (arteDeFundo ? 0.44 : 0.62);
   if (raioFoto >= 11) {
     var foto = spImagem(info.avatar);

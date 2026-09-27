@@ -366,7 +366,7 @@ function lojaAmostraSkin(skin) {
     var url = minhaCarteira.skin_splano_imagem;
     if (url) {
       var img = document.createElement("img");
-      img.src = url;
+      img.src = urlImagemExterna(url);
       img.alt = "";
       amostra.appendChild(img);
     } else {

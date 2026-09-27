@@ -30,6 +30,7 @@ CELULAS_MAXIMO = 8
 ENERGIA_MINIMA_DIVIDIR = 24
 IMPULSO_DIVISAO = 520.0
 SEGUNDOS_PARA_JUNTAR = 5.0
+VELOCIDADE_JUNTAR = 300.0   # o quão rápido as metades se reaproximam depois disso
 
 # Soltar energia (segurar o botão)
 CUSTO_SOLTAR = 4
@@ -288,8 +289,14 @@ def _mover_pellets(jogo: dict, dt: float) -> None:
         pellet["y"] = min(max(pellet["y"], 10.0), ARENA - 10.0)
 
 
-def _separar_ou_juntar(jogador: dict, agora: float) -> None:
-    """Células do mesmo jogador: empurram uma à outra até poderem se juntar."""
+def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
+    """Células do mesmo jogador: enquanto o tempo de divisão não venceu elas se
+    empurram; vencido o prazo elas se ATRAEM até virar uma bolinha só.
+
+    Sem a atração a bolinha nunca voltava ao normal sozinha: o empurrão parava
+    exatamente onde elas se encostam (d == ra + rb) e a fusão só acontecia se o
+    jogador conseguisse sobrepor as metades na mão.
+    """
     celulas = jogador["celulas"]
     for i in range(len(celulas)):
         for k in range(i + 1, len(celulas)):
@@ -298,15 +305,28 @@ def _separar_ou_juntar(jogador: dict, agora: float) -> None:
                 continue
             ra, rb = raio(a["energia"]), raio(b["energia"])
             d = _distancia(a["x"], a["y"], b["x"], b["y"])
-            if d >= ra + rb:
-                continue
             pode_juntar = agora >= a["juntar_em"] and agora >= b["juntar_em"]
-            if pode_juntar and d < max(ra, rb):
-                maior, menor = (a, b) if a["energia"] >= b["energia"] else (b, a)
-                maior["energia"] += menor["energia"]
-                menor["_comida"] = True
+
+            if pode_juntar:
+                # Encostou o bastante: vira uma só.
+                if d < max(ra, rb):
+                    maior, menor = (a, b) if a["energia"] >= b["energia"] else (b, a)
+                    maior["energia"] += menor["energia"]
+                    menor["_comida"] = True
+                    continue
+                if d < 0.01:
+                    continue
+                # Ainda longe: puxa uma na direção da outra (o passo nunca passa
+                # da metade da distância, senão elas atravessariam uma à outra).
+                passo = min(VELOCIDADE_JUNTAR * dt, d / 2.0)
+                nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
+                a["x"] -= nx * passo
+                a["y"] -= ny * passo
+                b["x"] += nx * passo
+                b["y"] += ny * passo
                 continue
-            if d < 0.01:
+
+            if d >= ra + rb or d < 0.01:
                 continue
             empurrao = (ra + rb - d) / 2.0
             nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
@@ -381,7 +401,7 @@ def passo(jogo: dict, dt: float, agora: float) -> dict:
         _mover_celulas(jogador, dt)
     _mover_pellets(jogo, dt)
     for jogador in vivos(jogo):
-        _separar_ou_juntar(jogador, agora)
+        _separar_ou_juntar(jogador, dt, agora)
         _comer_pellets(jogo, jogador, agora)
         pegos = _pegar_powerups(jogo, jogador, agora)
         if pegos:

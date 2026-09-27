@@ -558,6 +558,20 @@ function dentroDaActivity() {
   return params.has("frame_id") || params.has("instance_id");
 }
 
+// A imagem que o usuário escolheu para a skin do Splano mora em outro site, e
+// dentro da Activity a sandbox do Discord bloqueia qualquer host que não seja
+// dele — por isso a skin aparecia no site e sumia na Activity. Lá dentro,
+// pedimos a imagem ao nosso próprio servidor, que a rebaixa e a devolve como
+// mesma origem. No navegador comum vale o link direto, sem gastar nossa banda.
+function urlImagemExterna(url) {
+  if (!url) return url;
+  if (!dentroDaActivity()) return url;
+  if (/^(data|blob):/i.test(url)) return url;
+  // Host do próprio Discord já passa pela sandbox: não precisa de proxy.
+  if (/^https:\/\/([a-z0-9-]+\.)*(discordapp\.(com|net)|discord\.com)\//i.test(url)) return url;
+  return "./imagem-externa?url=" + encodeURIComponent(url);
+}
+
 function compartilharInstanciaAtual() {
   if (obterInstanciaParam()) return obterInstanciaParam();
   if (discordSdkGlobal && discordSdkGlobal.instanceId) return discordSdkGlobal.instanceId;

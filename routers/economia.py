@@ -1,8 +1,12 @@
 """Moedas, loja de decorações de avatar e cor do nick."""
+import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
+
+from shared.imagem_proxy import ImagemRecusada, buscar as buscar_imagem_externa
 
 from shared.economia import (
     CATALOGO_DECORACOES,
@@ -260,6 +264,39 @@ def definir_imagem_skin_splano(dados: ImagemSkinSplano):
     carteira["skin_splano_imagem"] = url
     salvar_economia(economia)
     return carteira_publica(carteira)
+
+
+# Cache curto na memória do processo: a mesma skin é pedida por todo mundo na
+# sala a cada partida, e a VM não tem banda sobrando pra rebaixar a imagem toda
+# vez. url -> (validade, bytes, content-type).
+_CACHE_IMAGENS: dict = {}
+_CACHE_SEGUNDOS = 600
+_CACHE_MAXIMO = 60
+
+
+@router.get("/imagem-externa")
+def imagem_externa(url: str = Query(..., max_length=500)):
+    """Serve uma imagem de outro site pelo nosso domínio.
+
+    Existe por causa da Activity do Discord: lá a página roda em
+    <id>.discordsays.com e a sandbox bloqueia host que não seja do Discord, o
+    que fazia a skin de imagem personalizada sumir. Pelo nosso domínio a imagem
+    é de mesma origem e carrega. A checagem de SSRF mora em shared/imagem_proxy.
+    """
+    agora = time.time()
+    em_cache = _CACHE_IMAGENS.get(url)
+    if em_cache and em_cache[0] > agora:
+        corpo, tipo = em_cache[1], em_cache[2]
+    else:
+        try:
+            corpo, tipo = buscar_imagem_externa(url)
+        except ImagemRecusada as erro:
+            raise HTTPException(status_code=400, detail=str(erro))
+        if len(_CACHE_IMAGENS) >= _CACHE_MAXIMO:
+            _CACHE_IMAGENS.clear()
+        _CACHE_IMAGENS[url] = (agora + _CACHE_SEGUNDOS, corpo, tipo)
+    return Response(content=corpo, media_type=tipo,
+                    headers={"Cache-Control": "public, max-age=600"})
 
 
 @router.post("/economia/equipar")
