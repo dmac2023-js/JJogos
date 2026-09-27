@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Espaçamento mínimo entre chamadas ao /oauth2/token do Discord
+# Espaçamento entre chamadas ao /oauth2/token do Discord
 # ---------------------------------------------------------------------------
 # O Discord rate-limita trocas de code/refresh por client_id. Sem isso, vários
 # usuários (novos ou renovando sessão) que chegam ao mesmo tempo disparam a
@@ -34,15 +34,28 @@ router = APIRouter()
 # único processo uvicorn, então um lock em memória já serializa entre
 # requisições concorrentes). Isso não aumenta o limite do Discord, só evita
 # que a gente mesmo crie o pico que esbarra nele.
+#
+# O espaçamento é adaptativo: começa curto (BASE) e, se o Discord ainda assim
+# devolver 429, aumenta com base no retry_after que ELE mandou (o número real
+# de quão apertado está o limite agora) em vez de a gente adivinhar um valor
+# fixo. Decai de volta pro BASE depois de um tempo sem novos 429.
 _lock_token_discord = threading.Lock()
 _ultima_chamada_token_discord = 0.0
-_INTERVALO_MINIMO_TOKEN_DISCORD = 0.35  # segundos
+_INTERVALO_BASE_TOKEN_DISCORD = 0.35  # segundos
+_INTERVALO_MAXIMO_TOKEN_DISCORD = 3.0  # segundos
+_DECAIMENTO_APOS_SEGUNDOS = 20.0  # sem 429 novo por esse tempo, volta ao BASE
+_intervalo_atual_token_discord = _INTERVALO_BASE_TOKEN_DISCORD
+_intervalo_ajustado_em = 0.0
 
 
 def _chamar_token_discord(payload: dict) -> requests.Response:
-    global _ultima_chamada_token_discord
+    global _ultima_chamada_token_discord, _intervalo_atual_token_discord, _intervalo_ajustado_em
     with _lock_token_discord:
-        espera = _INTERVALO_MINIMO_TOKEN_DISCORD - (time.monotonic() - _ultima_chamada_token_discord)
+        if (_intervalo_atual_token_discord > _INTERVALO_BASE_TOKEN_DISCORD
+                and time.monotonic() - _intervalo_ajustado_em > _DECAIMENTO_APOS_SEGUNDOS):
+            _intervalo_atual_token_discord = _INTERVALO_BASE_TOKEN_DISCORD
+
+        espera = _intervalo_atual_token_discord - (time.monotonic() - _ultima_chamada_token_discord)
         if espera > 0:
             time.sleep(espera)
         resposta = requests.post(
@@ -51,6 +64,20 @@ def _chamar_token_discord(payload: dict) -> requests.Response:
             timeout=15,
         )
         _ultima_chamada_token_discord = time.monotonic()
+
+        if resposta.status_code == 429:
+            try:
+                retry_after = float(resposta.json().get("retry_after", 5))
+            except Exception:
+                retry_after = 5.0
+            novo_intervalo = min(_INTERVALO_MAXIMO_TOKEN_DISCORD,
+                                 max(_intervalo_atual_token_discord, retry_after / 5))
+            _intervalo_atual_token_discord = novo_intervalo
+            _intervalo_ajustado_em = time.monotonic()
+            print(
+                "[auth] Discord 429 em /oauth2/token — retry_after=%.1fs, "
+                "novo espaçamento entre chamadas=%.2fs" % (retry_after, novo_intervalo)
+            )
     return resposta
 
 
