@@ -25,6 +25,15 @@ async def liberar_embed_discord(request: Request, call_next):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "*"
+    # O proxy da Discloud injeta X-Frame-Options: DENY, que mataria o iframe da
+    # Activity. Não dá pra removê-lo daqui (ele é adicionado depois de nós), mas
+    # o Chromium ignora XFO quando há CSP frame-ancestors — e o cliente do
+    # Discord é Chromium. Então declaramos frame-ancestors explicitamente.
+    response.headers.pop("x-frame-options", None)
+    response.headers["Content-Security-Policy"] = (
+        "frame-ancestors https://discord.com https://*.discord.com "
+        "https://*.discordsays.com"
+    )
     response.headers["Permissions-Policy"] = (
         "camera=(self), microphone=(self), display-capture=(self), "
         "geolocation=(), payment=()"
