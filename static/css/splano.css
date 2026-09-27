@@ -64,6 +64,11 @@
   display: flex; align-items: center; gap: 7px; padding: 5px 11px 5px 5px;
   border-radius: 999px; background: #141c30; border: 1px solid #26314f; font-size: 13px;
 }
+.sp-espera-item.pronto { border-color: #3f8f57; background: #16251c; }
+.sp-espera-check { font-size: 12px; opacity: .85; }
+
+#sp-pronto { display: block; width: 100%; margin-top: 14px; }
+#sp-pronto.sp-pronto-marcado { background: #2f7d4a; border-color: #4bbf76; }
 
 .sp-fim-linha {
   display: grid; grid-template-columns: 26px 1fr auto auto auto;
@@ -75,17 +80,33 @@
 .sp-fim-num { color: #c9ccda; font-variant-numeric: tabular-nums; }
 .sp-fim-moedas { color: #ffd36a; font-weight: bold; }
 
-#sp-morreu {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  padding: 12px 20px; border-radius: 14px; background: rgba(60, 12, 12, .88);
-  border: 1px solid #b64a4a; color: #ffc9c9; font-weight: 600; text-align: center;
-  pointer-events: none;
+/* --- Escolha de espectador (depois de morrer) --- */
+.sp-espectador {
+  position: absolute; left: 50%; bottom: 68px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 10px 14px; border-radius: 16px; background: rgba(6, 9, 18, .9);
+  border: 1px solid #26314f; max-width: calc(100% - 20px);
 }
+.sp-espectador-mensagem { color: #ffc9c9; font-size: 13px; font-weight: 600; text-align: center; }
+.sp-espectador-barra { display: flex; align-items: center; gap: 10px; }
+.sp-espectador-barra button {
+  width: 40px; height: 40px; border: 1px solid #2d4470; border-radius: 12px;
+  background: #141c30; color: #9dc2ff; font-size: 24px; line-height: 1; cursor: pointer;
+}
+.sp-espectador-barra button:hover { background: #24365c; }
+.sp-espectro-perfil {
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px; min-width: 190px;
+  justify-content: center; border-radius: 999px; background: #141c30;
+  border: 1px solid #26314f; font-size: 14px; font-weight: 600;
+}
+.sp-espectro-vazio { color: #7a85a8; font-weight: normal; font-size: 13px; }
+.sp-espectro-contador { color: #7a85a8; font-size: 12px; min-width: 34px; text-align: center; }
 
 @media (max-width: 760px) {
   .sp-arena { height: min(58vh, 460px); }
   .sp-placar { width: 140px; font-size: 11px; }
   .sp-hud span { font-size: 11.5px; padding: 4px 8px; }
+  .sp-espectro-perfil { min-width: 130px; font-size: 13px; }
 }
 
 /* --- Skins na loja --- */

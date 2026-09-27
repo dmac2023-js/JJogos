@@ -474,6 +474,62 @@ def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:
         return carteira["saldo"]
 
 
+def debitar_moedas(nome: str, quantidade: int) -> Optional[int]:
+    """Remove moedas da conta (o saldo nunca fica negativo). Retorna o novo
+    saldo, ou None se não removeu nada."""
+    if eh_anonimo(nome) or not nome or quantidade <= 0:
+        return None
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        carteira["saldo"] = max(0, carteira.get("saldo", 0) - quantidade)
+        salvar_economia(dados)
+        return carteira["saldo"]
+
+
+def _contagem_itens(carteira: dict) -> dict:
+    contagem = {
+        "decoracoes": len(carteira.get("decoracoes") or []),
+        "cores_nick": len(carteira.get("cores_nick") or []),
+        "fontes_nick": len(carteira.get("fontes_nick") or []),
+        "skins_splano": len(carteira.get("skins_splano") or []),
+    }
+    contagem["total"] = sum(v for k, v in contagem.items() if k != "total")
+    return contagem
+
+
+def consulta_admin(nome: str) -> dict:
+    """Saldo + quantos itens da loja o jogador tem — pro painel de admin."""
+    if not nome:
+        return {"nome": "", "nick": None, "saldo": 0, "itens": _contagem_itens({})}
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        return {"nome": nome, "nick": carteira.get("nick"), "saldo": carteira.get("saldo", 0),
+                "itens": _contagem_itens(carteira)}
+
+
+def limpar_itens_admin(nome: str) -> dict:
+    """Apaga tudo que o jogador comprou/ganhou na loja (decorações, cores,
+    fontes e skins do Splano). As moedas ficam na conta."""
+    if not nome:
+        return {"nome": "", "removidos": 0, "saldo": 0, "itens": _contagem_itens({})}
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        removidos = 0
+        for chave in ("decoracoes", "cores_nick", "fontes_nick", "skins_splano"):
+            removidos += len(carteira.get(chave) or [])
+            carteira[chave] = []
+        carteira["skin_splano_imagem"] = ""
+        equipado = carteira.setdefault("equipado", {})
+        for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano"):
+            equipado[chave] = None
+        salvar_economia(dados)
+        return {"nome": nome, "removidos": removidos, "saldo": carteira.get("saldo", 0),
+                "itens": _contagem_itens(carteira)}
+
+
 def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> dict:
     """Credita o bônus de atividade (5 moedas a cada 15 min), se já deu
     tempo desde o último. O cliente chama isso periodicamente enquanto a

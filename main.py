@@ -69,3 +69,17 @@ async def servir_estatico(caminho: str = ""):
     # era a causa de "host conectou mas não chega vídeo" na Activity.
     return FileResponse(PASTA_STATIC / "index.html",
                         headers={"Cache-Control": "no-cache, must-revalidate"})
+
+
+# ---------------------------------------------------------------------------
+# Execução direta: `python main.py`
+# ---------------------------------------------------------------------------
+# A Discloud roteia o proxy do subdomínio para a porta 8080 em 0.0.0.0 — é
+# fixo, não existe $PORT lá. Render/Railway injetam $PORT, então lemos a env
+# com 8080 de padrão e o mesmo arquivo serve pros dois.
+if __name__ == "__main__":
+    import os
+
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8080")))

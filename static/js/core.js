@@ -535,8 +535,13 @@ function obterInstanciaParam() {
 
 // Origem REAL do app. Dentro da Activity o location.origin é o proxy do
 // Discord (ex.: 123.discordsays.com) — links/redirects devem apontar o site.
+// Trocar de hospedagem = mudar só esta constante (e o URL mapping no portal
+// do Discord). Precisa ser literal: dentro da Activity não há como descobrir
+// a origem real, o iframe só vê o proxy.
+var SITE_ORIGIN = "https://jogos7.discloud.app";
+
 function appOrigin() {
-  if (/\.discordsays\.com$/i.test(location.hostname)) return "https://jogos7.onrender.com";
+  if (/\.discordsays\.com$/i.test(location.hostname)) return SITE_ORIGIN;
   return location.origin;
 }
 

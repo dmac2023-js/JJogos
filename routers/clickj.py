@@ -36,7 +36,6 @@ INTERVALO_ONLINE = 3
 INTERVALO_COSMETICOS = 120
 CLIQUES_POR_SEGUNDO_MAX = 20
 CLIQUES_RAJADA_MAX = 40
-MOEDAS_POR_REBIRTH = 100
 PRAZO_TURNO = 30
 PRAZO_CONVITE = 20
 TOLERANCIA_DESCONEXAO = 30
@@ -544,9 +543,11 @@ async def _tratar(nome: str, dados: dict) -> None:
                 ok, msg = False, "Termine a luta antes do rebirth."
             else:
                 ok, msg = regras.fazer_rebirth(j)
-                if ok:
-                    await asyncio.to_thread(creditar_moedas, nome, MOEDAS_POR_REBIRTH)
-                    msg += " +%d moedas!" % MOEDAS_POR_REBIRTH
+                if ok and j["rebirths"] <= regras.REBIRTHS_QUE_PAGAM:
+                    await asyncio.to_thread(creditar_moedas, nome, regras.MOEDAS_POR_REBIRTH)
+                    msg += " +%d moedas!" % regras.MOEDAS_POR_REBIRTH
+                elif ok:
+                    msg += " (sem moedas: os %d primeiros rebirths são os que pagam.)" % regras.REBIRTHS_QUE_PAGAM
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
@@ -596,23 +597,6 @@ async def _tratar(nome: str, dados: dict) -> None:
             return
         _marcar_sujo()
         await _enviar_estado(nome, {"aviso": msg})
-        return
-
-    if tipo == "converter_jcoins":
-        ok, msg, moedas = regras.converter_jcoins(j, dados.get("pacotes", 0))
-        if not ok:
-            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
-            return
-        try:
-            await asyncio.to_thread(creditar_moedas, nome, moedas)
-        except Exception as erro:
-            j["jcoins"] += moedas // regras.MOEDAS_POR_CONVERSAO * regras.JCOINS_POR_CONVERSAO
-            log_tela("clickj: falha ao converter jcoins de %s: %r" % (nome, erro))
-            await _enviar(nome, {"tipo": "erro", "mensagem": "Não consegui creditar as moedas agora."})
-            return
-        _marcar_sujo()
-        await _salvar_se_sujo()
-        await _enviar_estado(nome, {"aviso": msg, "moedas_creditadas": moedas})
         return
 
     if tipo == "usar_pocao_luta":

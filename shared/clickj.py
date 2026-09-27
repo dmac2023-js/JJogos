@@ -53,6 +53,11 @@ NIVEIS = [
 ]
 NIVEL_MAX = len(NIVEIS)
 
+# Moedas do site pagas a cada rebirth feito. Depois de REBIRTHS_QUE_PAGAM
+# rebirths o jogo para de pagar — o rebirth continua valendo pelas skills.
+MOEDAS_POR_REBIRTH = 100
+REBIRTHS_QUE_PAGAM = 20
+
 NIVEL_AUTOCLICKER = 5  # nível do personagem em que o autoclicker libera de graça (nível 1 dele)
 AUTO_CPS = {
     1: 50, 2: 100, 3: 200, 4: 500, 5: 750,
@@ -299,12 +304,12 @@ def catalogo() -> dict:
         "auto": {"cps": AUTO_CPS, "precos": AUTO_PRECO_UPGRADE, "nivel_desbloqueio": NIVEL_AUTOCLICKER},
         "luta": {"hp_base": HP_BASE, "hp_por_rebirth": HP_POR_REBIRTH,
                  "esquiva_intervalo": ESQUIVA_INTERVALO},
-        "conversao": {"jcoins": JCOINS_POR_CONVERSAO, "moedas": MOEDAS_POR_CONVERSAO},
         "maestria": {"desbloqueio": NIVEL_MAESTRIA_DESBLOQUEIO, "precos": MAESTRIA_PRECO,
                      "bonus_pct": MAESTRIA_BONUS_PCT, "max": MAESTRIA_MAX},
         "titulos": TITULOS, "preco_titulo": PRECO_TITULO,
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
+        "rebirth_moedas": {"quantia": MOEDAS_POR_REBIRTH, "limite": REBIRTHS_QUE_PAGAM},
         "pets": {
             "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS_BASE, "max_mochila": PET_MAX_MOCHILA,
             "rebirth_minimo": PET_REBIRTH_MINIMO,
@@ -381,11 +386,6 @@ def _mult_rebirth(j: dict) -> int:
     return max(1, 10 * j.get("rebirths", 0))
 
 
-# Converter Jcoins em moedas do site: só em múltiplos de 1T, pra a conta ser
-# fácil de fazer de cabeça (1T = 100 moedas).
-JCOINS_POR_CONVERSAO = 1_000_000_000_000
-MOEDAS_POR_CONVERSAO = 100
-
 LIMITE_JCOINS_MARGEM = 1.10  # teto = preço do autoclick nível 10 + 10%
 
 
@@ -396,23 +396,6 @@ def limite_jcoins(rebirths: int) -> int:
     dar pra juntar o suficiente pra comprá-lo."""
     preco_nivel_10 = AUTO_PRECO_UPGRADE[10] * mult_preco_autoclicker(max(0, rebirths))
     return round(preco_nivel_10 * LIMITE_JCOINS_MARGEM)
-
-
-def converter_jcoins(j: dict, pacotes: int) -> Tuple[bool, str, int]:
-    """Troca `pacotes` x 1T de Jcoins por 100 moedas cada. Devolve também
-    quantas moedas creditar (quem chama é que fala com a economia)."""
-    try:
-        pacotes = int(pacotes)
-    except (TypeError, ValueError):
-        return False, "Quantidade inválida.", 0
-    if pacotes <= 0:
-        return False, "Converta pelo menos 1 T de Jcoins.", 0
-    custo = pacotes * JCOINS_POR_CONVERSAO
-    if j.get("jcoins", 0) < custo:
-        return False, "Você não tem %dT de Jcoins." % pacotes, 0
-    j["jcoins"] -= custo
-    moedas = pacotes * MOEDAS_POR_CONVERSAO
-    return True, "Converteu %dT de Jcoins em %d moedas!" % (pacotes, moedas), moedas
 
 
 def _adicionar_jcoins(j: dict, quantidade: int) -> None:

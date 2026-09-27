@@ -276,8 +276,6 @@ function cjProcessar(d) {
       // ação (tem aviso), pra refletir o resultado de uma redistribuição.
       if (document.querySelector("#cj-loja").classList.contains("ativa") && (cjLojaAba !== "respec" || d.aviso)) cjRenderLoja();
       if (d.aviso) cjToast(d.aviso);
-      // Converteu Jcoins: o saldo de moedas lá em cima tem que acompanhar.
-      if (d.moedas_creditadas && typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
       break;
     case "online":
       cjOnline = d.jogadores || [];
@@ -450,9 +448,6 @@ function cjRenderJogo() {
 
   var podeRebirth = cjEu.faltando_rebirth.length === 0;
   document.querySelector("#cj-rebirth").style.display = podeRebirth ? "" : "none";
-  var conv = cjCatalogo.conversao;
-  document.querySelector("#cj-converter").style.display =
-    conv && cjJcoinsAtuais() >= conv.jcoins ? "" : "none";
   var dica = "";
   if (!podeRebirth) {
     if (cjEu.nivel < cjEu.nivel_requerido_rebirth) {
@@ -963,42 +958,19 @@ function cjResponderDesafio(aceitar) {
   cjFecharPopup();
 }
 
-function cjAbrirConversor() {
-  var conv = cjCatalogo.conversao;
-  var maximo = Math.floor(cjJcoinsAtuais() / conv.jcoins);
-  if (maximo < 1) return;
-  cjPopup("💱 Converter Jcoins em moedas",
-    "<p>Cada <strong>1 T</strong> de Jcoins vira <strong>" + conv.moedas + " moedas</strong> do site. " +
-    "Só dá pra converter em múltiplos de 1 T — você pode converter até <strong>" + maximo + " T</strong> agora.</p>" +
-    '<div class="cj-conversor">' +
-    '<input id="cj-conversor-qtd" type="number" min="1" step="1" max="' + maximo + '" value="' + maximo + '" /> T' +
-    '<div id="cj-conversor-resultado"></div></div>',
-    [
-      { texto: "Converter", principal: true, acao: function () {
-          var campo = document.querySelector("#cj-conversor-qtd");
-          var pacotes = Math.max(1, Math.min(maximo, parseInt(campo.value, 10) || 0));
-          cjEnviar({ tipo: "converter_jcoins", pacotes: pacotes });
-          cjFecharPopup();
-        } },
-      { texto: "Cancelar", acao: cjFecharPopup },
-    ]);
-  var campo = document.querySelector("#cj-conversor-qtd");
-  var resultado = document.querySelector("#cj-conversor-resultado");
-  function atualizar() {
-    var pacotes = Math.max(0, Math.min(maximo, parseInt(campo.value, 10) || 0));
-    resultado.textContent = "= " + (pacotes * conv.moedas) + " moedas";
-  }
-  campo.addEventListener("input", atualizar);
-  atualizar();
-}
-
 function cjConfirmarRebirth() {
   if (!cjEu) return;
   var mult = 10 * (cjEu.rebirths + 1);
+  var premio = cjCatalogo.rebirth_moedas || { quantia: 100, limite: 20 };
+  var paga = cjEu.rebirths < premio.limite;
+  var textoPremio = paga
+    ? "e você ganha <strong>" + premio.quantia + " moedas</strong> automaticamente."
+    : "e você <strong>não ganha mais moedas</strong> — só os <strong>" + premio.limite +
+      " primeiros rebirths</strong> pagam moedas.";
   cjPopup("🔁 Rebirth",
     "<p>Você volta ao nível 1 e perde Jcoins, cliques, armas, armaduras, livros, poções e a maestria.</p>" +
     "<p>Em troca: cada clique passa a contar <strong>" + mult + "x</strong> mais pro nível (os Jcoins por clique continuam os mesmos), todas as suas skills ficam <strong>1,5x</strong> mais fortes, o autoclicker já vem no nível 1, sua vida no PvP vai para <strong>" +
-    (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong> e você ganha <strong>100 moedas</strong> automaticamente.</p>",
+    (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong> " + textoPremio + "</p>",
     [
       { texto: "Fazer rebirth", principal: true, acao: function () {
         cjEnviar({ tipo: "rebirth" });
@@ -1354,7 +1326,6 @@ function cjSair() {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
-  document.querySelector("#cj-converter").addEventListener("click", cjAbrirConversor);
 
   document.querySelector("#cj-online-lista").addEventListener("click", function (ev) {
     var b = ev.target.closest(".cj-desafiar");

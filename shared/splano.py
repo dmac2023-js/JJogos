@@ -2,7 +2,7 @@
 
 Só lógica pura aqui (sem rede nem disco): o servidor autoritativo, as salas e
 o WebSocket ficam em routers/splano.py. Toda posição é em "unidades" do mapa;
-a arena é um quadrado de lado ARENA e encostar na borda mata a célula.
+a arena é um quadrado de lado ARENA fechado (as bolinhas nunca saem dela).
 """
 import math
 import random
@@ -12,7 +12,7 @@ from typing import Optional
 # Constantes do mundo
 # ---------------------------------------------------------------------------
 
-ARENA = 2200.0            # lado do quadrado (bem maior que a tela)
+ARENA = 3000.0            # lado do quadrado (dá pra 20 jogadores respirarem)
 ENERGIA_INICIAL = 10
 RAIO_BASE = 26.0          # raio de quem está com ENERGIA_INICIAL
 VELOCIDADE_BASE = 250.0   # unidades por segundo com ENERGIA_INICIAL
@@ -21,14 +21,15 @@ VELOCIDADE_MINIMA = 55.0
 
 PELLET_VALOR = 1
 PELLET_RAIO = 7.0
-PELLETS_POR_AREA = 1 / 9000.0    # ~538 pellets numa arena de 2200x2200
+PELLETS_POR_AREA = 1 / 11000.0   # ~818 pellets numa arena de 3000x3000 (20 jogadores)
 PELLETS_POR_TICK = 3             # quantos repõem por tick quando falta
 
-# Divisão (clique duplo)
+# Divisão (clique duplo) — as metades se juntam de novo e a bolinha "volta
+# ao normal" passados SEGUNDOS_PARA_JUNTAR segundos.
 CELULAS_MAXIMO = 8
 ENERGIA_MINIMA_DIVIDIR = 24
 IMPULSO_DIVISAO = 520.0
-SEGUNDOS_PARA_JUNTAR = 12.0
+SEGUNDOS_PARA_JUNTAR = 5.0
 
 # Soltar energia (segurar o botão)
 CUSTO_SOLTAR = 4
@@ -42,17 +43,20 @@ SEGUNDOS_PROTEGIDO = 4.0    # logo que a partida começa ninguém pode ser comid
 VANTAGEM_PARA_COMER = 1.2   # preciso ter 20% a mais de energia
 SOBREPOSICAO_PARA_COMER = 0.35
 
-# Itens especiais
-POWERUPS_MAXIMO = 3
-POWERUP_RAIO = 18.0
-POWERUP_INTERVALO = 30.0     # segundos entre tentativas de nascer um
+# Itens especiais — nascem em leva, espalhados pelo mapa, e somem sozinhos
+# se ninguém comer a tempo.
+POWERUPS_MAXIMO = 24
+POWERUPS_POR_LEVA = 6       # quantos nascem de uma vez
+POWERUP_RAIO = 34.0         # bem maior que o pellet, pra dá pra ver de longe
+POWERUP_INTERVALO = 30.0    # segundos entre uma leva e outra
+POWERUP_VIDA = 10.0         # segundos até sumir se ninguém comer
 DOBRO_ENERGIA_SEGUNDOS = 60.0
 TIPOS_POWERUP = ("energia2x", "tamanho2x")
 
 # Fim de partida
 FRACAO_ARENA_VITORIA = 0.34   # raio >= 34% da metade da arena = tomou conta
 DURACAO_MAXIMA = 6 * 60.0     # empate técnico: ganha quem tiver mais energia
-MOEDAS_VITORIA = 400
+MOEDAS_VITORIA = 100
 MOEDAS_KILL = 20
 
 NIVEIS_BOT = ("iniciante", "competente")
@@ -61,6 +65,8 @@ NOMES_BOTS = [
     "Gorducho", "Sr. Círculo", "Bolota", "Esferinha", "Tiozão", "Rolim",
     "Nuvem", "Pipoca", "Melancia", "Brigadeiro", "Gulodice", "Bolinha Azul",
     "Planeta X", "Lua Cheia", "Mochi", "Tapioca", "Pingo", "Bolha do Mal",
+    "Disquete", "Marmita", "Didi Bolinha", "Bolonha", "Caçula", "Redonda",
+    "Bolão", "Tampinha",
 ]
 
 
@@ -167,12 +173,27 @@ def encher_pellets(jogo: dict) -> None:
     repor_pellets(jogo, pellets_alvo())
 
 
-def _talvez_nascer_powerup(jogo: dict, agora: float) -> None:
-    if agora < jogo["proximo_powerup"] or len(jogo["powerups"]) >= POWERUPS_MAXIMO:
+def _nascer_powerups(jogo: dict, agora: float) -> None:
+    """Nasce uma leva inteira de itens espalhados pelo mapa (a cada
+    POWERUP_INTERVALO segundos)."""
+    if agora < jogo["proximo_powerup"]:
         return
     jogo["proximo_powerup"] = agora + POWERUP_INTERVALO
-    x, y = _ponto_livre(220.0)
-    jogo["powerups"][_novo_id(jogo)] = {"x": x, "y": y, "tipo": random.choice(TIPOS_POWERUP)}
+    for _ in range(POWERUPS_POR_LEVA):
+        if len(jogo["powerups"]) >= POWERUPS_MAXIMO:
+            break
+        x, y = _ponto_livre(220.0)
+        jogo["powerups"][_novo_id(jogo)] = {
+            "x": x, "y": y, "tipo": random.choice(TIPOS_POWERUP), "nasceu": agora,
+        }
+
+
+def _expirar_powerups(jogo: dict, agora: float) -> None:
+    """Item que ninguém comeu em POWERUP_VIDA segundos some."""
+    vencidos = [pid for pid, item in jogo["powerups"].items()
+                if agora - item.get("nasceu", agora) >= POWERUP_VIDA]
+    for pid in vencidos:
+        jogo["powerups"].pop(pid, None)
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +268,11 @@ def _mover_celulas(jogador: dict, dt: float) -> None:
         amortecimento = math.exp(-dt * 4.0)
         celula["vx"] *= amortecimento
         celula["vy"] *= amortecimento
+        # a arena é fechada: a bolinha só desliza pela borda, nunca sai
+        # (nem mata quem encosta nela).
+        r = raio(celula["energia"])
+        celula["x"] = min(max(celula["x"], r), ARENA - r)
+        celula["y"] = min(max(celula["y"], r), ARENA - r)
 
 
 def _mover_pellets(jogo: dict, dt: float) -> None:
@@ -346,34 +372,14 @@ def _comer_jogadores(jogo: dict, agora: float) -> list:
     return mortes
 
 
-def _checar_bordas(jogo: dict) -> list:
-    """Encostar na borda mata a célula (e o jogador, se era a última)."""
-    mortes = []
-    for jogador in vivos(jogo):
-        sobreviventes = []
-        for celula in jogador["celulas"]:
-            r = raio(celula["energia"])
-            if (celula["x"] - r <= 0 or celula["x"] + r >= ARENA or
-                    celula["y"] - r <= 0 or celula["y"] + r >= ARENA):
-                continue  # bateu na borda: essa célula se foi
-            sobreviventes.append(celula)
-        jogador["celulas"] = sobreviventes
-        if not sobreviventes:
-            jogador["vivo"] = False
-            jogador["morto_por"] = None
-            mortes.append(jogador["nome"])
-    return mortes
-
-
 def passo(jogo: dict, dt: float, agora: float) -> dict:
     """Roda um tick da simulação. Retorna o que aconteceu de notável."""
-    eventos = {"kills": [], "bordas": [], "powerups": {}}
+    eventos = {"kills": [], "powerups": {}}
     for jogador in vivos(jogo):
         if jogador["soltando"]:
             soltar_energia(jogo, jogador, agora)
         _mover_celulas(jogador, dt)
     _mover_pellets(jogo, dt)
-    eventos["bordas"] = _checar_bordas(jogo)
     for jogador in vivos(jogo):
         _separar_ou_juntar(jogador, agora)
         _comer_pellets(jogo, jogador, agora)
@@ -385,7 +391,8 @@ def passo(jogo: dict, dt: float, agora: float) -> dict:
         if jogador["vivo"]:
             jogador["energia_maxima"] = max(jogador["energia_maxima"], energia_total(jogador))
     repor_pellets(jogo)
-    _talvez_nascer_powerup(jogo, agora)
+    _expirar_powerups(jogo, agora)
+    _nascer_powerups(jogo, agora)
     return eventos
 
 

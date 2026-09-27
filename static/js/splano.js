@@ -29,6 +29,11 @@ var spMortes = [];        // avisos "X comeu Y"
 var spToque = null;       // joystick do celular
 var spUltimoToque = 0;
 var spSeguraTimer = null;
+var spPronto = false;     // meu voto de "pronto" na votação da sala
+var spEspectroPid = 0;    // quem estou assistindo (0 = servidor escolhe)
+var spVivosPids = [];     // pids vivos no último estado
+var spEspectroChave = ""; // evita remontar o perfil do espectador sem mudar nada
+var spEspectadorVisivel = false;
 
 var SP_CORES_ENERGIA = ["#7ef0e0", "#ffd36a", "#ff9ecf", "#a3e635", "#7de8ff"];
 
@@ -84,6 +89,7 @@ function spProcessar(d) {
       spFase = d.fase;
       spInfo = {};
       (d.jogadores || []).forEach(function (j) { spInfo[j.pid] = j; });
+      spEspectroChave = "";
       spAtualizarEspera(d);
       break;
     case "estado":
@@ -91,7 +97,7 @@ function spProcessar(d) {
       spReceberEstado(d);
       break;
     case "morte":
-      spMortes.push({ texto: d.por ? d.por + " comeu " + d.nick : d.nick + " bateu na borda",
+      spMortes.push({ texto: d.por ? d.por + " comeu " + d.nick : d.nick + " sumiu da arena",
                       ate: Date.now() + 4000 });
       if (spMortes.length > 4) spMortes.shift();
       break;
@@ -120,8 +126,22 @@ function spReceberEstado(d) {
   spPellets = d.pellets || [];
   spPowerups = d.powerups || [];
   spPlacar = d.placar || [];
+  spVivosPids = d.vivos_pids || [];
   spEu = { vivo: d.vivo, energia: d.energia, kills: d.kills, dobro: d.dobro,
            restante: d.restante, vivos: d.vivos, protegido: d.protegido || 0 };
+
+  if (!spEu.vivo) {
+    // Sem escolha válida (mortei agora, ou quem eu seguia morreu): manda
+    // um passo na frente e avisa o servidor pra câmera acompanhar.
+    if (spVivosPids.indexOf(spEspectroPid) === -1) {
+      var escolhido = (d.assistindo && spVivosPids.indexOf(d.assistindo) !== -1)
+        ? d.assistindo : spEspectroProximoValido();
+      spEspectroPid = escolhido;
+      if (escolhido) spEnviar({ tipo: "assistir", pid: escolhido });
+    }
+  } else {
+    spEspectroPid = 0;
+  }
 
   var agora = Date.now();
   (d.celulas || []).forEach(function (c) {
@@ -165,28 +185,47 @@ function spAtualizarEspera(d) {
   if (d.fase === "fim") return;
   fim.style.display = "none";
   espera.style.display = "";
+  spEspectadorMostrar(false);
+
+  var jogadores = d.jogadores || [];
   var humanos = d.humanos || 0;
-  var faltam = Math.max(0, (d.humanos_necessarios || 2) - humanos);
+  var prontos = d.prontos || 0;
+  var faltam = Math.max(0, humanos - prontos);
+  var contendo = d.fase === "contagem";
+
   document.querySelector("#sp-espera-titulo").textContent =
-    d.fase === "contagem" ? "Começando em " + d.contagem + "..." : "Esperando jogadores";
+    contendo ? "Começando em " + d.contagem + "..." : "Votação pra começar";
   document.querySelector("#sp-espera-texto").textContent =
-    d.fase === "contagem"
-      ? "Prepare-se! Bots entram pra completar a arena."
-      : (faltam > 0
-          ? "Precisa de mais " + faltam + " jogador" + (faltam > 1 ? "es" : "") +
-            " pra começar (" + humanos + "/" + (d.humanos_necessarios || 2) + ")."
-          : "Montando a partida...");
+    contendo
+      ? "Todo mundo votou pronto! Bots completam a arena até " +
+        ((spConfig && spConfig.jogadores) || 20) + " jogadores."
+      : (humanos > 1
+          ? "A partida só começa quando TODOS marcarem pronto (" +
+            prontos + "/" + humanos + " pronto" + (prontos === 1 ? "" : "s") + ")." +
+            (faltam > 0 ? " Faltam " + faltam + " pra votar." : "")
+          : "Marque pronto pra começar contra os bots — não começa sozinho.");
+
+  var euNome = nomeUsuario();
+  var meu = jogadores.filter(function (j) { return !j.bot && j.nome === euNome; })[0];
+  spPronto = !!meu && !!meu.pronto;
+  var botao = document.querySelector("#sp-pronto");
+  botao.textContent = spPronto ? "👍 Pronto! (tocar pra voltar)" : "✅ Estou pronto";
+  botao.classList.toggle("sp-pronto-marcado", spPronto);
+
   var lista = document.querySelector("#sp-espera-lista");
-  var humanosInfo = (d.jogadores || []).filter(function (j) { return !j.bot; });
+  var humanosInfo = jogadores.filter(function (j) { return !j.bot; });
   lista.innerHTML = humanosInfo.map(function (j) {
-    return '<div class="sp-espera-item">' + avatarSalaHtml(j.avatar, j.nick, j.cosmeticos, j.nome) +
-      "<span>" + nickHtml(j.nick, j.cosmeticos, j.nome) + "</span></div>";
+    return '<div class="sp-espera-item' + (j.pronto ? " pronto" : "") + '">' +
+      avatarSalaHtml(j.avatar, j.nick, j.cosmeticos, j.nome) +
+      "<span>" + nickHtml(j.nick, j.cosmeticos, j.nome) + "</span>" +
+      '<span class="sp-espera-check">' + (j.pronto ? "✅" : "⏳") + "</span></div>";
   }).join("") || '<p class="vazio">Ninguém ainda.</p>';
 }
 
 function spMostrarFim(d) {
   var el = document.querySelector("#sp-fim");
   el.style.display = "";
+  spEspectadorMostrar(false);
   var motivos = {
     ultimo: "Sobrou sozinho na arena!",
     arena: "Tomou conta da arena inteira!",
@@ -207,6 +246,78 @@ function spMostrarFim(d) {
       "</div>";
   }).join("");
   if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader();
+  spPronto = false;
+  spEspectroPid = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Escolher quem assistir depois de morrer
+// ---------------------------------------------------------------------------
+
+function spEspectroVivos() {
+  // Humanos e bots, na ordem em que entraram — só quem está vivo dá pra seguir.
+  return Object.keys(spInfo).map(Number)
+    .filter(function (pid) { return spVivosPids.indexOf(pid) !== -1; })
+    .sort(function (a, b) { return a - b; });
+}
+
+function spEspectroProximoValido() {
+  var vivos = spEspectroVivos();
+  if (!vivos.length) return 0;
+  if (vivos.indexOf(spEspectroPid) !== -1) return spEspectroPid;
+  // O que eu seguia morreu: o próximo vivo depois dele (sem pular tudo).
+  for (var i = 0; i < vivos.length; i++) {
+    if (vivos[i] > spEspectroPid) return vivos[i];
+  }
+  return vivos[0];
+}
+
+function spEspectroMover(passo) {
+  var vivos = spEspectroVivos();
+  if (!vivos.length) return;
+  var i = vivos.indexOf(spEspectroPid);
+  if (i === -1) i = passo > 0 ? 0 : vivos.length - 1;
+  else i = (i + passo + vivos.length) % vivos.length;
+  spEspectroPid = vivos[i];
+  spEnviar({ tipo: "assistir", pid: spEspectroPid });
+  spRenderEspectro();
+}
+
+function spRenderEspectro() {
+  var caixa = document.querySelector("#sp-espectro-perfil");
+  if (!caixa) return;
+  var info = spInfo[spEspectroPid];
+  var vivos = spEspectroVivos();
+  var pos = vivos.indexOf(spEspectroPid);
+  var chave = spEspectroPid + "/" + vivos.length + "/" + (info ? info.nick : "");
+  if (chave === spEspectroChave) return;   // nada mudou: não remonta o HTML 20x por segundo
+  spEspectroChave = chave;
+
+  if (!info) {
+    caixa.innerHTML = "<span class='sp-espectro-vazio'>Ninguém vivo pra assistir</span>";
+  } else {
+    caixa.innerHTML =
+      avatarSalaHtml(info.avatar, info.nick, info.cosmeticos, info.nome) +
+      "<span>" + nickHtml(info.nick, info.cosmeticos, info.nome) + "</span>" +
+      (info.bot ? ' <small class="sp-tag-bot">bot</small>' : "");
+  }
+  var contador = document.querySelector("#sp-espectro-contador");
+  if (contador) contador.textContent = vivos.length ? (pos + 1) + "/" + vivos.length : "";
+}
+
+function spEspectadorMostrar(sim) {
+  var barra = document.querySelector("#sp-espectador");
+  if (!barra) return;
+  if (spEspectadorVisivel !== sim) {
+    spEspectadorVisivel = sim;
+    if (sim) spEspectroChave = "";
+  }
+  barra.style.display = sim ? "" : "none";
+  if (sim) spRenderEspectro();
+}
+
+function spAtualizarEspectador() {
+  spEspectadorMostrar(!spEu.vivo);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +337,7 @@ function spAtualizarHud() {
   var dobro = document.querySelector("#sp-dobro");
   dobro.style.display = spEu.dobro > 0 ? "" : "none";
   dobro.textContent = "2x energia (" + spEu.dobro + "s)";
-  document.querySelector("#sp-morreu").style.display = spEu.vivo ? "none" : "";
+  spAtualizarEspectador();
 
   document.querySelector("#sp-placar-lista").innerHTML = spPlacar.map(function (p, i) {
     var info = spInfo[p.pid] || {};
@@ -246,8 +357,16 @@ function spImagem(url) {
   if (!url) return null;
   if (spImagens[url] !== undefined) return spImagens[url] || null;
   var img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onerror = function () { spImagens[url] = false; };
+  // Sem crossOrigin: a imagem só entra no canvas (nunca lemos os pixels),
+  // e muitos hosts não mandam CORS — pedir CORS deixava a skin personalizada
+  // falhando e virando uma bolinha cor sólida.
+  img.onerror = function () {
+    spImagens[url] = false;
+    // Volta a tentar daqui a pouco: pode ter sido um tranco de rede.
+    setTimeout(function () {
+      if (spImagens[url] === false) delete spImagens[url];
+    }, 20000);
+  };
   img.src = url;
   spImagens[url] = img;
   return img;
@@ -352,8 +471,11 @@ function spDesenharCelula(ctx, celula, tempo) {
   ctx.arc(x, y, r - ctx.lineWidth / 2, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Foto do Discord no meio da bola (só quando cabe).
-  var raioFoto = r * 0.62;
+  // Foto do Discord no meio da bola (só quando cabe). Com skin de imagem
+  // personalizada ela encolhe, senão tapava a arte que o jogador comprou.
+  var arteDeFundo = !!(info.skin && info.skin.padrao === "imagem" &&
+    spImagemPronta(spImagem(info.skin.imagem)));
+  var raioFoto = r * (arteDeFundo ? 0.44 : 0.62);
   if (raioFoto >= 11) {
     var foto = spImagem(info.avatar);
     ctx.save();
@@ -429,13 +551,13 @@ function spDesenhar(tempo) {
   }
   ctx.stroke();
 
-  // Borda mortal
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = "rgba(255,90,90,.85)";
-  ctx.setLineDash([26, 18]);
-  ctx.lineDashOffset = -(tempo / 22);
+  // Paredes da arena: não matam mais — as bolinhas só deslizam por elas.
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = "rgba(96,132,214,.5)";
   ctx.strokeRect(0, 0, spArena, spArena);
-  ctx.setLineDash([]);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(160,196,255,.35)";
+  ctx.strokeRect(0, 0, spArena, spArena);
 
   // Energia espalhada
   spPellets.forEach(function (p) {
@@ -445,23 +567,56 @@ function spDesenhar(tempo) {
     ctx.fill();
   });
 
-  // Itens especiais
+  // Itens especiais (2x energia / 2x tamanho): bem maiores e brilhantes
+  // pra dá pra achar de longe. Nascem em leva e somem em 10s.
+  var raioPowerup = (spConfig && spConfig.powerup_raio) || 34;
   spPowerups.forEach(function (p) {
-    var pulso = 1 + Math.sin(tempo / 180) * 0.12;
-    var r = 20 * pulso;
+    // p[3] = segundos que ainda faltam: nos últimos 3s o item vai sumindo.
+    var restante = typeof p[3] === "number" ? p[3] : 10;
+    var some = restante <= 3 ? Math.max(0.15, restante / 3) : 1;
     ctx.save();
-    ctx.shadowColor = p[2] === "energia2x" ? "#ffd36a" : "#ff9ecf";
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = p[2] === "energia2x" ? "#ffd36a" : "#ff9ecf";
+    ctx.globalAlpha = some;
+    var ehEnergia = p[2] === "energia2x";
+    var cor = ehEnergia ? "#ffd36a" : "#ff9ecf";
+    var pulso = 1 + Math.sin(tempo / 220) * 0.09;
+    var r = raioPowerup * pulso;
+
+    // Halo pulsante ao redor
+    ctx.save();
+    ctx.globalAlpha = (0.22 + Math.sin(tempo / 300) * 0.1) * some;
+    ctx.fillStyle = cor;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r * 1.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.shadowColor = cor;
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = cor;
     ctx.beginPath();
     ctx.arc(p[0], p[1], r, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,255,255,.92)";
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+
     ctx.fillStyle = "#1a1330";
-    ctx.font = "bold 18px system-ui, sans-serif";
+    ctx.font = "bold " + Math.round(r * 0.62) + "px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(p[2] === "energia2x" ? "2E" : "2X", p[0], p[1] + 1);
+    ctx.fillText(ehEnergia ? "2E" : "2X", p[0], p[1] + 1);
+    ctx.font = "bold " + Math.round(r * 0.42) + "px system-ui, sans-serif";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(10,14,26,.85)";
+    ctx.strokeText(ehEnergia ? "2x ENERGIA" : "2x TAMANHO", p[0], p[1] + r * 1.12);
+    ctx.fillStyle = cor;
+    ctx.fillText(ehEnergia ? "2x ENERGIA" : "2x TAMANHO", p[0], p[1] + r * 1.12);
+    ctx.restore();
   });
 
   // Bolas: menores primeiro pra maior ficar por cima
@@ -541,6 +696,19 @@ var SP_TECLAS = {
 
 function spTeclaBaixo(ev) {
   if (!spAtivo) return;
+  // Morto: as setinhas viram "quem estou assistindo".
+  if (spFase === "jogando" && !spEu.vivo) {
+    if (ev.code === "ArrowLeft") {
+      ev.preventDefault();
+      spEspectroMover(-1);
+      return;
+    }
+    if (ev.code === "ArrowRight") {
+      ev.preventDefault();
+      spEspectroMover(1);
+      return;
+    }
+  }
   var acao = SP_TECLAS[ev.code];
   if (acao) {
     ev.preventDefault();
@@ -654,7 +822,11 @@ async function abrirSplano() {
   spAjustarCanvas();
   spEsconderPaineis();
   document.querySelector("#sp-espera").style.display = "";
+  spEspectadorMostrar(false);
   spCelulas = {};
+  spVivosPids = [];
+  spEspectroPid = 0;
+  spPronto = false;
   spCamera.prontoX = false;
   spConectar();
   // Leva a arena pra vista: em notebook a tela do jogo fica abaixo da dobra.
@@ -675,6 +847,9 @@ function spSair() {
   clearTimeout(spSeguraTimer);
   spTeclas = {};
   spSoltando = false;
+  spPronto = false;
+  spEspectroPid = 0;
+  spVivosPids = [];
   if (spWs) {
     var ws = spWs;
     spWs = null;
@@ -693,6 +868,16 @@ function spSair() {
   spLigarControles();
   document.querySelector("#sp-dividir").addEventListener("click", function () {
     spEnviar({ tipo: "dividir" });
+  });
+  document.querySelector("#sp-pronto").addEventListener("click", function () {
+    spPronto = !spPronto;
+    spEnviar({ tipo: "pronto", ativo: spPronto });
+  });
+  document.querySelector("#sp-espectro-anterior").addEventListener("click", function () {
+    spEspectroMover(-1);
+  });
+  document.querySelector("#sp-espectro-proximo").addEventListener("click", function () {
+    spEspectroMover(1);
   });
   var botaoSoltar = document.querySelector("#sp-soltar");
   ["mousedown", "touchstart"].forEach(function (evento) {

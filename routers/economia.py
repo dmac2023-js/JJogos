@@ -20,10 +20,13 @@ from shared.economia import (
     ROLETA_FATIAS,
     carregar_economia,
     carteira_publica,
+    consulta_admin,
     creditar_moedas,
     decoracao_existe,
+    debitar_moedas,
     eh_admin_discord_id,
     girar_roleta,
+    limpar_itens_admin,
     obter_carteira,
     perfil_publico,
     preco_decoracao_item,
@@ -91,6 +94,12 @@ class DoarMoedas(BaseModel):
     admin_id: str
     alvo_id: str
     quantidade: int
+    acao: str = "adicionar"  # "adicionar" | "remover"
+
+
+class AdminAlvo(BaseModel):
+    admin_id: str
+    alvo_id: str
 
 
 class TempoJogo(BaseModel):
@@ -320,17 +329,12 @@ def obter_perfil_jogador(nome: str = ""):
     return perfil
 
 
-@router.post("/economia/admin/doar")
-def admin_doar_moedas(dados: DoarMoedas):
-    """Só o(s) ID(s) em ADMIN_DISCORD_IDS conseguem creditar moedas pra
-    qualquer jogador (inclusive pra si mesmo, usando o próprio ID). Nunca
-    confia num "sou admin" mandado pelo cliente — o ID é checado aqui."""
-    if not eh_admin_discord_id(dados.admin_id):
+def _alvo_admin(admin_id: str, alvo_id: str) -> str:
+    """Checa o ID do admin e resolve o alvo (ID do Discord ou username).
+    Nunca confia num "sou admin" mandado pelo cliente — o ID é checado aqui."""
+    if not eh_admin_discord_id(admin_id):
         raise HTTPException(status_code=403, detail="Você não tem permissão para isso.")
-    if dados.quantidade <= 0 or dados.quantidade > 1_000_000_000:
-        raise HTTPException(status_code=400, detail="Quantidade inválida.")
-
-    nome_alvo = resolver_nome_alvo(dados.alvo_id.strip())
+    nome_alvo = resolver_nome_alvo((alvo_id or "").strip())
     if not nome_alvo:
         raise HTTPException(
             status_code=404,
@@ -338,6 +342,38 @@ def admin_doar_moedas(dados: DoarMoedas):
                     "precisa ter aberto o site logada pelo menos uma vez recentemente (versão "
                     "atual). Tente também o @username dela do Discord direto."),
         )
+    return nome_alvo
 
-    novo_saldo = creditar_moedas(nome_alvo, dados.quantidade)
-    return {"nome": nome_alvo, "saldo": novo_saldo}
+
+@router.post("/economia/admin/consultar")
+def admin_consultar(dados: AdminAlvo):
+    """Saldo e itens da loja de um jogador — o admin digita o ID e vê quanto
+    a pessoa tem antes de adicionar/remover moedas."""
+    nome_alvo = _alvo_admin(dados.admin_id, dados.alvo_id)
+    return consulta_admin(nome_alvo)
+
+
+@router.post("/economia/admin/doar")
+def admin_doar_moedas(dados: DoarMoedas):
+    """Só o(s) ID(s) em ADMIN_DISCORD_IDS conseguem creditar/remover moedas
+    de qualquer jogador (inclusive pra si mesmo, usando o próprio ID)."""
+    if dados.quantidade <= 0 or dados.quantidade > 1_000_000_000:
+        raise HTTPException(status_code=400, detail="Quantidade inválida.")
+    nome_alvo = _alvo_admin(dados.admin_id, dados.alvo_id)
+
+    if dados.acao == "remover":
+        novo_saldo = debitar_moedas(nome_alvo, dados.quantidade)
+    else:
+        novo_saldo = creditar_moedas(nome_alvo, dados.quantidade)
+    if novo_saldo is None:
+        raise HTTPException(status_code=400, detail="Não consegui alterar o saldo desse jogador.")
+    return {"nome": nome_alvo, "saldo": novo_saldo,
+            "itens": consulta_admin(nome_alvo)["itens"]}
+
+
+@router.post("/economia/admin/limpar-itens")
+def admin_limpar_itens(dados: AdminAlvo):
+    """Apaga todos os itens que o jogador comprou/ganhou na loja (as moedas
+    continuam na conta)."""
+    nome_alvo = _alvo_admin(dados.admin_id, dados.alvo_id)
+    return limpar_itens_admin(nome_alvo)

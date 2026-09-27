@@ -5,19 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jogos no Discord</title>
     <base href="/" />
-    <link rel="stylesheet" href="./css/base.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/sudoku.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/velha.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/ludo.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/campo.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/termo.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/tela.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/perfil.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/loja.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/ranking.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/clickj.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/splano.css?v=20260927-01" />
-    <link rel="stylesheet" href="./css/assistir.css?v=20260927-01" />
+    <link rel="stylesheet" href="./css/base.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/sudoku.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/velha.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/ludo.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/campo.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/termo.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/tela.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/perfil.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/loja.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/ranking.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/clickj.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/splano.css?v=20260927-34" />
+    <link rel="stylesheet" href="./css/assistir.css?v=20260927-34" />
   </head>
   <body>
     <div id="app-split">
@@ -995,7 +995,7 @@
         <div class="titulo-tela">
           <h2>Loja</h2>
           <p>Troque suas moedas por decorações de perfil, cores e fontes de nick. Saldo: <strong id="loja-saldo">0</strong> moedas.</p>
-          <button id="loja-btn-admin-doar" type="button" class="botao-copiar" style="display:none;margin-top:8px;">💰 Doar/Gerar moedas</button>
+          <button id="loja-btn-admin-doar" type="button" class="botao-copiar" style="display:none;margin-top:8px;">💰 Moedas e itens</button>
         </div>
 
         <!-- Menu principal: escolher entre nametags (cor do nick) e decorações -->
@@ -1200,7 +1200,6 @@
 
               <div class="cj-acoes">
                 <button id="cj-abrir-loja" type="button" class="botao principal">🛒 Loja</button>
-                <button id="cj-converter" type="button" class="botao cj-converter-btn" style="display:none;">💱 Converter</button>
                 <button id="cj-rebirth" type="button" class="botao cj-rebirth-btn" style="display:none;">🔁 Rebirth</button>
               </div>
               <p id="cj-rebirth-dica" class="cj-dica"></p>
@@ -1275,7 +1274,7 @@
         <h2>Splano.io</h2>
         <p class="subtitulo">
           Coma as bolinhas de energia pra crescer, engula quem for menor e fuja de quem for maior.
-          Encostar na borda vermelha mata.
+          A arena é fechada: as bolinhas só deslizam pelas paredes.
         </p>
         <p id="sp-mensagem" class="mensagem erro" style="display:none;"></p>
 
@@ -1301,15 +1300,22 @@
             <button id="sp-dividir" type="button">✂️ Dividir</button>
           </div>
 
-          <div id="sp-morreu" style="display:none;">
-            Você foi comido!<br /><small>Assistindo até a próxima partida.</small>
+          <div id="sp-espectador" class="sp-espectador" style="display:none;">
+            <div class="sp-espectador-mensagem">Você foi comido — escolha quem assistir</div>
+            <div class="sp-espectador-barra">
+              <button id="sp-espectro-anterior" type="button" aria-label="Jogador anterior">‹</button>
+              <div id="sp-espectro-perfil" class="sp-espectro-perfil"></div>
+              <span id="sp-espectro-contador" class="sp-espectro-contador"></span>
+              <button id="sp-espectro-proximo" type="button" aria-label="Próximo jogador">›</button>
+            </div>
           </div>
 
           <div id="sp-espera" class="sp-painel" style="display:none;">
             <div class="sp-painel-caixa">
-              <h3 id="sp-espera-titulo">Esperando jogadores</h3>
+              <h3 id="sp-espera-titulo">Votação pra começar</h3>
               <p id="sp-espera-texto"></p>
               <div id="sp-espera-lista"></div>
+              <button id="sp-pronto" type="button" class="botao principal sp-pronto">✅ Estou pronto</button>
             </div>
           </div>
 
@@ -1325,10 +1331,12 @@
 
         <p class="sp-dica-controles">
           <strong>Mover:</strong> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou as setinhas ·
-          <strong>Dividir:</strong> dois cliques na arena (ou <kbd>Espaço</kbd>) ·
+          <strong>Dividir:</strong> dois cliques na arena (ou <kbd>Espaço</kbd>) — as metades se juntam de novo em 5 segundos ·
           <strong>Soltar energia:</strong> segurar o botão esquerdo (ou <kbd>Shift</kbd>).<br />
           No celular: arraste pra andar, toque duas vezes pra dividir e segure o dedo pra soltar energia.
-          Vence quem sobrar sozinho ou tomar conta da arena — <strong>400 moedas</strong> pra quem vencer
+          A partida <strong>não começa sozinha</strong>: todo mundo precisa votar <strong>pronto</strong> (mínimo de 1 jogador real,
+          o resto é bot — até 20 jogadores). Morreu? Use as setinhas ‹ › pra escolher quem assistir.
+          Vence quem sobrar sozinho ou tomar conta da arena — <strong>100 moedas</strong> pra quem vencer
           e <strong>20</strong> por cada jogador engolido.
         </p>
       </section>
@@ -1372,18 +1380,18 @@
     </aside>
     </div>
 
-    <script src="./js/perfil.js?v=20260927-01"></script>
-    <script src="./js/loja.js?v=20260927-01"></script>
-    <script src="./js/ranking.js?v=20260927-01"></script>
-    <script src="./js/core.js?v=20260927-01"></script>
-    <script src="./js/sudoku.js?v=20260927-01"></script>
-    <script src="./js/velha.js?v=20260927-01"></script>
-    <script src="./js/ludo.js?v=20260927-01"></script>
-    <script src="./js/campo.js?v=20260927-01"></script>
-    <script src="./js/termo.js?v=20260927-01"></script>
-    <script src="./js/tela.js?v=20260927-01"></script>
-    <script src="./js/clickj.js?v=20260927-01"></script>
-    <script src="./js/splano.js?v=20260927-01"></script>
-    <script src="./js/assistir.js?v=20260927-01"></script>
+    <script src="./js/perfil.js?v=20260927-34"></script>
+    <script src="./js/loja.js?v=20260927-34"></script>
+    <script src="./js/ranking.js?v=20260927-34"></script>
+    <script src="./js/core.js?v=20260927-34"></script>
+    <script src="./js/sudoku.js?v=20260927-34"></script>
+    <script src="./js/velha.js?v=20260927-34"></script>
+    <script src="./js/ludo.js?v=20260927-34"></script>
+    <script src="./js/campo.js?v=20260927-34"></script>
+    <script src="./js/termo.js?v=20260927-34"></script>
+    <script src="./js/tela.js?v=20260927-34"></script>
+    <script src="./js/clickj.js?v=20260927-34"></script>
+    <script src="./js/splano.js?v=20260927-34"></script>
+    <script src="./js/assistir.js?v=20260927-34"></script>
   </body>
 </html>

@@ -847,9 +847,14 @@ async function tentarBonusAtividade() {
 }
 
 // ---------------------------------------------------------------------------
-// Admin: doar/gerar moedas (só aparece pra quem o servidor reconhece como
-// admin — o botão em si não dá acesso a nada, o endpoint checa o ID de novo).
+// Admin: doar/remover moedas e apagar itens (só aparece pra quem o servidor
+// reconhece como admin — o botão em si não dá acesso a nada, o endpoint
+// checa o ID de novo).
 // ---------------------------------------------------------------------------
+var ESTILO_INPUT_ADMIN =
+  "width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;" +
+  "background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;";
+
 function fecharModalAdminDoar() {
   var overlay = document.querySelector("#admin-doar-modal");
   if (overlay) overlay.remove();
@@ -869,56 +874,140 @@ function abrirModalAdminDoar() {
   card.className = "rmodal-card";
   card.innerHTML =
     '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
-    "<h3>💰 Doar/Gerar moedas</h3>" +
-    '<p style="color:#aeb2c7;font-size:13px;">Credita moedas (Jogos7, não Jcoins do ClickJ) na conta de quem você quiser.</p>' +
+    "<h3>💰 Moedas e itens</h3>" +
+    '<p style="color:#aeb2c7;font-size:13px;">Digite o ID do jogador pra ver o saldo dele e depois adicione, remova moedas ou apague os itens da loja.</p>' +
     '<label style="display:block;margin-top:10px;">ID do Discord ou @username' +
-    '<input id="admin-doar-id" type="text" placeholder="Ex: 1527038915628761110 ou kaizo"' +
-    ' style="width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;"></label>' +
+    '<input id="admin-doar-id" type="text" placeholder="Ex: 1527038915628761110 ou kaizo" style="' + ESTILO_INPUT_ADMIN + '"></label>' +
+    '<button id="admin-consultar" type="button" class="botao-copiar" style="margin-top:8px;width:100%;">🔍 Consultar jogador</button>' +
+    '<div id="admin-doar-info" style="display:none;margin-top:12px;padding:10px 12px;border:1px solid #26314f;border-radius:10px;background:#0d1424;font-size:13px;color:#c9ccda;"></div>' +
     '<label style="display:block;margin-top:10px;">Quantidade de moedas' +
-    '<input id="admin-doar-qtd" type="number" min="1" step="1" value="100"' +
-    ' style="width:100%;margin-top:4px;padding:9px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:14px;box-sizing:border-box;"></label>' +
-    '<p id="admin-doar-erro" class="mensagem erro" style="display:none;margin-top:8px;"></p>' +
-    '<button id="admin-doar-confirmar" type="button" class="botao-copiar" style="margin-top:14px;width:100%;">Doar/Gerar</button>';
+    '<input id="admin-doar-qtd" type="number" min="1" step="1" value="100" style="' + ESTILO_INPUT_ADMIN + '"></label>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;">' +
+    '<button id="admin-add" type="button" class="botao-copiar" style="flex:1;">➕ Adicionar</button>' +
+    '<button id="admin-rem" type="button" class="botao-copiar" style="flex:1;">➖ Remover</button>' +
+    "</div>" +
+    '<button id="admin-limpar-itens" type="button" class="botao-copiar" style="margin-top:8px;width:100%;background:#3a1414;color:#ffc9c9;">🗑️ Remover todos os itens da loja</button>' +
+    '<p id="admin-doar-erro" class="mensagem erro" style="display:none;margin-top:8px;"></p>';
 
   overlay.appendChild(card);
   document.body.appendChild(overlay);
   card.querySelector(".rmodal-fechar").addEventListener("click", fecharModalAdminDoar);
-  card.querySelector("#admin-doar-confirmar").addEventListener("click", confirmarAdminDoar);
+  card.querySelector("#admin-consultar").addEventListener("click", adminConsultar);
+  card.querySelector("#admin-add").addEventListener("click", function () { adminAlterar("adicionar"); });
+  card.querySelector("#admin-rem").addEventListener("click", function () { adminAlterar("remover"); });
+  card.querySelector("#admin-limpar-itens").addEventListener("click", adminLimparItens);
+  card.querySelector("#admin-doar-id").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") adminConsultar();
+  });
 }
 
-async function confirmarAdminDoar() {
-  var idInput = document.querySelector("#admin-doar-id");
-  var qtdInput = document.querySelector("#admin-doar-qtd");
+function adminErro(texto) {
   var erroEl = document.querySelector("#admin-doar-erro");
-  var alvoId = (idInput.value || "").trim();
+  if (!erroEl) return;
+  erroEl.textContent = texto || "";
+  erroEl.style.display = texto ? "" : "none";
+}
+
+function adminAlvo() {
+  var idInput = document.querySelector("#admin-doar-id");
+  var alvoId = ((idInput && idInput.value) || "").trim();
+  if (!alvoId) {
+    adminErro("Digite o ID do Discord ou o @username do jogador.");
+    return null;
+  }
+  adminErro("");
+  return alvoId;
+}
+
+function adminRenderInfo(dados) {
+  var info = document.querySelector("#admin-doar-info");
+  if (!info) return;
+  var itens = dados.itens || {};
+  info.style.display = "";
+  info.innerHTML =
+    "<strong>" + escapeHtml(dados.nick || dados.nome) + "</strong> (" + escapeHtml(dados.nome) + ")<br>" +
+    "Saldo: <strong style='color:#ffd36a;'>" + dados.saldo + " moedas</strong><br>" +
+    "Itens da loja: <strong style='color:#9dc2ff;'>" + (itens.total || 0) + "</strong> — " +
+    (itens.decoracoes || 0) + " decorações, " + (itens.cores_nick || 0) + " cores, " +
+    (itens.fontes_nick || 0) + " fontes, " + (itens.skins_splano || 0) + " skins.";
+}
+
+async function adminConsultar() {
+  var alvoId = adminAlvo();
+  if (!alvoId) return;
+  try {
+    var resp = await fetch("./economia/admin/consultar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId }),
+    });
+    var dados = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) {
+      adminErro(dados.detail || "Não consegui achar esse jogador.");
+      return;
+    }
+    adminRenderInfo(dados);
+  } catch (e) {
+    adminErro("Não foi possível consultar agora.");
+  }
+}
+
+async function adminAlterar(acao) {
+  var alvoId = adminAlvo();
+  if (!alvoId) return;
+  var qtdInput = document.querySelector("#admin-doar-qtd");
   var quantidade = parseInt(qtdInput.value, 10);
-  erroEl.style.display = "none";
-  if (!alvoId || !quantidade || quantidade <= 0) {
-    erroEl.textContent = "Preencha o ID e uma quantidade válida.";
-    erroEl.style.display = "";
+  if (!quantidade || quantidade <= 0) {
+    adminErro("Digite uma quantidade válida de moedas.");
     return;
   }
   try {
     var resp = await fetch("./economia/admin/doar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId, quantidade: quantidade }),
+      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId,
+                             quantidade: quantidade, acao: acao }),
     });
     var dados = await resp.json().catch(function () { return {}; });
     if (!resp.ok) {
-      erroEl.textContent = dados.detail || "Não foi possível doar.";
-      erroEl.style.display = "";
+      adminErro(dados.detail || "Não foi possível alterar o saldo.");
       return;
     }
-    fecharModalAdminDoar();
-    alert("Creditado! Novo saldo de " + dados.nome + ": " + dados.saldo + " moedas.");
+    adminRenderInfo(dados);
     if (dados.nome === nomeUsuario()) {
       minhaCarteira.saldo = dados.saldo;
       lojaAtualizarSaldoTelas();
     }
+    adminErro("");
   } catch (e) {
-    erroEl.textContent = "Não foi possível doar agora.";
-    erroEl.style.display = "";
+    adminErro("Não foi possível alterar o saldo agora.");
+  }
+}
+
+async function adminLimparItens() {
+  var alvoId = adminAlvo();
+  if (!alvoId) return;
+  if (!confirm("Apagar TODOS os itens da loja desse jogador? As moedas ficam na conta.")) return;
+  try {
+    var resp = await fetch("./economia/admin/limpar-itens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId }),
+    });
+    var dados = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) {
+      adminErro(dados.detail || "Não consegui apagar os itens.");
+      return;
+    }
+    adminRenderInfo(dados);
+    adminErro("");
+    if (dados.nome === nomeUsuario()) {
+      await atualizarMoedasHeader();
+      var telaLoja = document.querySelector("#tela-loja");
+      if (telaLoja && telaLoja.classList.contains("ativa")) lojaMostrarMenu();
+    }
+  } catch (e) {
+    adminErro("Não foi possível apagar os itens agora.");
   }
 }
 

@@ -2,7 +2,9 @@
 
 O cliente só manda intenção (direção, dividir, soltar energia); posição,
 tamanho, quem comeu quem e o fim da partida são decididos aqui, num tick fixo.
-A sala espera 2 jogadores de verdade pra começar e completa com bots.
+A partida NÃO começa sozinha: todo mundo conectado precisa votar "pronto"
+(mínimo de 1 humano) e aí sim conta regressiva — o resto da arena é
+completado com bots (até 20 jogadores no total).
 """
 import asyncio
 import json
@@ -23,9 +25,9 @@ router = APIRouter()
 TICKS_POR_SEGUNDO = 20
 DT = 1.0 / TICKS_POR_SEGUNDO
 TICKS_POR_PENSAMENTO_BOT = 4      # bots decidem 5x por segundo
-HUMANOS_PARA_COMECAR = 2
-PARTICIPANTES_MINIMO = 6
-PARTICIPANTES_MAXIMO = 14
+HUMANOS_PARA_COMECAR = 1          # com 1 humano pronto já dá pra jogar (19 bots)
+PARTICIPANTES_MINIMO = 20         # a arena sempre enche até aqui com bots
+PARTICIPANTES_MAXIMO = 20
 SEGUNDOS_CONTAGEM = 5
 SEGUNDOS_PLACAR_FINAL = 10
 SALA_PADRAO = "publica"
@@ -42,9 +44,10 @@ def _nova_sala(codigo: str) -> dict:
     return {
         "codigo": codigo,
         "jogo": regras.novo_jogo(),
-        "conexoes": {},        # nome -> {ws, nick, avatar, cosmeticos, skin, visao}
+        "conexoes": {},        # nome -> {ws, nick, avatar, cosmeticos, skin, assistindo}
         "pids": {},            # nome -> id curto usado no tick
         "proximo_pid": 1,
+        "prontos": set(),      # quem já votou "pronto" nesta rodada
         "contagem_ate": 0.0,
         "fim_em": 0.0,
         "resultado": None,
@@ -66,6 +69,27 @@ def _humanos(sala: dict) -> list:
 
 def _humanos_conectados(sala: dict) -> list:
     return [n for n in sala["conexoes"] if n in sala["jogo"]["jogadores"]]
+
+
+def _humanos_prontos(sala: dict) -> list:
+    return [n for n in _humanos_conectados(sala) if n in sala["prontos"]]
+
+
+def _todos_prontos(sala: dict) -> bool:
+    """A votação só passa quando TODOS os humanos conectados votaram pronto."""
+    conectados = _humanos_conectados(sala)
+    return bool(conectados) and len(_humanos_prontos(sala)) == len(conectados)
+
+
+def _nome_por_pid(sala: dict, pid) -> Optional[str]:
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    for nome, valor in sala["pids"].items():
+        if valor == pid:
+            return nome
+    return None
 
 
 async def _enviar(sala: dict, nome: str, mensagem: dict) -> None:
@@ -103,6 +127,7 @@ def _info_jogadores(sala: dict) -> list:
         "cosmeticos": j["cosmeticos"],
         "skin": j["skin"],
         "bot": j["bot"],
+        "pronto": (not j["bot"]) and nome in sala["prontos"],
     } for nome, j in sala["jogo"]["jogadores"].items()]
 
 
@@ -111,8 +136,9 @@ async def _mandar_sala(sala: dict, para: Optional[str] = None) -> None:
         "tipo": "sala",
         "fase": sala["jogo"]["fase"],
         "jogadores": _info_jogadores(sala),
-        "humanos": len(_humanos(sala)),
+        "humanos": len(_humanos_conectados(sala)),
         "humanos_necessarios": HUMANOS_PARA_COMECAR,
+        "prontos": len(_humanos_prontos(sala)),
         "contagem": max(0, int(math.ceil(sala["contagem_ate"] - time.time()))) if sala["jogo"]["fase"] == "contagem" else 0,
     }
     if para:
@@ -145,10 +171,14 @@ def _cor_bot(i: int) -> str:
 
 
 async def _talvez_comecar(sala: dict) -> None:
+    """Começa só quando todo mundo conectado votou "pronto" (mínimo de
+    HUMANOS_PARA_COMECAR humano) — nunca sozinho só por ter gente na sala."""
     jogo = sala["jogo"]
     if jogo["fase"] != "espera":
         return
     if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR:
+        return
+    if not _todos_prontos(sala):
         return
     jogo["fase"] = "contagem"
     sala["contagem_ate"] = time.time() + SEGUNDOS_CONTAGEM
@@ -245,31 +275,40 @@ def _reiniciar_para_espera(sala: dict) -> None:
     jogo["fase"] = "espera"
     jogo["vencedor"] = None
     sala["resultado"] = None
+    sala["prontos"].clear()
 
 
 # ---------------------------------------------------------------------------
 # Envio do estado (com corte do que está fora da tela)
 # ---------------------------------------------------------------------------
 
-def _centro_da_camera(jogo: dict, jogador: Optional[dict]) -> tuple:
+def _centro_da_camera(jogo: dict, jogador: Optional[dict],
+                      observando: Optional[str] = None) -> tuple:
     if jogador and jogador["vivo"] and jogador["celulas"]:
-        total = sum(c["energia"] for c in jogador["celulas"]) or 1
-        x = sum(c["x"] * c["energia"] for c in jogador["celulas"]) / total
-        y = sum(c["y"] * c["energia"] for c in jogador["celulas"]) / total
-        return x, y
+        return _centro(jogador)
+    # Morreu (ou nunca entrou): assiste quem o jogador escolheu.
+    alvo = jogo["jogadores"].get(observando or "")
+    if alvo and alvo["vivo"] and alvo["celulas"]:
+        return _centro(alvo)
     restantes = regras.vivos(jogo)
-    if restantes:  # morreu: assiste quem está liderando
-        lider = max(restantes, key=regras.energia_total)
-        if lider["celulas"]:
-            maior = max(lider["celulas"], key=lambda c: c["energia"])
-            return maior["x"], maior["y"]
+    if restantes:  # sem escolha válida: segue quem está liderando
+        return _centro(max(restantes, key=regras.energia_total))
     return regras.ARENA / 2, regras.ARENA / 2
+
+
+def _centro(jogador: dict) -> tuple:
+    total = sum(c["energia"] for c in jogador["celulas"]) or 1
+    x = sum(c["x"] * c["energia"] for c in jogador["celulas"]) / total
+    y = sum(c["y"] * c["energia"] for c in jogador["celulas"]) / total
+    return x, y
 
 
 def _estado_para(sala: dict, nome: str, agora: float) -> dict:
     jogo = sala["jogo"]
     eu = jogo["jogadores"].get(nome)
-    cx, cy = _centro_da_camera(jogo, eu)
+    conexao = sala["conexoes"].get(nome) or {}
+    assistindo = conexao.get("assistindo") if (not eu or not eu["vivo"]) else None
+    cx, cy = _centro_da_camera(jogo, eu, assistindo)
     meu_raio = regras.RAIO_BASE
     if eu and eu["celulas"]:
         meu_raio = max(regras.raio(c["energia"]) for c in eu["celulas"])
@@ -294,7 +333,9 @@ def _estado_para(sala: dict, nome: str, agora: float) -> dict:
     pellets = [[round(p["x"], 1), round(p["y"], 1), p["v"]]
                for p in jogo["pellets"].values()
                if abs(p["x"] - cx) <= alcance and abs(p["y"] - cy) <= alcance]
-    powerups = [[round(p["x"], 1), round(p["y"], 1), p["tipo"]]
+    # [x, y, tipo, restante] — o cliente apaga o brilho quando tá acabando
+    powerups = [[round(p["x"], 1), round(p["y"], 1), p["tipo"],
+                 round(max(0.0, regras.POWERUP_VIDA - (agora - p.get("nasceu", agora))), 1)]
                 for p in jogo["powerups"].values()
                 if abs(p["x"] - cx) <= alcance + 60 and abs(p["y"] - cy) <= alcance + 60]
 
@@ -309,7 +350,9 @@ def _estado_para(sala: dict, nome: str, agora: float) -> dict:
         "cx": round(cx, 1), "cy": round(cy, 1), "alcance": round(alcance, 1),
         "celulas": celulas, "pellets": pellets, "powerups": powerups,
         "placar": placar[:10],
+        "vivos_pids": [_pid(sala, n) for n, j in jogo["jogadores"].items() if j["vivo"]],
         "vivo": bool(eu and eu["vivo"]),
+        "assistindo": _pid(sala, assistindo) if assistindo else 0,
         "protegido": max(0, round((eu or {}).get("protegido_ate", 0) - agora, 1)) if eu else 0,
         "energia": round(regras.energia_total(eu)) if eu else 0,
         "kills": eu["kills"] if eu else 0,
@@ -329,7 +372,8 @@ async def _tick(sala: dict) -> None:
     sala["tick"] += 1
 
     if jogo["fase"] == "contagem":
-        if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR:
+        if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR or not _todos_prontos(sala):
+            # Alguém desistiu/entrou no meio da contagem: volta pra votação.
             jogo["fase"] = "espera"
             await _mandar_sala(sala)
         elif agora >= sala["contagem_ate"]:
@@ -361,10 +405,6 @@ async def _tick(sala: dict) -> None:
         if vitima and caçador:
             await _transmitir(sala, {"tipo": "morte", "nick": vitima["nick"],
                                      "por": caçador["nick"]})
-    for nome in eventos["bordas"]:
-        jogador = jogo["jogadores"].get(nome)
-        if jogador:
-            await _transmitir(sala, {"tipo": "morte", "nick": jogador["nick"], "por": None})
 
     for nome in list(sala["conexoes"]):
         await _enviar(sala, nome, _estado_para(sala, nome, agora))
@@ -405,6 +445,14 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
     if tipo == "ping":
         await _enviar(sala, nome, {"tipo": "pong"})
         return
+    if tipo == "assistir":
+        # Escolha de quem observar depois de morrer — dá até pra quem entrou
+        # no meio da partida e nem está jogando.
+        conexao = sala["conexoes"].get(nome)
+        if conexao is not None:
+            alvo = _nome_por_pid(sala, dados.get("pid"))
+            conexao["assistindo"] = alvo if alvo in sala["jogo"]["jogadores"] else None
+        return
     if not jogador:
         return
     if tipo == "dir":
@@ -416,6 +464,18 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
         regras.dividir(sala["jogo"], jogador, time.time())
     elif tipo == "soltar":
         jogador["soltando"] = bool(dados.get("ativo"))
+    elif tipo == "pronto":
+        if bool(dados.get("ativo", True)):
+            sala["prontos"].add(nome)
+        else:
+            sala["prontos"].discard(nome)
+            # Desistiu no meio da contagem: volta pra votação.
+            if sala["jogo"]["fase"] == "contagem":
+                sala["jogo"]["fase"] = "espera"
+        fase = sala["jogo"]["fase"]
+        await _talvez_comecar(sala)          # só transmite se começar de fato
+        if sala["jogo"]["fase"] == fase:
+            await _mandar_sala(sala)
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +527,8 @@ async def ws_splano(websocket: WebSocket):
         skin = {}
 
     sala["conexoes"][nome] = {"ws": websocket, "nick": nick, "avatar": avatar,
-                              "cosmeticos": cosmeticos, "skin": skin}
+                              "cosmeticos": cosmeticos, "skin": skin,
+                              "assistindo": None}
 
     jogo = sala["jogo"]
     if nome in jogo["jogadores"]:
@@ -477,6 +538,11 @@ async def ws_splano(websocket: WebSocket):
     elif jogo["fase"] in ("espera", "contagem"):
         regras.entrar(jogo, nome, nick, avatar, cosmeticos, skin)
     # Partida em andamento: fica só assistindo até a próxima.
+
+    # Quem chegou durante a contagem ainda não votou "pronto" — a votação
+    # volta atrás pra todo mundo decidir de novo.
+    if jogo["fase"] == "contagem" and nome not in sala["prontos"]:
+        jogo["fase"] = "espera"
 
     _pid(sala, nome)
     _garantir_loop(sala)
@@ -492,6 +558,10 @@ async def ws_splano(websocket: WebSocket):
             "moedas_kill": regras.MOEDAS_KILL,
             "energia_minima_dividir": regras.ENERGIA_MINIMA_DIVIDIR,
             "dobro_segundos": int(regras.DOBRO_ENERGIA_SEGUNDOS),
+            "powerup_raio": regras.POWERUP_RAIO,
+            "powerup_vida": int(regras.POWERUP_VIDA),
+            "juntar_segundos": regras.SEGUNDOS_PARA_JUNTAR,
+            "jogadores": PARTICIPANTES_MAXIMO,
         },
     })
     await _mandar_sala(sala)
@@ -515,6 +585,7 @@ async def ws_splano(websocket: WebSocket):
     finally:
         if (sala["conexoes"].get(nome) or {}).get("ws") is websocket:
             sala["conexoes"].pop(nome, None)
+            sala["prontos"].discard(nome)
             jogador = sala["jogo"]["jogadores"].get(nome)
             if jogador and sala["jogo"]["fase"] in ("espera", "contagem"):
                 sala["jogo"]["jogadores"].pop(nome, None)

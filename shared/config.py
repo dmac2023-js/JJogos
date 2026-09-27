@@ -23,7 +23,11 @@ ARQUIVO_TERMO_PALAVRAS_VALIDAS = PASTA_BASE / "termo_palavras_validas.txt"
 DISCORD_APPLICATION_ID = os.getenv("DISCORD_APPLICATION_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY", "")
-OAUTH_REDIRECT_PADRAO = "https://jogos7.onrender.com/auth/callback"
+# Origem pública do site. Trocar de host (Render -> Discloud -> etc.) é só
+# mudar SITE_URL na env; o redirect do OAuth acompanha. OAUTH_REDIRECT_URI
+# continua valendo como override direto do callback.
+SITE_URL = os.getenv("SITE_URL", "https://jogos7.discloud.app").rstrip("/")
+OAUTH_REDIRECT_PADRAO = f"{SITE_URL}/auth/callback"
 
 # Upstash Redis (REST) — guarda recordes.json e economia.json fora do disco
 # do Render, que é efêmero e reseta a cada deploy. Sem essas duas variáveis
