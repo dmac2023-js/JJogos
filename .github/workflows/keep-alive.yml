@@ -1,0 +1,18 @@
+name: Manter Render acordado
+
+# Serviço está no plano Free do Render, que dorme depois de ~15min sem
+# tráfego — a próxima requisição real (ex: alguém abrindo a Activity)
+# então demora 10-50s pra acordar o container, tempo suficiente pra o
+# Discord mobile desistir e fechar a Activity sozinho. Batendo no /saude
+# de tempos em tempos, o serviço nunca chega a dormir.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /saude
+        run: curl -fsS --max-time 30 https://jogos7.onrender.com/saude
