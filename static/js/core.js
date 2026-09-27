@@ -111,9 +111,9 @@ function mostrarTela(tela) {
 }
 
 // ---------------------------------------------------------------------------
-// "Quem está jogando agora" — painel embaixo da lista de jogos.
-// Só consulta enquanto a lista está à vista: ninguém precisa do contador
-// enquanto joga, e a VM é pequena demais pra responder pergunta à toa.
+// "N jogando agora" dentro de cada cartão da lista de jogos, embaixo da
+// descrição. Só consulta enquanto a lista está à vista: ninguém precisa do
+// número enquanto joga, e a VM é pequena demais pra responder pergunta à toa.
 // ---------------------------------------------------------------------------
 var onlineTimer = null;
 var ONLINE_INTERVALO = 15000;
@@ -128,26 +128,47 @@ function onlineAcompanhar(ligado) {
   onlineTimer = setInterval(onlineAtualizar, ONLINE_INTERVALO);
 }
 
+// A linha não existe no HTML: é criada aqui, dentro do mesmo <span> que já tem
+// o nome e a descrição do jogo. O id do botão é "jogo-<chave>", a mesma chave
+// que o servidor devolve.
+function onlineLinhaDoCartao(chave) {
+  var cartao = document.querySelector("#jogo-" + chave);
+  if (!cartao) return null;
+  var linha = cartao.querySelector(".cartao-online");
+  if (linha) return linha;
+  // Nada de ":has()" aqui: em navegador que nao o suporta, querySelector
+  // LANCA em vez de devolver null. O <strong> com o nome do jogo mora no
+  // mesmo <span> da descricao, entao o pai dele ja e o lugar certo.
+  var nome = cartao.querySelector("strong");
+  var texto = nome && nome.parentNode;
+  if (!texto) return null;
+  linha = document.createElement("small");
+  linha.className = "cartao-online";
+  texto.appendChild(linha);
+  return linha;
+}
+
 async function onlineAtualizar() {
-  var lista = document.querySelector("#online-lista");
-  var totalEl = document.querySelector("#online-total");
-  if (!lista) return;
+  if (!document.querySelector("#tela-jogos")) return;
   try {
     var resp = await fetch("./online");
     if (!resp.ok) throw new Error("falhou");
     var dados = await resp.json();
-    var jogos = dados.jogos || [];
-    totalEl.textContent = dados.total === 1 ? "1 pessoa" : dados.total + " pessoas";
-    lista.innerHTML = jogos.map(function (j) {
-      return '<li class="' + (j.online > 0 ? "tem-gente" : "") + '">' +
-        "<span>" + j.nome + "</span>" +
-        '<span class="online-quantos"><span class="online-bolinha"></span>' +
-        j.online + "</span></li>";
-    }).join("");
-    if (!jogos.length) lista.innerHTML = '<li class="vazio">Sem informação agora.</li>';
+    (dados.jogos || []).forEach(function (j) {
+      var linha = onlineLinhaDoCartao(j.chave);
+      if (!linha) return;
+      linha.classList.toggle("tem-gente", j.online > 0);
+      linha.innerHTML = '<span class="online-bolinha"></span>' +
+        (j.online === 0 ? "ninguém jogando agora"
+          : j.online === 1 ? "1 pessoa jogando agora"
+            : j.online + " pessoas jogando agora");
+    });
   } catch (e) {
-    totalEl.textContent = "—";
-    lista.innerHTML = '<li class="vazio">Não deu pra saber agora.</li>';
+    // Sem rede: apaga os números em vez de deixar um valor velho na tela.
+    document.querySelectorAll(".cartao-online").forEach(function (linha) {
+      linha.classList.remove("tem-gente");
+      linha.textContent = "";
+    });
   }
 }
 

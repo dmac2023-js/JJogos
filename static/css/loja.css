@@ -156,3 +156,10 @@
 }
 
 .loja-roleta-legenda .loja-roleta-nota { color: #7b8299; font-size: 12px; margin-top: 4px; }
+
+/* Confirmação da loja (all-in, ações de admin) — feita em HTML porque a
+   sandbox da Activity do Discord engole confirm(). */
+.loja-confirma-corpo p { margin: 0 0 8px; color: #c9ccda; font-size: 14px; }
+.loja-confirma-corpo p:last-child { margin-bottom: 0; }
+.loja-confirma-botoes { display: flex; gap: 8px; }
+.loja-confirma-botoes button { flex: 1; }

@@ -799,18 +799,56 @@ function lojaRoletaApostaMaxima() {
   return saldo - (saldo % lojaRoletaApostaMultiplo);
 }
 
+/* Confirmação em HTML, não com confirm(). Dentro da Activity do Discord a
+   página roda num iframe com sandbox: confirm() e alert() não abrem nada e
+   simplesmente devolvem false — era por isso que o all-in parecia morto. */
+function lojaConfirmar(titulo, corpoHtml, textoSim, aoConfirmar) {
+  var antigo = document.querySelector("#loja-confirma-modal");
+  if (antigo) antigo.remove();
+
+  var overlay = document.createElement("div");
+  overlay.id = "loja-confirma-modal";
+  overlay.className = "rmodal-overlay";
+
+  var card = document.createElement("div");
+  card.className = "rmodal-card";
+  card.innerHTML =
+    '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
+    "<h3>" + titulo + "</h3>" +
+    '<div class="loja-confirma-corpo">' + corpoHtml + "</div>" +
+    '<div class="loja-confirma-botoes">' +
+    '<button id="loja-confirma-nao" type="button" class="botao-copiar">Cancelar</button>' +
+    '<button id="loja-confirma-sim" type="button" class="botao principal">' + textoSim + "</button>" +
+    "</div>";
+
+  function fechar() { overlay.remove(); }
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) fechar(); });
+  card.querySelector(".rmodal-fechar").addEventListener("click", fechar);
+  card.querySelector("#loja-confirma-nao").addEventListener("click", fechar);
+  card.querySelector("#loja-confirma-sim").addEventListener("click", function () {
+    fechar();
+    aoConfirmar();
+  });
+}
+
 function lojaRoletaAllIn() {
   if (lojaRoletaGirando) return;
   var tudo = lojaRoletaApostaMaxima();
   if (tudo < lojaRoletaApostaMinima) return;
   var troco = ((minhaCarteira && minhaCarteira.saldo) || 0) - tudo;
-  var aviso = "Apostar TUDO: " + tudo + " moedas" +
-    (troco ? " (sobram " + troco + " que não fecham um múltiplo de " + lojaRoletaApostaMultiplo + ")" : "") +
-    ".\n\nSe a roleta cair mal você perde tudo. Tem certeza?";
-  if (!confirm(aviso)) return;
-  lojaRoletaAposta = tudo;
-  lojaRoletaAtualizarValor();
-  girarRoleta();
+  lojaConfirmar("🔥 All-in",
+    "<p>Apostar <strong>" + tudo + " moedas</strong> — tudo o que você tem" +
+    (troco ? " (sobram " + troco + ", que não fecham um múltiplo de " +
+      lojaRoletaApostaMultiplo + ")" : "") + ".</p>" +
+    "<p>Se a roleta cair mal, você perde tudo. Tem certeza?</p>",
+    "Apostar tudo",
+    function () {
+      lojaRoletaAposta = tudo;
+      lojaRoletaAtualizarValor();
+      girarRoleta();
+    });
 }
 
 function lojaRoletaGirarPara(indice) {
@@ -1042,10 +1080,31 @@ async function adminAlterar(acao) {
   }
 }
 
+// Mesmo motivo do lojaConfirmar: confirm() nao abre nada dentro da Activity.
+function adminConfirmar(pergunta) {
+  return new Promise(function (resolve) {
+    var respondeu = false;
+    lojaConfirmar("Confirmar", "<p>" + pergunta + "</p>", "Sim, pode ir", function () {
+      respondeu = true;
+      resolve(true);
+    });
+    var overlay = document.querySelector("#loja-confirma-modal");
+    if (!overlay) { resolve(false); return; }
+    // Fechar no X, no Cancelar ou clicando fora so tira o overlay do DOM.
+    var observador = new MutationObserver(function () {
+      if (!document.body.contains(overlay)) {
+        observador.disconnect();
+        if (!respondeu) resolve(false);
+      }
+    });
+    observador.observe(document.body, { childList: true });
+  });
+}
+
 async function adminZerarSaldo() {
   var alvoId = adminAlvo();
   if (!alvoId) return;
-  if (!confirm("Zerar TODO o dinheiro desse jogador? Os itens da loja continuam com ele.")) return;
+  if (!(await adminConfirmar("Zerar TODO o dinheiro desse jogador? Os itens da loja continuam com ele."))) return;
   try {
     var resp = await fetch("./economia/admin/zerar-saldo", {
       method: "POST",
@@ -1068,7 +1127,7 @@ async function adminZerarSaldo() {
 async function adminLimparItens() {
   var alvoId = adminAlvo();
   if (!alvoId) return;
-  if (!confirm("Apagar TODOS os itens da loja desse jogador? As moedas ficam na conta.")) return;
+  if (!(await adminConfirmar("Apagar TODOS os itens da loja desse jogador? As moedas ficam na conta."))) return;
   try {
     var resp = await fetch("./economia/admin/limpar-itens", {
       method: "POST",
