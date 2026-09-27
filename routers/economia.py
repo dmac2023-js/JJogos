@@ -12,6 +12,9 @@ from shared.economia import (
     PRECO_COR_NICK,
     PRECO_DECORACAO,
     PRECO_FONTE_NICK,
+    SKINS_SPLANO,
+    SKINS_SPLANO_GRUPOS,
+    preco_skin_splano,
     ROLETA_APOSTA_MINIMA,
     ROLETA_APOSTA_MULTIPLO,
     ROLETA_FATIAS,
@@ -59,10 +62,22 @@ class CompraFonte(BaseModel):
     fonte: str
 
 
+class CompraSkinSplano(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    skin: str
+
+
+class ImagemSkinSplano(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    imagem: str
+
+
 class EquiparRequest(BaseModel):
     nome: str
     nick: str = "Anônimo"
-    tipo: str  # "decoracao" | "cor_nick" | "fonte_nick"
+    tipo: str  # "decoracao" | "cor_nick" | "fonte_nick" | "skin_splano"
     valor: Optional[str] = None
 
 
@@ -119,6 +134,9 @@ def obter_loja():
         "preco_cor_nick": PRECO_COR_NICK,
         "fontes_nick": [{"id": k, "nome": v} for k, v in FONTES_NICK.items()],
         "preco_fonte_nick": PRECO_FONTE_NICK,
+        "skins_splano": [dict(s, id=k, preco=preco_skin_splano(k))
+                         for k, s in SKINS_SPLANO.items()],
+        "skins_splano_grupos": SKINS_SPLANO_GRUPOS,
     }
 
 
@@ -193,11 +211,53 @@ def comprar_fonte(dados: CompraFonte):
         return carteira_publica(carteira)
 
 
+@router.post("/economia/comprar/skin-splano")
+def comprar_skin_splano(dados: CompraSkinSplano):
+    if eh_anonimo(dados.nick) or not dados.nome:
+        raise HTTPException(status_code=400, detail="Entre com Discord pra comprar.")
+    if dados.skin not in SKINS_SPLANO:
+        raise HTTPException(status_code=400, detail="Skin inválida.")
+
+    economia = carregar_economia()
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+    if dados.skin in carteira["skins_splano"]:
+        raise HTTPException(status_code=409, detail="Você já tem essa skin.")
+    preco = preco_skin_splano(dados.skin)
+    if carteira["saldo"] < preco:
+        raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+
+    carteira["saldo"] -= preco
+    carteira["skins_splano"].append(dados.skin)
+    salvar_economia(economia)
+    return carteira_publica(carteira)
+
+
+@router.post("/economia/skin-splano/imagem")
+def definir_imagem_skin_splano(dados: ImagemSkinSplano):
+    """URL da imagem usada pela skin personalizada (só quem comprou tem)."""
+    if eh_anonimo(dados.nick) or not dados.nome:
+        raise HTTPException(status_code=400, detail="Entre com Discord.")
+    url = (dados.imagem or "").strip()
+    if url and not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Use um link http(s) direto da imagem.")
+    if len(url) > 500:
+        raise HTTPException(status_code=400, detail="Link muito longo.")
+
+    economia = carregar_economia()
+    carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+    if "imagem" not in carteira["skins_splano"]:
+        raise HTTPException(status_code=403, detail="Compre a skin de imagem personalizada primeiro.")
+    carteira["skin_splano_imagem"] = url
+    salvar_economia(economia)
+    return carteira_publica(carteira)
+
+
 @router.post("/economia/equipar")
 def equipar(dados: EquiparRequest):
     if eh_anonimo(dados.nick) or not dados.nome:
         raise HTTPException(status_code=400, detail="Entre com Discord.")
-    listas = {"decoracao": "decoracoes", "cor_nick": "cores_nick", "fonte_nick": "fontes_nick"}
+    listas = {"decoracao": "decoracoes", "cor_nick": "cores_nick",
+              "fonte_nick": "fontes_nick", "skin_splano": "skins_splano"}
     if dados.tipo not in listas:
         raise HTTPException(status_code=400, detail="Tipo inválido.")
 

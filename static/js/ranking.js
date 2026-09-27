@@ -14,6 +14,7 @@ var RANKING_JOGO_LABELS = {
   termo_online: "Termo Online",
   ludo: "Ludo",
   clickj_pvp: "ClickJ PvP",
+  splano_io: "Splano.io",
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,7 @@ var RANKING_GRUPOS_JOGO = [
   { titulo: "Campo Minado",  variantes: [["campo_solo", "Solo"], ["campo_online", "Online"]] },
   { titulo: "Termo",         variantes: [["termo_solo", "Solo"], ["termo_online", "Online"]] },
   { titulo: "Ludo",          variantes: [["ludo", "Online"]] },
+  { titulo: "Splano.io",     variantes: [["splano_io", "Online"]] },
   { titulo: "ClickJ",        variantes: [["clickj_pvp", "PvP"]] },
 ];
 

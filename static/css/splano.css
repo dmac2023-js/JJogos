@@ -1,0 +1,126 @@
+/* Splano.io — arena em canvas com HUD por cima. */
+
+.sp-arena {
+  position: relative; width: 100%; height: min(60vh, 540px);
+  min-height: 300px; border: 1px solid #20293f; border-radius: 16px;
+  background: #0a0f1c; overflow: hidden; touch-action: none;
+}
+#sp-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+/* --- HUD --- */
+.sp-hud {
+  position: absolute; top: 10px; left: 10px; display: flex; flex-wrap: wrap;
+  gap: 6px; pointer-events: none;
+}
+.sp-hud span {
+  padding: 5px 10px; border-radius: 999px; background: rgba(10, 14, 26, .78);
+  border: 1px solid #20293f; font-size: 13px; font-weight: 600; color: #c9ccda;
+}
+.sp-hud strong { color: #7ef0e0; }
+#sp-dobro { color: #ffd36a; border-color: #6b5320; }
+
+.sp-placar {
+  position: absolute; top: 10px; right: 10px; width: 186px;
+  padding: 8px 10px; border-radius: 12px; background: rgba(10, 14, 26, .82);
+  border: 1px solid #20293f; pointer-events: none;
+}
+.sp-placar h3 { margin: 0 0 6px; font-size: 12px; color: #9dc2ff; text-transform: uppercase; letter-spacing: .04em; }
+.sp-placar-linha { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; color: #e6e9f5; }
+.sp-placar-linha.morto { opacity: .42; text-decoration: line-through; }
+.sp-placar-pos { width: 14px; color: #7a85a8; flex-shrink: 0; }
+.sp-placar-nick { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-placar-energia { color: #7ef0e0; font-weight: bold; font-variant-numeric: tabular-nums; }
+.sp-tag-bot { color: #7a85a8; font-size: 10px; }
+
+.sp-controles {
+  position: absolute; bottom: 10px; right: 10px; display: flex; gap: 8px;
+}
+.sp-controles button {
+  padding: 10px 14px; border: 1px solid #2d4470; border-radius: 12px;
+  background: rgba(20, 28, 48, .9); color: #9dc2ff; font-size: 13px;
+  font-weight: 600; cursor: pointer; touch-action: none;
+}
+.sp-controles button:active { background: #2f6fe0; color: #fff; }
+
+.sp-dica-controles { margin-top: 10px; color: #aeb2c7; font-size: 12.5px; line-height: 1.5; }
+.sp-dica-controles kbd {
+  padding: 1px 6px; border: 1px solid #2d4470; border-radius: 5px;
+  background: #141c30; color: #9dc2ff; font-size: 11px;
+}
+
+/* --- Painéis sobrepostos (espera / fim / morreu) --- */
+.sp-painel {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(6, 9, 18, .82); padding: 18px; text-align: center;
+}
+.sp-painel-caixa {
+  width: min(460px, 100%); padding: 20px; border: 1px solid #26314f;
+  border-radius: 16px; background: #111a2e; max-height: 100%; overflow-y: auto;
+}
+.sp-painel h3 { margin: 0 0 8px; font-size: 19px; color: #f4f6ff; }
+.sp-painel p { margin: 0 0 12px; color: #aeb2c7; font-size: 14px; }
+#sp-espera-lista { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.sp-espera-item {
+  display: flex; align-items: center; gap: 7px; padding: 5px 11px 5px 5px;
+  border-radius: 999px; background: #141c30; border: 1px solid #26314f; font-size: 13px;
+}
+
+.sp-fim-linha {
+  display: grid; grid-template-columns: 26px 1fr auto auto auto;
+  gap: 8px; align-items: center; padding: 7px 9px; margin-bottom: 5px;
+  border-radius: 9px; background: #141c30; font-size: 13px; text-align: left;
+}
+.sp-fim-linha.venceu { background: #23301c; border: 1px solid #4b7c2f; }
+.sp-fim-pos { color: #7a85a8; font-weight: bold; }
+.sp-fim-num { color: #c9ccda; font-variant-numeric: tabular-nums; }
+.sp-fim-moedas { color: #ffd36a; font-weight: bold; }
+
+#sp-morreu {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 12px 20px; border-radius: 14px; background: rgba(60, 12, 12, .88);
+  border: 1px solid #b64a4a; color: #ffc9c9; font-weight: 600; text-align: center;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .sp-arena { height: min(58vh, 460px); }
+  .sp-placar { width: 140px; font-size: 11px; }
+  .sp-hud span { font-size: 11.5px; padding: 4px 8px; }
+}
+
+/* --- Skins na loja --- */
+.sp-skin-amostra {
+  /* span é inline por padrão e ignoraria width/height — sem isso a amostra
+     virava um risquinho no lugar da bolinha. */
+  display: inline-block; position: relative; width: 46px; height: 46px;
+  border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  border: 2px solid rgba(0, 0, 0, .35);
+}
+.sp-skin-amostra img { width: 100%; height: 100%; object-fit: cover; }
+.sp-skin-rainbow {
+  background: linear-gradient(120deg, #ff0040, #ff8a00, #ffe600, #37ff7a, #00d0ff, #a24bff);
+  background-size: 300% 300%; animation: sp-rainbow 4s linear infinite;
+}
+@keyframes sp-rainbow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+#loja-skins-splano { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.loja-skin-imagem-url {
+  width: 100%; margin-top: 8px; padding: 9px 11px; border: 1px solid #26314f;
+  border-radius: 10px; background: #0d1424; color: #f4f6ff; font-size: 13px;
+}
+
+/* Filtros e dica da seção de skins na loja */
+.loja-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.loja-filtro {
+  padding: 7px 13px; border: 1px solid #26314f; border-radius: 999px;
+  background: #111a2e; color: #c9ccda; font-size: 13px; cursor: pointer;
+}
+.loja-filtro:hover { border-color: #3b82f6; }
+.loja-filtro.ativo { border-color: #2f6fe0; background: #1c2c4a; color: #fff; font-weight: 600; }
+.loja-dica { margin-bottom: 12px; color: #aeb2c7; font-size: 13px; line-height: 1.5; }
+.loja-dica strong { color: #ffd36a; }
+#loja-skins-splano .sp-skin-amostra { width: 40px; height: 40px; }
+#loja-skins-splano .loja-cor-amostra-box { width: 40px; height: 40px; }
+#sp-protegido { color: #7ef0e0; border-color: #235c55; }

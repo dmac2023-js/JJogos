@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="./css/loja.css?v=20260926-32" />
     <link rel="stylesheet" href="./css/ranking.css?v=20260926-32" />
     <link rel="stylesheet" href="./css/clickj.css?v=20260926-32" />
+    <link rel="stylesheet" href="./css/splano.css?v=20260926-32" />
     <link rel="stylesheet" href="./css/assistir.css?v=20260926-32" />
   </head>
   <body>
@@ -165,6 +166,23 @@
           <span>
             <strong>ClickJ</strong>
             <small>Clique, evolua seu herói e desafie quem está online.</small>
+          </span>
+          <span class="seta">&rarr;</span>
+        </button>
+        <button id="jogo-splano" class="cartao-jogo" style="margin-top: 12px;">
+          <span class="icone-jogo">
+            <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+              <circle cx="9.5" cy="13" r="7" fill="#3b82f6" stroke="#0a0e1a" stroke-width="1.1"/>
+              <circle cx="9.5" cy="13" r="3.3" fill="#0d1424" opacity=".55"/>
+              <circle cx="18.4" cy="6.6" r="3.1" fill="#ec4899" stroke="#0a0e1a" stroke-width="1"/>
+              <circle cx="20" cy="15.4" r="1.7" fill="#7ef0e0"/>
+              <circle cx="14.6" cy="20" r="1.4" fill="#ffd36a"/>
+              <circle cx="3.4" cy="5" r="1.3" fill="#a3e635"/>
+            </svg>
+          </span>
+          <span>
+            <strong>Splano.io</strong>
+            <small>Coma energia, cresça e engula os outros antes que te comam.</small>
           </span>
           <span class="seta">&rarr;</span>
         </button>
@@ -997,6 +1015,11 @@
             <strong>Decorações de perfil</strong>
             <small>Decore ao redor da sua foto</small>
           </button>
+          <button id="loja-btn-skins-splano" class="botao-modo">
+            <span class="icone">🔵</span>
+            <strong>Skins do Splano.io</strong>
+            <small>Cores, times, seleções e imagem personalizada</small>
+          </button>
           <button id="loja-btn-roleta" class="botao-modo">
             <span class="icone">🎡</span>
             <strong>Roleta da sorte</strong>
@@ -1028,6 +1051,26 @@
           </div>
 
           <div id="loja-fontes" class="loja-grade"></div>
+        </div>
+
+        <!-- Seção Skins do Splano.io -->
+        <div id="loja-secao-skins-splano" class="loja-secao loja-subsecao" style="display:none;">
+          <button class="loja-sub-voltar" data-alvo="loja-menu">&larr; Voltar à loja</button>
+          <h3>Skins do Splano.io</h3>
+          <p class="loja-dica">
+            É o visual da sua bolinha na arena. Cores e times custam
+            <strong id="loja-preco-skin">1000</strong>, Rainbow RGB
+            <strong id="loja-preco-skin-rainbow">1500</strong> e imagem personalizada
+            <strong id="loja-preco-skin-imagem">2000</strong> moedas.
+          </p>
+          <div id="loja-skins-filtros" class="loja-filtros"></div>
+          <div id="loja-skins-splano"></div>
+          <div id="loja-skin-imagem-area" style="display:none;">
+            <label class="loja-preview-titulo" for="loja-skin-imagem-url">Link da sua imagem (http/https)</label>
+            <input id="loja-skin-imagem-url" class="loja-skin-imagem-url" type="url"
+                   placeholder="https://exemplo.com/minha-foto.png" maxlength="500" />
+            <button id="loja-skin-imagem-salvar" class="botao-copiar" type="button">Salvar imagem</button>
+          </div>
         </div>
 
         <!-- Seção Decorações de perfil -->
@@ -1226,6 +1269,69 @@
       </div>
       <div id="cj-toast" class="cj-toast"></div>
 
+      <section id="tela-splano" class="tela">
+        <button class="voltar" id="voltar-splano">&larr; Voltar aos jogos</button>
+        <h2>Splano.io</h2>
+        <p class="subtitulo">
+          Coma as bolinhas de energia pra crescer, engula quem for menor e fuja de quem for maior.
+          Encostar na borda vermelha mata.
+        </p>
+        <p id="sp-mensagem" class="mensagem erro" style="display:none;"></p>
+
+        <div class="sp-arena">
+          <canvas id="sp-canvas"></canvas>
+
+          <div class="sp-hud">
+            <span>⚡ <strong id="sp-energia">0</strong></span>
+            <span>🍽️ <strong id="sp-kills">0</strong></span>
+            <span>👥 <strong id="sp-vivos">0</strong> vivos</span>
+            <span>⏱️ <strong id="sp-tempo">0:00</strong></span>
+            <span id="sp-dobro" style="display:none;"></span>
+            <span id="sp-protegido" style="display:none;"></span>
+          </div>
+
+          <aside class="sp-placar">
+            <h3>Energia</h3>
+            <div id="sp-placar-lista"></div>
+          </aside>
+
+          <div class="sp-controles">
+            <button id="sp-soltar" type="button">💧 Soltar</button>
+            <button id="sp-dividir" type="button">✂️ Dividir</button>
+          </div>
+
+          <div id="sp-morreu" style="display:none;">
+            Você foi comido!<br /><small>Assistindo até a próxima partida.</small>
+          </div>
+
+          <div id="sp-espera" class="sp-painel" style="display:none;">
+            <div class="sp-painel-caixa">
+              <h3 id="sp-espera-titulo">Esperando jogadores</h3>
+              <p id="sp-espera-texto"></p>
+              <div id="sp-espera-lista"></div>
+            </div>
+          </div>
+
+          <div id="sp-fim" class="sp-painel" style="display:none;">
+            <div class="sp-painel-caixa">
+              <h3 id="sp-fim-titulo"></h3>
+              <p id="sp-fim-motivo"></p>
+              <div id="sp-fim-placar"></div>
+              <p style="margin-top:12px;font-size:13px;">Próxima partida começa em instantes...</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="sp-dica-controles">
+          <strong>Mover:</strong> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou as setinhas ·
+          <strong>Dividir:</strong> dois cliques na arena (ou <kbd>Espaço</kbd>) ·
+          <strong>Soltar energia:</strong> segurar o botão esquerdo (ou <kbd>Shift</kbd>).<br />
+          No celular: arraste pra andar, toque duas vezes pra dividir e segure o dedo pra soltar energia.
+          Vence quem sobrar sozinho ou tomar conta da arena — <strong>400 moedas</strong> pra quem vencer
+          e <strong>20</strong> por cada jogador engolido.
+        </p>
+      </section>
+
       <footer>
         <p>Mais jogos serão adicionados em breve.</p>
         <p style="margin-top: 6px;"><a href="/politica.html">Política de Privacidade</a> &middot; <a href="/termos.html">Termos de Serviço</a></p>
@@ -1276,6 +1382,7 @@
     <script src="./js/termo.js?v=20260926-32"></script>
     <script src="./js/tela.js?v=20260926-32"></script>
     <script src="./js/clickj.js?v=20260926-32"></script>
+    <script src="./js/splano.js?v=20260926-32"></script>
     <script src="./js/assistir.js?v=20260926-32"></script>
   </body>
 </html>

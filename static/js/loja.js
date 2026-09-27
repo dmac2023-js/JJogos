@@ -130,7 +130,8 @@ function ordenarPossuidosPrimeiro(lista, chaveDe, possuidos) {
 // Navegação: menu principal <-> nametags / decorações
 // ---------------------------------------------------------------------------
 function lojaMostrarSomente(id) {
-  ["#loja-menu", "#loja-secao-cores", "#loja-secao-fontes", "#loja-secao-decoracoes", "#loja-secao-roleta"].forEach(function (sel) {
+  ["#loja-menu", "#loja-secao-cores", "#loja-secao-fontes", "#loja-secao-skins-splano",
+   "#loja-secao-decoracoes", "#loja-secao-roleta"].forEach(function (sel) {
     document.querySelector(sel).style.display = sel === id ? "" : "none";
   });
 }
@@ -147,6 +148,11 @@ function lojaMostrarSecaoCores() {
 function lojaMostrarSecaoFontes() {
   lojaMostrarSomente("#loja-secao-fontes");
   renderLojaFontes();
+}
+
+function lojaMostrarSecaoSkinsSplano() {
+  lojaMostrarSomente("#loja-secao-skins-splano");
+  renderLojaSkinsSplano();
 }
 
 function lojaMostrarSecaoDecoracoes() {
@@ -344,6 +350,166 @@ function lojaPreviewDecoracao(item) {
   nomeEl.textContent = item.nome;
 }
 
+// ---------------------------------------------------------------------------
+// Skins do Splano.io
+// ---------------------------------------------------------------------------
+var lojaSkinGrupo = "cores";
+
+function lojaAmostraSkin(skin) {
+  var amostra = document.createElement("span");
+  amostra.className = "sp-skin-amostra";
+  if (skin.padrao === "rainbow") {
+    amostra.classList.add("sp-skin-rainbow");
+    return amostra;
+  }
+  if (skin.padrao === "imagem") {
+    var url = minhaCarteira.skin_splano_imagem;
+    if (url) {
+      var img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      amostra.appendChild(img);
+    } else {
+      amostra.style.background = skin.cores[0];
+      amostra.style.display = "grid";
+      amostra.style.placeItems = "center";
+      amostra.textContent = "🖼️";
+    }
+    return amostra;
+  }
+  var a = skin.cores[0];
+  var b = skin.cores[1] || skin.cores[0];
+  if (skin.padrao === "listras") {
+    amostra.style.background = "repeating-linear-gradient(180deg," + a + " 0 8px," + b + " 8px 16px)";
+  } else if (skin.padrao === "vertical") {
+    amostra.style.background = "repeating-linear-gradient(90deg," + a + " 0 8px," + b + " 8px 16px)";
+  } else if (skin.padrao === "faixa") {
+    amostra.style.background = "linear-gradient(125deg," + a + " 0 38%," + b + " 38% 62%," + a + " 62%)";
+  } else {
+    amostra.style.background = a;
+  }
+  return amostra;
+}
+
+function renderLojaSkinsSplano() {
+  var alvo = document.querySelector("#loja-skins-splano");
+  if (!alvo || !lojaCatalogo.skins_splano) return;
+  document.querySelector("#loja-preco-skin").textContent = 1000;
+  var especiais = {};
+  lojaCatalogo.skins_splano.forEach(function (s) { especiais[s.id] = s.preco; });
+  document.querySelector("#loja-preco-skin-rainbow").textContent = especiais.rainbow || 1500;
+  document.querySelector("#loja-preco-skin-imagem").textContent = especiais.imagem || 2000;
+
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar skins.</p>';
+    document.querySelector("#loja-skins-filtros").innerHTML = "";
+    return;
+  }
+
+  var grupos = lojaCatalogo.skins_splano_grupos || {};
+  var filtros = document.querySelector("#loja-skins-filtros");
+  filtros.innerHTML = "";
+  Object.keys(grupos).forEach(function (g) {
+    var botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "loja-filtro" + (g === lojaSkinGrupo ? " ativo" : "");
+    botao.textContent = grupos[g];
+    botao.addEventListener("click", function () {
+      lojaSkinGrupo = g;
+      renderLojaSkinsSplano();
+    });
+    filtros.appendChild(botao);
+  });
+
+  var possuidas = minhaCarteira.skins_splano || [];
+  var equipada = (minhaCarteira.equipado || {}).skin_splano;
+  var lista = lojaCatalogo.skins_splano.filter(function (s) { return s.grupo === lojaSkinGrupo; });
+  lista = ordenarPossuidosPrimeiro(lista, function (s) { return s.id; }, possuidas);
+
+  alvo.innerHTML = "";
+  lista.forEach(function (skin) {
+    var possui = possuidas.indexOf(skin.id) !== -1;
+    var estaEquipada = equipada === skin.id;
+    var card = document.createElement("div");
+    card.className = "loja-item" + (estaEquipada ? " equipado" : "");
+    card.addEventListener("click", function () {
+      if (possui && !estaEquipada) equiparItem("skin_splano", skin.id);
+    });
+
+    var moldura = document.createElement("span");
+    moldura.className = "loja-cor-amostra-box";
+    moldura.appendChild(lojaAmostraSkin(skin));
+    if (estaEquipada) moldura.appendChild(lojaBadgeEquipado());
+    card.appendChild(moldura);
+
+    var label = document.createElement("span");
+    label.className = "loja-item-nome";
+    label.textContent = skin.nome;
+    card.appendChild(label);
+
+    if (!possui) {
+      card.appendChild(lojaBotaoPreco(skin.preco, possui, estaEquipada, function (ev) {
+        ev.stopPropagation();
+        comprarSkinSplano(skin.id);
+      }));
+    }
+    alvo.appendChild(card);
+  });
+
+  if (equipada) {
+    var limpar = document.createElement("button");
+    limpar.className = "botao-copiar";
+    limpar.textContent = "Voltar à bolinha padrão";
+    limpar.addEventListener("click", function () { equiparItem("skin_splano", null); });
+    alvo.appendChild(limpar);
+  }
+
+  // Campo da imagem personalizada só aparece pra quem comprou.
+  var area = document.querySelector("#loja-skin-imagem-area");
+  var temImagem = possuidas.indexOf("imagem") !== -1;
+  area.style.display = temImagem ? "" : "none";
+  if (temImagem) {
+    document.querySelector("#loja-skin-imagem-url").value = minhaCarteira.skin_splano_imagem || "";
+  }
+}
+
+async function comprarSkinSplano(skin) {
+  try {
+    var resp = await fetch("./economia/comprar/skin-splano", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), skin: skin }),
+    });
+    if (!resp.ok) {
+      var erro = await resp.json().catch(function () { return {}; });
+      alert(erro.detail || "Não foi possível comprar.");
+      return;
+    }
+    minhaCarteira = await resp.json();
+    aplicarCosmeticosHeader();
+    lojaAtualizarSaldoTelas();
+    renderLojaSkinsSplano();
+  } catch (e) { alert("Não foi possível comprar agora."); }
+}
+
+async function salvarImagemSkinSplano() {
+  var url = document.querySelector("#loja-skin-imagem-url").value.trim();
+  try {
+    var resp = await fetch("./economia/skin-splano/imagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), imagem: url }),
+    });
+    if (!resp.ok) {
+      var erro = await resp.json().catch(function () { return {}; });
+      alert(erro.detail || "Não deu pra salvar essa imagem.");
+      return;
+    }
+    minhaCarteira = await resp.json();
+    renderLojaSkinsSplano();
+  } catch (e) { alert("Não deu pra salvar agora."); }
+}
+
 function lojaBadgeEquipado() {
   var badge = document.createElement("span");
   badge.className = "loja-badge-equipado";
@@ -527,6 +693,8 @@ async function equiparItem(tipo, valor) {
       renderLojaDecoracoes();
     } else if (tipo === "fonte_nick") {
       renderLojaFontes();
+    } else if (tipo === "skin_splano") {
+      renderLojaSkinsSplano();
     } else {
       renderLojaCores();
     }
@@ -765,6 +933,8 @@ document.querySelector("#loja-decoracoes-busca").addEventListener("input", funct
   renderLojaDecoracoes();
 });
 document.querySelector("#loja-btn-fontes").addEventListener("click", lojaMostrarSecaoFontes);
+document.querySelector("#loja-btn-skins-splano").addEventListener("click", lojaMostrarSecaoSkinsSplano);
+document.querySelector("#loja-skin-imagem-salvar").addEventListener("click", salvarImagemSkinSplano);
 document.querySelector("#loja-btn-roleta").addEventListener("click", lojaMostrarSecaoRoleta);
 document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
   botao.addEventListener("click", lojaMostrarMenu);

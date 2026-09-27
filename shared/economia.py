@@ -88,6 +88,100 @@ CORES_NICK = {
     "arco-iris": None,  # animação (ver .nick-arco-iris no css), não é cor fixa
 }
 
+# --- Skins do Splano.io -----------------------------------------------------
+# padrao: como o círculo é pintado no canvas.
+#   solido    -> uma cor só
+#   listras   -> faixas horizontais alternando as cores
+#   vertical  -> faixas verticais alternando as cores
+#   faixa     -> cor de fundo com uma faixa diagonal da segunda cor
+#   rainbow   -> matiz girando (animada)
+#   imagem    -> o próprio jogador escolhe a imagem (url na carteira)
+PRECO_SKIN_SPLANO = 1000
+PRECO_SKIN_SPLANO_IMAGEM = 2000
+PRECO_SKIN_SPLANO_RAINBOW = 1500
+
+def _skin(nome, grupo, cores, padrao="solido"):
+    return {"nome": nome, "grupo": grupo, "cores": cores, "padrao": padrao}
+
+
+SKINS_SPLANO = {
+    # Cores simples
+    "azul": _skin("Azul", "cores", ["#3b82f6"]),
+    "verde": _skin("Verde", "cores", ["#22c55e"]),
+    "vermelho": _skin("Vermelho", "cores", ["#ef4444"]),
+    "amarelo": _skin("Amarelo", "cores", ["#facc15"]),
+    "roxo": _skin("Roxo", "cores", ["#a855f7"]),
+    "rosa": _skin("Rosa", "cores", ["#ec4899"]),
+    "laranja": _skin("Laranja", "cores", ["#fb923c"]),
+    "ciano": _skin("Ciano", "cores", ["#22d3ee"]),
+    "branco": _skin("Branco", "cores", ["#e8edf7"]),
+    "preto": _skin("Preto", "cores", ["#2b2f3a"]),
+    "dourado": _skin("Dourado", "cores", ["#e0a526"]),
+    "lima": _skin("Lima", "cores", ["#a3e635"]),
+    # Times brasileiros
+    "flamengo": _skin("Flamengo", "times_br", ["#d50000", "#141414"], "listras"),
+    "corinthians": _skin("Corinthians", "times_br", ["#141414", "#f2f2f2"], "vertical"),
+    "palmeiras": _skin("Palmeiras", "times_br", ["#046a38"], "solido"),
+    "sao-paulo": _skin("São Paulo", "times_br", ["#f2f2f2", "#d50000"], "faixa"),
+    "vasco": _skin("Vasco", "times_br", ["#141414", "#f2f2f2"], "faixa"),
+    "gremio": _skin("Grêmio", "times_br", ["#0d80bf", "#141414"], "vertical"),
+    "internacional": _skin("Internacional", "times_br", ["#c8102e"], "solido"),
+    "cruzeiro": _skin("Cruzeiro", "times_br", ["#1b3f94"], "solido"),
+    "atletico-mg": _skin("Atlético-MG", "times_br", ["#141414", "#f2f2f2"], "vertical"),
+    "santos": _skin("Santos", "times_br", ["#f2f2f2", "#141414"], "listras"),
+    "botafogo": _skin("Botafogo", "times_br", ["#141414", "#f2f2f2"], "vertical"),
+    "fluminense": _skin("Fluminense", "times_br", ["#7a1e38", "#046a38"], "vertical"),
+    "bahia": _skin("Bahia", "times_br", ["#0d80bf", "#d50000"], "listras"),
+    "vitoria": _skin("Vitória", "times_br", ["#d50000", "#141414"], "vertical"),
+    # Times internacionais
+    "real-madrid": _skin("Real Madrid", "times_int", ["#f4f6ff", "#d4af37"], "faixa"),
+    "barcelona": _skin("Barcelona", "times_int", ["#1c3a94", "#a50044"], "vertical"),
+    "man-united": _skin("Man. United", "times_int", ["#da291c"], "solido"),
+    "man-city": _skin("Man. City", "times_int", ["#6cabdd"], "solido"),
+    "liverpool": _skin("Liverpool", "times_int", ["#c8102e"], "solido"),
+    "chelsea": _skin("Chelsea", "times_int", ["#034694"], "solido"),
+    "arsenal": _skin("Arsenal", "times_int", ["#ef0107", "#f2f2f2"], "faixa"),
+    "bayern": _skin("Bayern", "times_int", ["#dc052d"], "solido"),
+    "juventus": _skin("Juventus", "times_int", ["#f2f2f2", "#141414"], "vertical"),
+    "milan": _skin("Milan", "times_int", ["#fb090b", "#141414"], "vertical"),
+    "inter-milao": _skin("Inter de Milão", "times_int", ["#0068a8", "#141414"], "vertical"),
+    "psg": _skin("PSG", "times_int", ["#0b1c3d", "#d50000"], "faixa"),
+    "boca": _skin("Boca Juniors", "times_int", ["#1c3a94", "#facc15"], "listras"),
+    "river": _skin("River Plate", "times_int", ["#f2f2f2", "#d50000"], "faixa"),
+    # Seleções
+    "brasil": _skin("Brasil", "selecoes", ["#ffdf00", "#009c3b"], "faixa"),
+    "argentina": _skin("Argentina", "selecoes", ["#75aadb", "#f2f2f2"], "vertical"),
+    "alemanha": _skin("Alemanha", "selecoes", ["#f2f2f2", "#141414"], "faixa"),
+    "franca": _skin("França", "selecoes", ["#1c3a94", "#d50000"], "faixa"),
+    "italia": _skin("Itália", "selecoes", ["#0f5ba7"], "solido"),
+    "espanha": _skin("Espanha", "selecoes", ["#c60b1e", "#facc15"], "listras"),
+    "portugal": _skin("Portugal", "selecoes", ["#d50000", "#046a38"], "vertical"),
+    "inglaterra": _skin("Inglaterra", "selecoes", ["#f2f2f2", "#d50000"], "faixa"),
+    "uruguai": _skin("Uruguai", "selecoes", ["#75aadb"], "solido"),
+    "holanda": _skin("Holanda", "selecoes", ["#fb923c"], "solido"),
+    "japao": _skin("Japão", "selecoes", ["#0b1c3d", "#d50000"], "faixa"),
+    "mexico": _skin("México", "selecoes", ["#046a38", "#d50000"], "vertical"),
+    # Especiais (preço próprio)
+    "rainbow": _skin("Rainbow RGB", "especiais", ["#ff0000"], "rainbow"),
+    "imagem": _skin("Imagem personalizada", "especiais", ["#2b2f3a"], "imagem"),
+}
+SKINS_SPLANO_GRUPOS = {
+    "cores": "Cores",
+    "times_br": "Times do Brasil",
+    "times_int": "Times do mundo",
+    "selecoes": "Seleções",
+    "especiais": "Especiais",
+}
+
+
+def preco_skin_splano(skin_id: str) -> int:
+    if skin_id == "rainbow":
+        return PRECO_SKIN_SPLANO_RAINBOW
+    if skin_id == "imagem":
+        return PRECO_SKIN_SPLANO_IMAGEM
+    return PRECO_SKIN_SPLANO
+
+
 ARQUIVO_LOJA_DECORACOES = PASTA_BASE / "loja_decoracoes.json"
 
 PARTIDAS_JOGOS = [
@@ -97,6 +191,7 @@ PARTIDAS_JOGOS = [
     "termo_solo", "termo_online",
     "ludo",
     "clickj_pvp",
+    "splano_io",
 ]
 
 # Roleta da sorte — 7 fatias intercaladas (mesma categoria nunca é vizinha),
@@ -183,8 +278,10 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None,
     carteira.setdefault("decoracoes", [])
     carteira.setdefault("cores_nick", [])
     carteira.setdefault("fontes_nick", [])
+    carteira.setdefault("skins_splano", [])
+    carteira.setdefault("skin_splano_imagem", "")
     equipado = carteira.setdefault("equipado", {})
-    for chave in ("decoracao", "cor_nick", "fonte_nick"):
+    for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano"):
         equipado.setdefault(chave, None)
     carteira.setdefault("segundos_jogados", 0)
     carteira.setdefault("partidas", {})
@@ -247,10 +344,13 @@ def carteira_publica(carteira: dict) -> dict:
         "decoracoes": carteira.get("decoracoes", []),
         "cores_nick": carteira.get("cores_nick", []),
         "fontes_nick": carteira.get("fontes_nick", []),
+        "skins_splano": carteira.get("skins_splano", []),
+        "skin_splano_imagem": carteira.get("skin_splano_imagem", ""),
         "equipado": {
             "decoracao": equipado.get("decoracao"),
             "cor_nick": equipado.get("cor_nick"),
             "fonte_nick": equipado.get("fonte_nick"),
+            "skin_splano": equipado.get("skin_splano"),
         },
         # URL pronta da decoração equipada, pro front não precisar carregar o
         # catálogo inteiro só pra desenhar o avatar do cabeçalho/perfil.
@@ -279,6 +379,26 @@ def cosmeticos_equipados(nome: str) -> dict:
 def cosmeticos_de_varios(nomes) -> dict:
     carteiras = _carteiras_recentes()
     return {n: _cosmeticos_da_carteira(carteiras.get(n)) for n in nomes if n}
+
+
+def skin_splano(nome: str) -> dict:
+    """Skin equipada no Splano.io, já pronta pro canvas desenhar. Sem skin
+    (ou anônimo), a cor sai do próprio nome — cada um fica com a sua."""
+    carteira = None
+    if nome and not eh_anonimo(nome):
+        carteira = _carteiras_recentes().get(nome)
+    skin_id = ((carteira or {}).get("equipado") or {}).get("skin_splano")
+    skin = SKINS_SPLANO.get(skin_id)
+    if not skin:
+        cores = list(CORES_NICK.values())
+        cor = [c for c in cores if c][sum(map(ord, nome or "?")) % len([c for c in cores if c])]
+        return {"id": None, "padrao": "solido", "cores": [cor], "imagem": ""}
+    return {
+        "id": skin_id,
+        "padrao": skin["padrao"],
+        "cores": skin["cores"],
+        "imagem": (carteira or {}).get("skin_splano_imagem", "") if skin["padrao"] == "imagem" else "",
+    }
 
 
 def registrar_fim_partida(nome: str, nick: str, segundos: int,
