@@ -603,11 +603,14 @@ async def ws_campo(websocket: WebSocket, sala: str):
                         if s.get("inicio_ms"):
                             tempo_outro = max(1, int((time.time() * 1000 - s["inicio_ms"]) / 1000))
                         p_outro["tempo_fim"] = tempo_outro
-                        registrar_vitoria_campo(
+                        await asyncio.to_thread(
+                            registrar_vitoria_campo,
                             p_outro.get("nick", "—"), p_outro.get("nome", ""),
                             p_outro.get("avatar"), tempo_outro,
                             s.get("dificuldade", "facil"))
-                        creditar_moedas(p_outro.get("nome", ""), MOEDAS_CAMPO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_CAMPO_ONLINE["facil"]))
+                        await asyncio.to_thread(
+                            creditar_moedas, p_outro.get("nome", ""),
+                            MOEDAS_CAMPO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_CAMPO_ONLINE["facil"]))
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": outro,
@@ -646,11 +649,14 @@ async def ws_campo(websocket: WebSocket, sala: str):
                         s["vencedor_rodada"] = slot
                         s["placar"][slot] = s["placar"].get(slot, 0) + 1
                         s["fase"] = "parcial"
-                        registrar_vitoria_campo(
+                        await asyncio.to_thread(
+                            registrar_vitoria_campo,
                             p.get("nick", "—"), p.get("nome", ""),
                             p.get("avatar"), tempo_s,
                             s.get("dificuldade", "facil"))
-                        creditar_moedas(p.get("nome", ""), MOEDAS_CAMPO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_CAMPO_ONLINE["facil"]))
+                        await asyncio.to_thread(
+                            creditar_moedas, p.get("nome", ""),
+                            MOEDAS_CAMPO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_CAMPO_ONLINE["facil"]))
                         await broadcast_campo(sala, {
                             "tipo": "vencedor_rodada",
                             "slot": slot,

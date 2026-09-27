@@ -593,7 +593,9 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p["venceu"] = venceu_agora
                     if venceu_agora:
                         s["placar"][slot] = s.get("placar", {}).get(slot, 0) + 1
-                        creditar_moedas(p.get("nome", ""), MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+                        await asyncio.to_thread(
+                            creditar_moedas, p.get("nome", ""),
+                            MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
                     outro = "p2" if slot == "p1" else "p1"
                     p_outro = s["slots"].get(outro)
                     if p_outro and p_outro.get("ws"):
@@ -666,7 +668,9 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p_outro["completou"] = True
                     p_outro["venceu"] = True
                     s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                    creditar_moedas(p_outro.get("nome", ""), MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+                    await asyncio.to_thread(
+                        creditar_moedas, p_outro.get("nome", ""),
+                        MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
                     s["fase"] = "parcial"
                     try:
                         await p_outro["ws"].send_json({
@@ -707,7 +711,9 @@ async def ws_termo(websocket: WebSocket, sala: str):
                 p_outro["completou"] = True
                 p_outro["venceu"] = True
                 s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                creditar_moedas(p_outro.get("nome", ""), MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+                await asyncio.to_thread(
+                    creditar_moedas, p_outro.get("nome", ""),
+                    MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
                 s["fase"] = "parcial"
                 try:
                     await p_outro["ws"].send_json({
@@ -728,7 +734,9 @@ async def ws_termo(websocket: WebSocket, sala: str):
                     p_outro["completou"] = True
                     p_outro["venceu"] = True
                     s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                    creditar_moedas(p_outro.get("nome", ""), MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+                    await asyncio.to_thread(
+                        creditar_moedas, p_outro.get("nome", ""),
+                        MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
                     s["fase"] = "parcial"
                     try:
                         await p_outro["ws"].send_json({

@@ -662,7 +662,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     txt = (s["slots"][slot] or {}).get("nick", "—") + " moveu o peão " + str(idx + 1) + "."
                 s["ultimo_evento"] = {"texto": txt, "capturas": capturas}
 
-                venceu = _ludo_check_vitoria(s)
+                venceu = await asyncio.to_thread(_ludo_check_vitoria, s)
                 if venceu:
                     s["dado"] = None
                     s["dado_ja_rolado"] = False
@@ -744,11 +744,12 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                                          {"p1": 0, "p2": 0, "p3": 0, "p4": 0})
                             s["placar"][ficou] = s["placar"].get(ficou, 0) + 1
                             p_ficou = s["slots"][ficou] or {}
-                            registrar_vitoria_ludo(
+                            await asyncio.to_thread(
+                                registrar_vitoria_ludo,
                                 p_ficou.get("nick", "Anônimo"),
                                 p_ficou.get("nome", ""),
                                 p_ficou.get("avatar"))
-                            _pagar_moedas_fim_ludo(s, ficou)
+                            await asyncio.to_thread(_pagar_moedas_fim_ludo, s, ficou)
                             s["ultimo_evento"] = {
                                 "texto": "Desistências. " +
                                 ((s["slots"][ficou] or {}).get("nick") or "—") + " venceu!",

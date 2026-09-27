@@ -634,7 +634,9 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                     s["placar"][slot] = s["placar"].get(slot, 0) + 1
                     s["fase"] = "parcial"
                     dif_sudoku = s.get("dificuldade", "facil")
-                    creditar_moedas(p.get("nome", ""), MOEDAS_SUDOKU_ONLINE.get(dif_sudoku, MOEDAS_SUDOKU_ONLINE["facil"]))
+                    await asyncio.to_thread(
+                        creditar_moedas, p.get("nome", ""),
+                        MOEDAS_SUDOKU_ONLINE.get(dif_sudoku, MOEDAS_SUDOKU_ONLINE["facil"]))
                     await broadcast_sudoku(sala, {
                         "tipo": "vencedor_rodada",
                         "slot": slot,
