@@ -8,8 +8,16 @@ from routers.ludo import purgar_salas_ludo_obsoletas, salas_ludo
 from routers.tela import listar_salas_multi_publicas
 from routers.velha import transmitir_salas_lobby
 from shared.lobby_state import conexoes_lobby
+from shared.online import contagem as contagem_online
 
 router = APIRouter()
+
+
+@router.get("/online")
+def quantos_online():
+    """Quantas pessoas estão em cada jogo agora — o painel embaixo da lista
+    de jogos na tela inicial."""
+    return contagem_online()
 
 
 @router.websocket("/ws/lobby")

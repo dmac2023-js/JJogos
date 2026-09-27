@@ -1,4 +1,4 @@
-"""Jogos no Discord — ponto de entrada da aplicação FastAPI.
+"""Jogos7 — ponto de entrada da aplicação FastAPI.
 
 O código de cada jogo mora em routers/<jogo>.py (modelos, estado em memória,
 endpoints REST e WebSocket). O que é compartilhado entre jogos (config,
@@ -10,7 +10,7 @@ from starlette.responses import FileResponse
 
 from shared.config import PASTA_STATIC
 
-app = FastAPI(title="Jogos no Discord")
+app = FastAPI(title="Jogos7 - feito por Jovem7")
 
 
 @app.middleware("http")

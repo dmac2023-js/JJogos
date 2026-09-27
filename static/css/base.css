@@ -162,3 +162,29 @@ footer a:hover { color: #9dc2ff; }
   .jogo-conteudo { gap: 16px; }
   .painel-recordes { padding: 12px; width: 230px; }
 }
+
+/* Quem está jogando agora — painel embaixo da lista de jogos. */
+.online-painel {
+  margin-top: 18px; padding: 12px 14px;
+  border: 1px solid #26314f; border-radius: 12px; background: #0d1424;
+}
+.online-cabecalho {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font-size: 14px; color: #e8edf7;
+}
+.online-total { font-size: 12px; color: #aeb2c7; font-variant-numeric: tabular-nums; }
+.online-lista { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.online-lista li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 13px; color: #c9ccda;
+}
+.online-lista li.vazio { color: #7b8299; }
+.online-quantos {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-variant-numeric: tabular-nums; color: #aeb2c7;
+}
+.online-bolinha {
+  width: 8px; height: 8px; border-radius: 50%; background: #2f3a56; flex: none;
+}
+.online-lista li.tem-gente .online-quantos { color: #7ddea3; font-weight: bold; }
+.online-lista li.tem-gente .online-bolinha { background: #7ddea3; box-shadow: 0 0 8px rgba(125, 222, 163, .7); }

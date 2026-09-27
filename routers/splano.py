@@ -282,18 +282,26 @@ def _reiniciar_para_espera(sala: dict) -> None:
 # Envio do estado (com corte do que está fora da tela)
 # ---------------------------------------------------------------------------
 
-def _centro_da_camera(jogo: dict, jogador: Optional[dict],
-                      observando: Optional[str] = None) -> tuple:
+def _camera_de(jogo: dict, jogador: Optional[dict],
+               observando: Optional[str] = None):
+    """(x, y, dono) — o ponto que a câmera segue e QUEM está ali.
+
+    Devolver o dono importa: o zoom é calculado a partir do tamanho de quem a
+    câmera acompanha. Enquanto isso não existia, quem morria continuava com o
+    zoom da própria bolinha (a menor possível) enquanto assistia um gigante, e
+    a tela virava um borrão de uma cor só.
+    """
     if jogador and jogador["vivo"] and jogador["celulas"]:
-        return _centro(jogador)
+        return _centro(jogador) + (jogador,)
     # Morreu (ou nunca entrou): assiste quem o jogador escolheu.
     alvo = jogo["jogadores"].get(observando or "")
     if alvo and alvo["vivo"] and alvo["celulas"]:
-        return _centro(alvo)
+        return _centro(alvo) + (alvo,)
     restantes = regras.vivos(jogo)
     if restantes:  # sem escolha válida: segue quem está liderando
-        return _centro(max(restantes, key=regras.energia_total))
-    return regras.ARENA / 2, regras.ARENA / 2
+        lider = max(restantes, key=regras.energia_total)
+        return _centro(lider) + (lider,)
+    return regras.ARENA / 2, regras.ARENA / 2, None
 
 
 def _centro(jogador: dict) -> tuple:
@@ -308,13 +316,18 @@ def _estado_para(sala: dict, nome: str, agora: float) -> dict:
     eu = jogo["jogadores"].get(nome)
     conexao = sala["conexoes"].get(nome) or {}
     assistindo = conexao.get("assistindo") if (not eu or not eu["vivo"]) else None
-    cx, cy = _centro_da_camera(jogo, eu, assistindo)
-    meu_raio = regras.RAIO_BASE
-    if eu and eu["celulas"]:
-        meu_raio = max(regras.raio(c["energia"]) for c in eu["celulas"])
+    cx, cy, dono_camera = _camera_de(jogo, eu, assistindo)
+    raio_camera = regras.RAIO_BASE
+    if dono_camera and dono_camera["celulas"]:
+        raio_camera = max(regras.raio(c["energia"]) for c in dono_camera["celulas"])
     # Quanto do mapa cabe na tela. Cresce mais devagar que a bola, então o
-    # jogador se vê aumentando (e não sempre do mesmo tamanho na tela).
-    alcance = 120.0 + 240.0 * (meu_raio / regras.RAIO_BASE) ** 0.55
+    # jogador se vê aumentando (e não sempre do mesmo tamanho na tela). Vale
+    # igual pra quem assiste: o zoom acompanha o tamanho de quem está sendo
+    # assistido, senão a bolinha dele não caberia na tela.
+    alcance = 120.0 + 240.0 * (raio_camera / regras.RAIO_BASE) ** 0.55
+    # Teto: passando disso a bolinha ocuparia a arena inteira e não daria pra
+    # ver mais nada além dela.
+    alcance = min(alcance, regras.ARENA / 2.0)
 
     celulas = []
     for outro_nome, jogador in jogo["jogadores"].items():

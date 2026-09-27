@@ -96,15 +96,9 @@
   width: 260px; height: 260px; border-radius: 50%;
   border: 4px solid #2d4470; box-shadow: 0 0 0 2px #0d1526 inset, 0 8px 24px rgba(0,0,0,0.4);
   position: relative;
-  background: conic-gradient(from 0deg,
-    #ffd36a 0% 15%,
-    #7ddea3 15% 25%,
-    #ff8a8a 25% 45%,
-    #c9a6ff 45% 55%,
-    #ff8a8a 55% 75%,
-    #7ddea3 75% 85%,
-    #ffd36a 85% 100%
-  );
+  /* As fatias são pintadas em JS a partir dos setores que o servidor manda
+     (lojaRoletaPintarRoda) — isto aqui é só a cor enquanto elas não chegam. */
+  background: #1c2c4a;
   transform: rotate(0deg);
 }
 .loja-roleta-cubo {
@@ -114,7 +108,7 @@
 }
 .loja-roleta-label {
   position: absolute; top: 50%; left: 50%;
-  font-size: 13px; font-weight: bold; color: #111a2e;
+  font-size: 11px; font-weight: bold; color: #111a2e;
   text-shadow: 0 1px 0 rgba(255,255,255,0.35);
   pointer-events: none; white-space: nowrap;
 }
@@ -160,3 +154,5 @@
   0% { background-position: 0% 50%; }
   100% { background-position: 300% 50%; }
 }
+
+.loja-roleta-legenda .loja-roleta-nota { color: #7b8299; font-size: 12px; margin-top: 4px; }

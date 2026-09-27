@@ -722,22 +722,41 @@ async function carregarRoleta() {
   lojaRoletaApostaMultiplo = dados.aposta_multiplo;
   lojaRoletaAposta = lojaRoletaApostaMinima;
 
+  var total = lojaRoletaFatias.reduce(function (soma, f) { return soma + f.peso; }, 0) || 100;
   var acumulado = 0;
   lojaRoletaAngulos = lojaRoletaFatias.map(function (fatia) {
     var inicio = acumulado;
-    var tamanho = (fatia.peso / 100) * 360;
-    var fim = acumulado + tamanho;
+    var fim = acumulado + (fatia.peso / total) * 360;
     acumulado = fim;
     return { inicio: inicio, fim: fim, meio: (inicio + fim) / 2 };
   });
 
+  lojaRoletaPintarRoda();
   lojaRoletaRenderLabels();
+}
+
+var LOJA_ROLETA_CORES = { "2x": "#ffd36a", "1.5x": "#7ddea3", "0.5x": "#ff8a8a" };
+var LOJA_ROLETA_COR_PRESENTE = "#c9a6ff";
+
+/* A roda é pintada a partir dos setores que o servidor mandou — antes as
+   fatias viviam fixas no CSS e qualquer mudança no servidor deixava o desenho
+   mentindo sobre onde o ponteiro parou. */
+function lojaRoletaPintarRoda() {
+  var partes = lojaRoletaFatias.map(function (fatia, i) {
+    var cor = fatia.tipo === "presente"
+      ? LOJA_ROLETA_COR_PRESENTE
+      : (LOJA_ROLETA_CORES[fatia.label] || "#5b9dff");
+    var a = lojaRoletaAngulos[i];
+    return cor + " " + a.inicio.toFixed(3) + "deg " + a.fim.toFixed(3) + "deg";
+  });
+  document.querySelector("#loja-roleta-roda").style.background =
+    "conic-gradient(from 0deg, " + partes.join(", ") + ")";
 }
 
 function lojaRoletaRenderLabels() {
   var roda = document.querySelector("#loja-roleta-roda");
   roda.querySelectorAll(".loja-roleta-label").forEach(function (el) { el.remove(); });
-  var raio = 88;
+  var raio = 96;
   lojaRoletaFatias.forEach(function (fatia, indice) {
     var meio = lojaRoletaAngulos[indice].meio;
     var rad = (meio * Math.PI) / 180;

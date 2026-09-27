@@ -13,7 +13,8 @@ var spPellets = [];
 var spPowerups = [];
 var spPlacar = [];
 var spEu = { vivo: false, energia: 0, kills: 0, dobro: 0, restante: 0, vivos: 0 };
-var spCamera = { x: 1100, y: 1100, alcance: 700, prontoX: false };
+var spCamera = { x: 1100, y: 1100, alcance: 700, alvoAlcance: 700, prontoX: false };
+var spCameraPidAtual = 0;  // de quem é a câmera agora (0 = eu mesmo)
 var spDir = { x: 0, y: 0 };
 var spUltimaDir = { x: 0, y: 0, em: 0 };
 var spTeclas = {};
@@ -122,10 +123,16 @@ function spProcessar(d) {
 }
 
 function spReceberEstado(d) {
-  spCamera.alcance = d.alcance;
-  if (!spCamera.prontoX) {
+  // Trocar de quem se assiste é um corte de câmera, não um passeio: sem o
+  // salto a câmera atravessava o mapa devagar até o novo alvo.
+  var trocouDeAlvo = spCameraPidAtual !== spEspectroPid;
+  spCameraPidAtual = spEspectroPid;
+
+  spCamera.alvoAlcance = d.alcance;
+  if (!spCamera.prontoX || trocouDeAlvo) {
     spCamera.x = d.cx;
     spCamera.y = d.cy;
+    spCamera.alcance = d.alcance;
     spCamera.prontoX = true;
   }
   spCamera.alvoX = d.cx;
@@ -664,6 +671,11 @@ function spLoop(agora) {
   if (spCamera.alvoX !== undefined) {
     spCamera.x += (spCamera.alvoX - spCamera.x) * Math.min(1, dt * 7);
     spCamera.y += (spCamera.alvoY - spCamera.y) * Math.min(1, dt * 7);
+  }
+  // O zoom também é puxado aos poucos: quem assiste um gigante recebia a
+  // mudança de alcance de uma vez e a tela dava um tranco a cada tick.
+  if (spCamera.alvoAlcance) {
+    spCamera.alcance += (spCamera.alvoAlcance - spCamera.alcance) * Math.min(1, dt * 5);
   }
   spDesenhar(agora);
 }

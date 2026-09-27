@@ -51,7 +51,7 @@ POWERUPS_POR_LEVA = 6       # quantos nascem de uma vez
 POWERUP_RAIO = 34.0         # bem maior que o pellet, pra dá pra ver de longe
 POWERUP_INTERVALO = 30.0    # segundos entre uma leva e outra
 POWERUP_VIDA = 10.0         # segundos até sumir se ninguém comer
-DOBRO_ENERGIA_SEGUNDOS = 60.0
+DOBRO_ENERGIA_SEGUNDOS = 30.0
 TIPOS_POWERUP = ("energia2x", "tamanho2x")
 
 # Fim de partida

@@ -107,6 +107,48 @@ function mostrarTela(tela) {
     sairSalaMulti();
   }
   if (typeof atualizarBotaoAssistirAlgo === "function") atualizarBotaoAssistirAlgo();
+  onlineAcompanhar(!!tela && tela.id === "tela-jogos");
+}
+
+// ---------------------------------------------------------------------------
+// "Quem está jogando agora" — painel embaixo da lista de jogos.
+// Só consulta enquanto a lista está à vista: ninguém precisa do contador
+// enquanto joga, e a VM é pequena demais pra responder pergunta à toa.
+// ---------------------------------------------------------------------------
+var onlineTimer = null;
+var ONLINE_INTERVALO = 15000;
+
+function onlineAcompanhar(ligado) {
+  if (onlineTimer) {
+    clearInterval(onlineTimer);
+    onlineTimer = null;
+  }
+  if (!ligado) return;
+  onlineAtualizar();
+  onlineTimer = setInterval(onlineAtualizar, ONLINE_INTERVALO);
+}
+
+async function onlineAtualizar() {
+  var lista = document.querySelector("#online-lista");
+  var totalEl = document.querySelector("#online-total");
+  if (!lista) return;
+  try {
+    var resp = await fetch("./online");
+    if (!resp.ok) throw new Error("falhou");
+    var dados = await resp.json();
+    var jogos = dados.jogos || [];
+    totalEl.textContent = dados.total === 1 ? "1 pessoa" : dados.total + " pessoas";
+    lista.innerHTML = jogos.map(function (j) {
+      return '<li class="' + (j.online > 0 ? "tem-gente" : "") + '">' +
+        "<span>" + j.nome + "</span>" +
+        '<span class="online-quantos"><span class="online-bolinha"></span>' +
+        j.online + "</span></li>";
+    }).join("");
+    if (!jogos.length) lista.innerHTML = '<li class="vazio">Sem informação agora.</li>';
+  } catch (e) {
+    totalEl.textContent = "—";
+    lista.innerHTML = '<li class="vazio">Não deu pra saber agora.</li>';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -807,3 +849,7 @@ conectarAoDiscord();
 })();
 
 
+
+// A lista de jogos já nasce visível (class="tela ativa"), sem passar por
+// mostrarTela — então o painel de online precisa começar a rodar aqui.
+if (document.querySelector("#tela-jogos.ativa")) onlineAcompanhar(true);

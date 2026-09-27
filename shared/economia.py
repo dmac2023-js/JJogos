@@ -198,20 +198,37 @@ PARTIDAS_JOGOS = [
     "splano_io",
 ]
 
-# Roleta da sorte — 7 fatias intercaladas (mesma categoria nunca é vizinha),
-# peso = tamanho da fatia em % (soma sempre 100). "indice" é preenchido em
-# sortear_fatia_roleta() e usado pelo front pra girar até a fatia certa.
+# Roleta da sorte — 13 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 4 de 0.5x
+# e 1 de presente. Todos têm peso igual, então é sorte pura: cada setor tem a
+# mesma chance (1/13) e não há fatia "grande" pra mirar.
+#
+# A ordem abaixo é embaralhada de propósito e FIXA: uma roleta de verdade não
+# se remonta a cada giro, e com ordem fixa dá pra conferir o resultado olhando
+# onde o ponteiro parou. Não existe padrão — não alterna por categoria nem
+# repete ciclo; o presente fica fora do centro e fora das pontas.
 ROLETA_APOSTA_MINIMA = 10
 ROLETA_APOSTA_MULTIPLO = 10
-ROLETA_FATIAS = [
-    {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
-    {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
-    {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
-    {"tipo": "presente", "peso": 10, "label": "Presente"},
-    {"tipo": "multiplicador", "valor": 0.5, "peso": 20, "label": "0.5x"},
-    {"tipo": "multiplicador", "valor": 1.5, "peso": 10, "label": "1.5x"},
-    {"tipo": "multiplicador", "valor": 2.0, "peso": 15, "label": "2x"},
+_ROLETA_ORDEM = [
+    "0.5x", "2x", "1.5x", "0.5x", "2x", "presente", "1.5x",
+    "0.5x", "1.5x", "2x", "0.5x", "2x", "1.5x",
 ]
+_ROLETA_MODELOS = {
+    "2x": {"tipo": "multiplicador", "valor": 2.0, "label": "2x"},
+    "1.5x": {"tipo": "multiplicador", "valor": 1.5, "label": "1.5x"},
+    "0.5x": {"tipo": "multiplicador", "valor": 0.5, "label": "0.5x"},
+    "presente": {"tipo": "presente", "label": "Presente"},
+}
+# peso = tamanho do setor em %, e a soma tem que dar 100 (o front desenha a
+# roda a partir disso). Com 13 setores iguais não fecha em número redondo, por
+# isso o resto vai pro último — a diferença é invisível e o sorteio não usa o
+# peso pra nada além do desenho.
+_ROLETA_PESO = round(100 / len(_ROLETA_ORDEM), 4)
+ROLETA_FATIAS = []
+for _i, _chave in enumerate(_ROLETA_ORDEM):
+    _fatia = dict(_ROLETA_MODELOS[_chave])
+    _fatia["peso"] = (round(100 - _ROLETA_PESO * (len(_ROLETA_ORDEM) - 1), 4)
+                      if _i == len(_ROLETA_ORDEM) - 1 else _ROLETA_PESO)
+    ROLETA_FATIAS.append(_fatia)
 
 
 def _carregar_catalogo_decoracoes() -> list:
@@ -575,9 +592,9 @@ def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> di
 
 
 def sortear_fatia_roleta() -> dict:
-    """Sorteia uma fatia respeitando os pesos (%) de cada uma."""
-    pesos = [fatia["peso"] for fatia in ROLETA_FATIAS]
-    indice = secrets.SystemRandom().choices(range(len(ROLETA_FATIAS)), weights=pesos, k=1)[0]
+    """Sorteia um setor. Todos têm a mesma chance — o "peso" só existe pro
+    desenho da roda, não pesa no sorteio."""
+    indice = secrets.SystemRandom().randrange(len(ROLETA_FATIAS))
     fatia = dict(ROLETA_FATIAS[indice])
     fatia["indice"] = indice
     return fatia
