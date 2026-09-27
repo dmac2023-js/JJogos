@@ -369,7 +369,35 @@ async function conectarAoDiscord() {
           usuarioDiscord = sessaoSalva.user;
           autenticou = true;
         } catch (eReusar) {
-          console.warn("Token salvo não colou, tentando login completo:", eReusar);
+          // Token salvo expirou (comum: dura ~7 dias) — antes de cair pro
+          // fluxo completo (authorize() interativo + troca de code, que É o
+          // ponto que o Discord limita), tenta renovar com o refresh_token.
+          // Renovar é mais barato/direto que uma autorização nova inteira.
+          console.warn("Token salvo não colou, tentando renovar:", eReusar);
+          if (sessaoSalva.refresh_token) {
+            try {
+              var resRenovar = await fetch("./token/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: sessaoSalva.refresh_token }),
+              });
+              if (resRenovar.ok) {
+                var tokenRenovado = await resRenovar.json();
+                var accessTokenNovo = tokenRenovado.access_token || sessaoSalva.access_token;
+                await discordSdkGlobal.commands.authenticate({ access_token: accessTokenNovo });
+                usuarioDiscord = sessaoSalva.user;
+                autenticou = true;
+                salvarSessaoDiscord({
+                  user: sessaoSalva.user,
+                  access_token: accessTokenNovo,
+                  refresh_token: tokenRenovado.refresh_token || sessaoSalva.refresh_token,
+                  obtido_em: Date.now(),
+                });
+              }
+            } catch (eRenovar) {
+              console.warn("Renovação de token falhou, tentando login completo:", eRenovar);
+            }
+          }
         }
       }
 
