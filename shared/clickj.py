@@ -218,18 +218,21 @@ PESO_MAGIA_ATAQUE = 0.9
 # Tipo do ataque = "magica" se a magia do atacante for >= força dele, senão
 # "fisica". >1 = fraqueza, <1 = resistência, 1 = neutro.
 RESISTENCIA_CLASSE = {
-    "mago": {"fisica": 1.25, "magica": 1.0},
+    "mago": {"fisica": 1.0, "magica": 1.0},
     "curandeiro": {"fisica": 1.20, "magica": 0.85},
-    "arqueiro": {"fisica": 0.8, "magica": 1.2},
+    "arqueiro": {"fisica": 0.8, "magica": 1.9},
     "guerreiro": {"fisica": 1.0, "magica": 1.0},
     "monge": {"fisica": 0.85, "magica": 0.85},
 }
-# Mago também sofre extra de quem ataca com muita precisão (até +50% de
-# dano quando a precisão do atacante domina completamente a do mago).
-PRECISAO_EXTRA_MAGO = 0.5
+# Mago também sofre extra de quem ataca com muita precisão (até +15% de
+# dano quando a precisão do atacante domina completamente a do mago). A
+# fraqueza do mago é só essa (a física neutra acima já conta a precisão do
+# arqueiro aqui) — somar as duas em cima do arqueiro (que é precisão E
+# físico) deixava esse confronto praticamente imperdível pro arqueiro.
+PRECISAO_EXTRA_MAGO = 0.15
 # Arqueiro toma "crítico de magia": chance extra de dano mágico ampliado.
-CHANCE_CRITICO_MAGICO_ARQUEIRO = 0.25
-CRITICO_MAGICO_MULT = 1.5
+CHANCE_CRITICO_MAGICO_ARQUEIRO = 0.38
+CRITICO_MAGICO_MULT = 1.72
 # Monge é pouco ágil: sua agilidade em combate rende menos que a mostrada
 # na ficha (afeta esquiva, tanto passiva quanto ativa).
 AGILIDADE_MULT_CLASSE = {"monge": 0.6}
@@ -890,6 +893,7 @@ def novo_lutador(j: dict, agora: float) -> dict:
         stats["agilidade"] = round(stats["agilidade"] * mult_agil)
     return {
         "stats": stats,
+        "classe": j["classe"],
         "hp": vida,
         "hp_max": vida,
         "defendendo": False,
