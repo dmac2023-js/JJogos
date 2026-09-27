@@ -56,7 +56,14 @@ app.include_router(lobby.router)
 async def servir_estatico(caminho: str = ""):
     arquivo = PASTA_STATIC / caminho
     if caminho and arquivo.is_file():
-        return FileResponse(arquivo)
+        # JS/CSS sempre vêm com ?v=... (cache-busting manual a cada mudança) —
+        # dá pra cachear "para sempre" sem risco de servir versão velha, o que
+        # corta round-trips de revalidação a cada load (crítico no mobile,
+        # onde a Activity tem pouco tempo pra terminar de carregar).
+        cabecalhos = {}
+        if arquivo.suffix in (".js", ".css"):
+            cabecalhos["Cache-Control"] = "public, max-age=31536000, immutable"
+        return FileResponse(arquivo, headers=cabecalhos)
     # HTML nunca fica no cache: aba antiga do transmissor sem o encoder novo
     # era a causa de "host conectou mas não chega vídeo" na Activity.
     return FileResponse(PASTA_STATIC / "index.html",

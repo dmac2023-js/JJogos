@@ -316,30 +316,39 @@ async function conectarAoDiscord() {
   }
   conexaoDiscordPromise = (async function () {
     try {
-      var respostaConfiguracao = await fetch("./config");
-      if (!respostaConfiguracao.ok) {
+      // Busca ./config e importa o SDK em paralelo (são independentes até
+      // aqui) — no mobile, cada round-trip sequencial custa caro de latência
+      // e a Activity tem um tempo curto pra chamar ready() antes de o
+      // Discord decidir que travou e fechar sozinha.
+      var configPromise = fetch("./config").then(function (r) {
+        if (!r.ok) throw { configHttpErro: r.status };
+        return r.json();
+      });
+      var sdkPromise = import("/sdk/npm/@discord/embedded-app-sdk/+esm").catch(function (importErr) {
+        console.warn("SDK import failed (likely not in Discord iframe):", importErr);
+        throw { sdkImportErro: importErr };
+      });
+
+      var configuracao, mod;
+      try {
+        var resultados = await Promise.all([configPromise, sdkPromise]);
+        configuracao = resultados[0];
+        mod = resultados[1];
+      } catch (erroParalelo) {
         if (dentroDaActivity()) {
-          elementoStatus.textContent = "Erro ao ler config (" + respostaConfiguracao.status + ")";
-          elementoStatus.classList.remove("conectado");
-        }
-        return;
-      }
-      var configuracao = await respostaConfiguracao.json();
-      if (!configuracao.application_id) {
-        if (dentroDaActivity()) {
-          elementoStatus.textContent = "application_id não configurado no servidor";
+          if (erroParalelo && erroParalelo.configHttpErro) {
+            elementoStatus.textContent = "Erro ao ler config (" + erroParalelo.configHttpErro + ")";
+          } else {
+            elementoStatus.textContent = "Erro ao carregar SDK do Discord";
+          }
           elementoStatus.classList.remove("conectado");
         }
         return;
       }
 
-      var mod;
-      try {
-        mod = await import("/sdk/npm/@discord/embedded-app-sdk/+esm");
-      } catch (importErr) {
-        console.warn("SDK import failed (likely not in Discord iframe):", importErr);
+      if (!configuracao.application_id) {
         if (dentroDaActivity()) {
-          elementoStatus.textContent = "Erro ao carregar SDK do Discord";
+          elementoStatus.textContent = "application_id não configurado no servidor";
           elementoStatus.classList.remove("conectado");
         }
         return;
