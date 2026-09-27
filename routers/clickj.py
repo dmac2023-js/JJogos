@@ -40,7 +40,9 @@ PRAZO_TURNO = 30
 PRAZO_CONVITE = 20
 TOLERANCIA_DESCONEXAO = 30
 
-_dados: dict = {"jogadores": {}}
+# "ascensoes": nome -> quantas vezes zerou tudo. Vive fora de "jogadores"
+# porque a ascensão apaga o personagem e esse contador é o que sobrevive.
+_dados: dict = {"jogadores": {}, "ascensoes": {}}
 _carregado = False
 _sujo = False
 _lock_carga = asyncio.Lock()
@@ -86,6 +88,7 @@ async def _garantir_carregado() -> None:
             return
         lido = await asyncio.to_thread(_ler_armazenamento)
         lido.setdefault("jogadores", {})
+        lido.setdefault("ascensoes", {})
         for j in lido["jogadores"].values():
             regras.normalizar(j)
         _dados = lido
@@ -152,6 +155,8 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "cliques_por_clique": cpc,
         "jcoins_por_clique": jpc,
         "rebirths": j["rebirths"],
+        "ascensoes": j.get("ascensoes", 0),
+        "pode_ascender": regras.pode_ascender(j),
         "hp_max": regras.hp_max(j),
         "auto_nivel": j["auto_nivel"],
         "auto_cps": regras.AUTO_CPS.get(j["auto_nivel"], 0),
@@ -214,6 +219,7 @@ def _entrada_online(nome: str) -> Optional[dict]:
         "nivel": j["nivel"],
         "jcoins": j["jcoins"],
         "rebirths": j["rebirths"],
+        "ascensoes": j.get("ascensoes", 0),
         "em_luta": nome in luta_de,
     }
 
@@ -221,7 +227,7 @@ def _entrada_online(nome: str) -> Optional[dict]:
 async def _transmitir_online(forcar: bool = False) -> None:
     global _ultimo_online
     lista = [e for e in (_entrada_online(n) for n in list(conexoes)) if e]
-    lista.sort(key=lambda e: (-e["rebirths"], -e["nivel"], -e["jcoins"]))
+    lista.sort(key=lambda e: (-e["ascensoes"], -e["rebirths"], -e["nivel"], -e["jcoins"]))
     assinatura = json.dumps(lista, sort_keys=True, ensure_ascii=False)
     if not forcar and assinatura == _ultimo_online:
         return
@@ -490,7 +496,9 @@ async def _tratar(nome: str, dados: dict) -> None:
         if classe not in regras.CLASSES or genero not in regras.GENEROS:
             await _enviar(nome, {"tipo": "erro", "mensagem": "Escolha uma classe e um gênero."})
             return
-        _dados["jogadores"][nome] = regras.novo_jogador(nome, c["nick"], c["avatar"], classe, genero, agora)
+        novo = regras.novo_jogador(nome, c["nick"], c["avatar"], classe, genero, agora)
+        novo["ascensoes"] = _dados.setdefault("ascensoes", {}).get(nome, 0)
+        _dados["jogadores"][nome] = novo
         _marcar_sujo()
         await _enviar_estado(nome)
         await _transmitir_online()
@@ -518,6 +526,27 @@ async def _tratar(nome: str, dados: dict) -> None:
             _marcar_sujo()
         extra = {"aviso": "Subiu para o nível %d!" % j["nivel"]} if subiu else None
         await _enviar_estado(nome, extra)
+        return
+
+    if tipo == "ascender":
+        if nome in luta_de:
+            await _enviar(nome, {"tipo": "erro", "mensagem": "Termine a luta antes de ascender."})
+            return
+        ok, msg = regras.ascender(j)
+        if not ok:
+            await _enviar(nome, {"tipo": "erro", "mensagem": msg})
+            return
+        # O personagem some por completo: só o contador de ascensões fica.
+        contador = _dados.setdefault("ascensoes", {})
+        contador[nome] = j.get("ascensoes", 0) + 1
+        _dados["jogadores"].pop(nome, None)
+        _marcar_sujo()
+        await asyncio.to_thread(creditar_moedas, nome, regras.MOEDAS_POR_ASCENSAO)
+        await _salvar_se_sujo()
+        await _enviar(nome, {"tipo": "bem_vindo", "catalogo": regras.catalogo(),
+                             "tem_personagem": False})
+        await _enviar(nome, {"tipo": "aviso", "mensagem": msg})
+        await _transmitir_online(forcar=True)
         return
 
     if tipo in ("comprar", "usar_pocao", "melhorar_auto", "rebirth", "maestria_escolher", "maestria_melhorar",
@@ -685,6 +714,7 @@ async def admin_resetar_progresso(dados: ResetarProgresso):
 
     afetados = len(_dados["jogadores"])
     _dados["jogadores"] = {}
+    _dados["ascensoes"] = {}
     _marcar_sujo()
     await _salvar_se_sujo()
 

@@ -756,6 +756,33 @@ function lojaRoletaAtualizarValor() {
   botaoMais100.disabled = lojaRoletaAposta + 100 > minhaCarteira.saldo || lojaRoletaGirando;
   botaoGirar.textContent = lojaRoletaGirando ? "Girando..." : "Girar";
   botaoGirar.disabled = lojaRoletaGirando || lojaRoletaAposta > minhaCarteira.saldo || lojaRoletaAposta < lojaRoletaApostaMinima;
+  var botaoAllIn = document.querySelector("#loja-roleta-allin");
+  var tudo = lojaRoletaApostaMaxima();
+  botaoAllIn.disabled = lojaRoletaGirando || tudo < lojaRoletaApostaMinima;
+  botaoAllIn.textContent = tudo >= lojaRoletaApostaMinima
+    ? "🔥 All-in: apostar " + tudo + " 🪙"
+    : "🔥 All-in (sem moedas suficientes)";
+}
+
+/* A aposta tem que ser múltipla de lojaRoletaApostaMultiplo, então o all-in é
+   o maior múltiplo que cabe no saldo — o troco fica na carteira. */
+function lojaRoletaApostaMaxima() {
+  var saldo = (minhaCarteira && minhaCarteira.saldo) || 0;
+  return saldo - (saldo % lojaRoletaApostaMultiplo);
+}
+
+function lojaRoletaAllIn() {
+  if (lojaRoletaGirando) return;
+  var tudo = lojaRoletaApostaMaxima();
+  if (tudo < lojaRoletaApostaMinima) return;
+  var troco = ((minhaCarteira && minhaCarteira.saldo) || 0) - tudo;
+  var aviso = "Apostar TUDO: " + tudo + " moedas" +
+    (troco ? " (sobram " + troco + " que não fecham um múltiplo de " + lojaRoletaApostaMultiplo + ")" : "") +
+    ".\n\nSe a roleta cair mal você perde tudo. Tem certeza?";
+  if (!confirm(aviso)) return;
+  lojaRoletaAposta = tudo;
+  lojaRoletaAtualizarValor();
+  girarRoleta();
 }
 
 function lojaRoletaGirarPara(indice) {
@@ -781,7 +808,8 @@ function lojaRoletaMensagemResultado(dados) {
   }
   var presente = dados.presente;
   if (presente) {
-    var tipos = { decoracao: "a decoração", cor_nick: "a cor de nick", fonte_nick: "a fonte de nick" };
+    var tipos = { decoracao: "a decoração", cor_nick: "a cor de nick", fonte_nick: "a fonte de nick",
+      skin_splano: "a skin do Splano.io" };
     return { texto: "🎁 Presente! Você ganhou " + tipos[presente.tipo] + " \"" + presente.nome + "\" de graça — já está na sua loja.", perda: false };
   }
   return { texto: "🎁 Você já tem tudo da loja! Recebeu " + dados.premio_moedas + " moedas.", perda: false };
@@ -886,6 +914,7 @@ function abrirModalAdminDoar() {
     '<button id="admin-add" type="button" class="botao-copiar" style="flex:1;">➕ Adicionar</button>' +
     '<button id="admin-rem" type="button" class="botao-copiar" style="flex:1;">➖ Remover</button>' +
     "</div>" +
+    '<button id="admin-zerar-saldo" type="button" class="botao-copiar" style="margin-top:8px;width:100%;background:#3a1414;color:#ffc9c9;">💸 Remover TODO o dinheiro</button>' +
     '<button id="admin-limpar-itens" type="button" class="botao-copiar" style="margin-top:8px;width:100%;background:#3a1414;color:#ffc9c9;">🗑️ Remover todos os itens da loja</button>' +
     '<p id="admin-doar-erro" class="mensagem erro" style="display:none;margin-top:8px;"></p>';
 
@@ -895,6 +924,7 @@ function abrirModalAdminDoar() {
   card.querySelector("#admin-consultar").addEventListener("click", adminConsultar);
   card.querySelector("#admin-add").addEventListener("click", function () { adminAlterar("adicionar"); });
   card.querySelector("#admin-rem").addEventListener("click", function () { adminAlterar("remover"); });
+  card.querySelector("#admin-zerar-saldo").addEventListener("click", adminZerarSaldo);
   card.querySelector("#admin-limpar-itens").addEventListener("click", adminLimparItens);
   card.querySelector("#admin-doar-id").addEventListener("keydown", function (ev) {
     if (ev.key === "Enter") adminConsultar();
@@ -984,6 +1014,29 @@ async function adminAlterar(acao) {
   }
 }
 
+async function adminZerarSaldo() {
+  var alvoId = adminAlvo();
+  if (!alvoId) return;
+  if (!confirm("Zerar TODO o dinheiro desse jogador? Os itens da loja continuam com ele.")) return;
+  try {
+    var resp = await fetch("./economia/admin/zerar-saldo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_id: usuarioDiscord.id, alvo_id: alvoId }),
+    });
+    var dados = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) {
+      adminErro(dados.detail || "Não consegui zerar o saldo.");
+      return;
+    }
+    adminRenderInfo(dados);
+    adminErro("");
+    if (dados.nome === nomeUsuario()) await atualizarMoedasHeader();
+  } catch (e) {
+    adminErro("Não foi possível zerar o saldo agora.");
+  }
+}
+
 async function adminLimparItens() {
   var alvoId = adminAlvo();
   if (!alvoId) return;
@@ -1052,5 +1105,6 @@ document.querySelector("#loja-roleta-mais100").addEventListener("click", functio
   lojaRoletaAtualizarValor();
 });
 document.querySelector("#loja-roleta-girar").addEventListener("click", girarRoleta);
+document.querySelector("#loja-roleta-allin").addEventListener("click", lojaRoletaAllIn);
 setInterval(tentarBonusAtividade, 60 * 1000);
 setTimeout(tentarBonusAtividade, 5000);

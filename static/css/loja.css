@@ -127,6 +127,9 @@
 .loja-roleta-valor { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: bold; min-width: 90px; justify-content: center; }
 .loja-roleta-girar-btn { display: block; width: 100%; max-width: 260px; margin: 0 auto; padding: 12px; font-size: 15px; }
 .loja-roleta-girar-btn:disabled { opacity: 0.5; cursor: default; }
+.loja-roleta-allin-btn { display: block; width: 100%; max-width: 260px; margin: 8px auto 0; padding: 10px;
+  font-size: 14px; border-color: #ff8a8a; color: #ffb3b3; }
+.loja-roleta-allin-btn:disabled { opacity: 0.45; cursor: default; }
 .loja-roleta-resultado { text-align: center; margin-top: 14px; font-size: 14px; min-height: 20px; color: #85e0ae; }
 .loja-roleta-resultado.perda { color: #ff8a8a; }
 

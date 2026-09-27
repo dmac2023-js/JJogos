@@ -498,6 +498,19 @@ def _contagem_itens(carteira: dict) -> dict:
     return contagem
 
 
+def zerar_saldo_admin(nome: str) -> Optional[int]:
+    """Tira TODO o dinheiro do jogador de uma vez (o botão "remover todo o
+    dinheiro" do painel). Retorna o novo saldo — sempre 0."""
+    if eh_anonimo(nome) or not nome:
+        return None
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome)
+        carteira["saldo"] = 0
+        salvar_economia(dados)
+        return 0
+
+
 def consulta_admin(nome: str) -> dict:
     """Saldo + quantos itens da loja o jogador tem — pro painel de admin."""
     if not nome:
@@ -567,13 +580,16 @@ def sortear_fatia_roleta() -> dict:
 
 
 def sortear_presente(carteira: dict) -> Optional[dict]:
-    """Presente da roleta: sorteia primeiro a categoria (decoração, cor ou
-    fonte do nick) entre as que ainda têm item não possuído, depois o item."""
+    """Presente da roleta: sorteia primeiro a categoria (decoração, cor do
+    nick, fonte do nick ou skin do Splano.io) entre as que ainda têm item não
+    possuído, depois o item."""
     aleatorio = secrets.SystemRandom()
     decoracoes = [d for d in CATALOGO_DECORACOES if d["sku_id"] not in carteira.get("decoracoes", [])]
     cores = [c for c in CORES_NICK if c not in carteira.get("cores_nick", [])]
     fontes = [f for f in FONTES_NICK if f not in carteira.get("fontes_nick", [])]
-    categorias = [nome for nome, itens in (("decoracao", decoracoes), ("cor_nick", cores), ("fonte_nick", fontes)) if itens]
+    skins = [s for s in SKINS_SPLANO if s not in carteira.get("skins_splano", [])]
+    categorias = [nome for nome, itens in (("decoracao", decoracoes), ("cor_nick", cores),
+                                           ("fonte_nick", fontes), ("skin_splano", skins)) if itens]
     if not categorias:
         return None
     categoria = aleatorio.choice(categorias)
@@ -585,9 +601,15 @@ def sortear_presente(carteira: dict) -> Optional[dict]:
         cor = aleatorio.choice(cores)
         carteira["cores_nick"].append(cor)
         return {"tipo": "cor_nick", "id": cor, "nome": "Arco-íris" if cor == "arco-iris" else cor.capitalize()}
-    fonte = aleatorio.choice(fontes)
-    carteira["fontes_nick"].append(fonte)
-    return {"tipo": "fonte_nick", "id": fonte, "nome": FONTES_NICK[fonte]}
+    if categoria == "fonte_nick":
+        fonte = aleatorio.choice(fontes)
+        carteira["fontes_nick"].append(fonte)
+        return {"tipo": "fonte_nick", "id": fonte, "nome": FONTES_NICK[fonte]}
+    skin = aleatorio.choice(skins)
+    carteira["skins_splano"].append(skin)
+    return {"tipo": "skin_splano", "id": skin, "nome": SKINS_SPLANO[skin]["nome"],
+            "cores": SKINS_SPLANO[skin].get("cores", []),
+            "padrao": SKINS_SPLANO[skin].get("padrao", "solido")}
 
 
 def girar_roleta(nome: str, aposta: int) -> dict:

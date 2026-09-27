@@ -27,6 +27,7 @@ from shared.economia import (
     eh_admin_discord_id,
     girar_roleta,
     limpar_itens_admin,
+    zerar_saldo_admin,
     obter_carteira,
     perfil_publico,
     preco_decoracao_item,
@@ -365,6 +366,17 @@ def admin_doar_moedas(dados: DoarMoedas):
         novo_saldo = debitar_moedas(nome_alvo, dados.quantidade)
     else:
         novo_saldo = creditar_moedas(nome_alvo, dados.quantidade)
+    if novo_saldo is None:
+        raise HTTPException(status_code=400, detail="Não consegui alterar o saldo desse jogador.")
+    return {"nome": nome_alvo, "saldo": novo_saldo,
+            "itens": consulta_admin(nome_alvo)["itens"]}
+
+
+@router.post("/economia/admin/zerar-saldo")
+def admin_zerar_saldo(dados: AdminAlvo):
+    """Remove todo o dinheiro do jogador de uma vez (os itens ficam)."""
+    nome_alvo = _alvo_admin(dados.admin_id, dados.alvo_id)
+    novo_saldo = zerar_saldo_admin(nome_alvo)
     if novo_saldo is None:
         raise HTTPException(status_code=400, detail="Não consegui alterar o saldo desse jogador.")
     return {"nome": nome_alvo, "saldo": novo_saldo,

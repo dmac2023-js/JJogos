@@ -433,7 +433,9 @@ function cjRenderJogo() {
   document.querySelector("#cj-meu-titulo").textContent = CJ_CLASSE_ICONES[cjEu.classe] + " " + cjEu.titulo +
     (tituloEquipadoInfo ? " «" + tituloEquipadoInfo.nome + "»" : "");
   document.querySelector("#cj-meu-nivel").textContent = "Nível " + cjEu.nivel + "/" + cjEu.nivel_max;
-  document.querySelector("#cj-meus-rebirths").textContent = cjEu.rebirths ? "🔁 " + cjEu.rebirths + " rebirth" + (cjEu.rebirths > 1 ? "s" : "") : "";
+  document.querySelector("#cj-meus-rebirths").textContent =
+    (cjEu.ascensoes ? "✨" + cjEu.ascensoes + " " : "") +
+    (cjEu.rebirths ? "🔁 " + cjEu.rebirths + " rebirth" + (cjEu.rebirths > 1 ? "s" : "") : (cjEu.ascensoes ? "🔁 0 rebirth" : ""));
   document.querySelector("#cj-meu-pvp").textContent = "⚔️ " + cjEu.pvp_vitorias + "V / " + cjEu.pvp_derrotas + "D · ❤️ " + cjEu.hp_max;
   document.querySelector("#cj-meu-maestria").textContent = (cjEu.maestria_skill && cjEu.maestria_nivel)
     ? "🏅 " + cjCatalogo.skill_nomes[cjEu.maestria_skill] + " " + cjEu.maestria_nivel + "/" + cjCatalogo.maestria.max : "";
@@ -458,6 +460,7 @@ function cjRenderJogo() {
     }
   }
   document.querySelector("#cj-rebirth-dica").textContent = dica;
+  document.querySelector("#cj-ascender").style.display = cjEu.pode_ascender ? "" : "none";
   cjRenderSkills();
 }
 
@@ -516,7 +519,8 @@ function cjRenderOnline() {
       avatarSalaHtml(j.avatar, j.nick, j.cosmeticos, j.nome) +
       '<div class="cj-online-info">' +
       "<strong>" + nickHtml(j.nick, j.cosmeticos, j.nome) + "</strong>" +
-      "<small>" + CJ_CLASSE_ICONES[j.classe] + " Nv " + j.nivel + " · 🔁 " + j.rebirths + "</small>" +
+      "<small>" + CJ_CLASSE_ICONES[j.classe] + " Nv " + j.nivel + " · 🔁 " + j.rebirths +
+      (j.ascensoes ? " · ✨" + j.ascensoes : "") + "</small>" +
       '<span class="cj-online-jcoins">' + cjMoedaHtml(j.jcoins) + "</span>" +
       "</div>" + acao + "</div>";
   });
@@ -589,7 +593,7 @@ function cjLinhasEquip(slot) {
   var podeMax = 0;
   var tempJcoins = jcoins;
   for (var ci = atual + 1; ci < cjCatalogo.materiais.length; ci++) {
-    var precoCi = cjCatalogo.materiais[ci].preco * mult;
+    var precoCi = Math.round(cjCatalogo.materiais[ci].preco * mult);
     if (tempJcoins >= precoCi) { tempJcoins -= precoCi; podeMax++; } else break;
   }
   var html = podeMax >= 2
@@ -600,7 +604,7 @@ function cjLinhasEquip(slot) {
   }
   cjCatalogo.materiais.forEach(function (m, idx) {
     var estado = idx <= atual ? "comprado" : idx === atual + 1 ? "disponivel" : "bloqueado";
-    var preco = m.preco * mult;
+    var preco = Math.round(m.preco * mult);
     var acao;
     if (estado === "comprado") acao = '<span class="cj-possui">' + (idx === atual ? "✓ Em uso" : "✓ Comprado") + "</span>";
     else if (estado === "disponivel") acao = cjBotaoComprar('data-comprar="' + slot + ":" + m.id + '"', preco, "Comprar", jcoins < preco);
@@ -838,7 +842,8 @@ function cjCardAutoclicker() {
   var html = '<div class="cj-auto-card"><strong>🤖 Autoclicker nível ' + cjEu.auto_nivel + "/" + maxAuto + "</strong>" +
     "<small>Clica " + cjFmt(auto.cps[cjEu.auto_nivel]) + " vezes por segundo enquanto você está no ClickJ.</small>";
   if (cjEu.rebirths > 0) {
-    html += '<small style="color:#ff9a9a">Rebirth encareceu o autoclicker em ' + cjFmt(cjEu.auto_preco_mult) + "x.</small>";
+    html += '<small style="color:#ff9a9a">Rebirth encareceu o autoclicker em ' + cjFmt(cjEu.auto_preco_mult) +
+      "x" + (cjEu.rebirths >= 3 ? " — e daqui pra frente o preço não sobe mais." : ".") + "</small>";
   }
   if (cjEu.auto_nivel < maxAuto) {
     var prox = cjEu.auto_nivel + 1;
@@ -974,6 +979,25 @@ function cjConfirmarRebirth() {
     [
       { texto: "Fazer rebirth", principal: true, acao: function () {
         cjEnviar({ tipo: "rebirth" });
+        cjFecharPopup();
+        setTimeout(function () { if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader(); }, 800);
+      } },
+      { texto: "Cancelar", acao: cjFecharPopup },
+    ]);
+}
+
+function cjConfirmarAscensao() {
+  if (!cjEu) return;
+  var asc = cjCatalogo.ascensao || { rebirths: 10, moedas: 500 };
+  cjPopup("✨ Ascensão",
+    "<p>Você volta do <strong>zero absoluto</strong>: sem personagem, sem rebirths, sem nível, sem Jcoins, " +
+    "sem equipamento, sem pets. Vai cair de novo na tela de escolher classe.</p>" +
+    "<p>Em troca: <strong>" + asc.moedas + " moedas</strong> e o símbolo ✨ <strong>" +
+    ((cjEu.ascensoes || 0) + 1) + "</strong> do lado do seu rebirth (que volta a ser 0). " +
+    "<strong>Não tem como desfazer.</strong></p>",
+    [
+      { texto: "Ascender mesmo assim", principal: true, acao: function () {
+        cjEnviar({ tipo: "ascender" });
         cjFecharPopup();
         setTimeout(function () { if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader(); }, 800);
       } },
@@ -1241,11 +1265,45 @@ function cjSair() {
     if (cjClasseEscolhida) cjEnviar({ tipo: "criar", classe: cjClasseEscolhida, genero: cjGenero });
   });
 
+  // Segurar o dedo (ou o botão do mouse) clica sozinho no mesmo ritmo que um
+  // clique rápido — sem isso o celular, onde não dá pra metralhar, ficava em
+  // desvantagem. O intervalo é folgado em relação ao teto do servidor
+  // (CLIQUES_POR_SEGUNDO_MAX = 20), então nada é descartado.
+  var CJ_SEGURAR_INTERVALO = 65;
   var botao = document.querySelector("#cj-botao-clique");
+  var cjSegurarTimer = null;
+  var cjSegurarPonteiro = null;
+
+  function cjPararDeSegurar() {
+    if (cjSegurarTimer) {
+      clearInterval(cjSegurarTimer);
+      cjSegurarTimer = null;
+    }
+    cjSegurarPonteiro = null;
+  }
+
   botao.addEventListener("pointerdown", function (ev) {
     if (ev.button !== undefined && ev.button !== 0) return;
     ev.preventDefault();
     cjClicar(ev);
+    cjPararDeSegurar();
+    cjSegurarPonteiro = ev.pointerId;
+    try { botao.setPointerCapture(ev.pointerId); } catch (e) { /* navegador antigo */ }
+    cjSegurarTimer = setInterval(function () {
+      if (!cjEu) { cjPararDeSegurar(); return; }
+      cjClicar(ev);
+    }, CJ_SEGURAR_INTERVALO);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (evento) {
+    botao.addEventListener(evento, function (ev) {
+      if (cjSegurarPonteiro !== null && ev.pointerId !== cjSegurarPonteiro) return;
+      cjPararDeSegurar();
+    });
+  });
+  // Trocar de tela/aba no meio de um toque deixaria o timer batendo à toa.
+  window.addEventListener("blur", cjPararDeSegurar);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) cjPararDeSegurar();
   });
   botao.addEventListener("keydown", function (ev) {
     if ((ev.key === " " || ev.key === "Enter") && !ev.repeat) {
@@ -1326,6 +1384,7 @@ function cjSair() {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
+  document.querySelector("#cj-ascender").addEventListener("click", cjConfirmarAscensao);
 
   document.querySelector("#cj-online-lista").addEventListener("click", function (ev) {
     var b = ev.target.closest(".cj-desafiar");

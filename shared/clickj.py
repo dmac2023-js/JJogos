@@ -58,6 +58,11 @@ NIVEL_MAX = len(NIVEIS)
 MOEDAS_POR_REBIRTH = 100
 REBIRTHS_QUE_PAGAM = 20
 
+# Ascensão: a partir do 10º rebirth dá pra zerar TUDO (inclusive os rebirths e
+# o personagem) em troca de 500 moedas do site e de um símbolo permanente.
+REBIRTHS_PARA_ASCENDER = 10
+MOEDAS_POR_ASCENSAO = 500
+
 NIVEL_AUTOCLICKER = 5  # nível do personagem em que o autoclicker libera de graça (nível 1 dele)
 AUTO_CPS = {
     1: 50, 2: 100, 3: 200, 4: 500, 5: 750,
@@ -310,6 +315,7 @@ def catalogo() -> dict:
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
         "rebirth_moedas": {"quantia": MOEDAS_POR_REBIRTH, "limite": REBIRTHS_QUE_PAGAM},
+        "ascensao": {"rebirths": REBIRTHS_PARA_ASCENDER, "moedas": MOEDAS_POR_ASCENSAO},
         "pets": {
             "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS_BASE, "max_mochila": PET_MAX_MOCHILA,
             "rebirth_minimo": PET_REBIRTH_MINIMO,
@@ -338,6 +344,7 @@ def normalizar(j: dict) -> dict:
     j.setdefault("cliques", 0)
     j.setdefault("nivel", 1)
     j.setdefault("rebirths", 0)
+    j.setdefault("ascensoes", 0)
     j.setdefault("auto_nivel", 0)
     j.setdefault("equip", {})
     j.setdefault("pocoes", {})
@@ -553,7 +560,7 @@ def nome_item(j: dict, slot: str, idx: int) -> str:
 
 
 def _preco_equip(j: dict, idx: int) -> int:
-    return MATERIAIS[idx]["preco"] * mult_preco_equip(j.get("rebirths", 0))
+    return round(MATERIAIS[idx]["preco"] * mult_preco_equip(j.get("rebirths", 0)))
 
 
 def comprar(j: dict, item_id: str) -> Tuple[bool, str]:
@@ -654,29 +661,31 @@ def usar_pocao_luta(j: dict, lutador: dict, pocao_id: str) -> Tuple[bool, str]:
     return True, "Usou: " + p["nome"] + "."
 
 
+# Do 3º rebirth em diante o autoclicker PARA de encarecer: o preço congela no
+# multiplicador do rebirth 3 pro resto do jogo.
+AUTO_PRECO_MULT = {0: 1, 1: 10, 2: 50}
+AUTO_PRECO_MULT_TETO = 200
+REBIRTH_TETO_AUTO = 3
+
+
 def mult_preco_autoclicker(rebirths: int) -> int:
-    """Cada rebirth encarece MUITO o autoclicker (todos os níveis, não só o
-    10) — no 3º rebirth o nível 10 (base 5B) vira 1T, no 4º vira 10T, no 5º
-    100T e por aí vai (×10 a cada rebirth a partir do 3º)."""
-    if rebirths <= 0:
-        return 1
-    if rebirths == 1:
-        return 10
-    if rebirths == 2:
-        return 50
-    return 200 * (10 ** (rebirths - 3))
+    """Encarece até o 3º rebirth e congela ali — depois disso o autoclicker
+    custa sempre o mesmo, só os equipamentos continuam subindo."""
+    if rebirths >= REBIRTH_TETO_AUTO:
+        return AUTO_PRECO_MULT_TETO
+    return AUTO_PRECO_MULT.get(max(0, rebirths), 1)
 
 
-def mult_preco_equip(rebirths: int) -> int:
-    """Arma, armadura e livros ficam mais caros a cada rebirth (menos
-    agressivo que o autoclicker, mas ainda pesado no fim do jogo)."""
+EQUIP_PRECO_PASSO = 1.15  # +15% por rebirth: sobe, mas sem explodir
+
+
+def mult_preco_equip(rebirths: int) -> float:
+    """Arma, armadura e livros ficam só um pouco mais caros a cada rebirth —
+    15% em cima do rebirth anterior, não mais aquele ×5 que inviabilizava o
+    fim do jogo."""
     if rebirths <= 0:
-        return 1
-    if rebirths == 1:
-        return 3
-    if rebirths == 2:
-        return 8
-    return 8 * (5 ** (rebirths - 2))
+        return 1.0
+    return EQUIP_PRECO_PASSO ** rebirths
 
 
 def melhorar_autoclicker(j: dict) -> Tuple[bool, str]:
@@ -879,6 +888,20 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
     })
     return True, "Rebirth %d feito! Agora cada clique conta %dx mais pro nível e você tem %d de vida." % (
         j["rebirths"], _mult_rebirth(j), hp_max(j))
+
+
+def pode_ascender(j: dict) -> bool:
+    return j.get("rebirths", 0) >= REBIRTHS_PARA_ASCENDER
+
+
+def ascender(j: dict) -> Tuple[bool, str]:
+    """Volta do zero absoluto: sem classe, sem rebirths, sem nada. A única
+    coisa que sobrevive é o contador de ascensões — o símbolo que fica do lado
+    do rebirth zerado."""
+    if not pode_ascender(j):
+        return False, "A ascensão libera com %d rebirths." % REBIRTHS_PARA_ASCENDER
+    return True, ("Ascensão %d! Você voltou do zero: escolha uma classe de novo. "
+                  "+%d moedas." % (j.get("ascensoes", 0) + 1, MOEDAS_POR_ASCENSAO))
 
 
 # ---------------------------------------------------------------------------

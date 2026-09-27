@@ -66,6 +66,8 @@
 .cj-acoes .botao { min-width: 130px; }
 .cj-rebirth-btn { border-color: #f5c542; color: #ffd36a; animation: cj-brilho 1.6s ease-in-out infinite; }
 @keyframes cj-brilho { 50% { box-shadow: 0 0 16px rgba(245, 197, 66, .55); } }
+.cj-ascender-btn { border-color: #a855f7; color: #d8b4fe; animation: cj-brilho-roxo 1.6s ease-in-out infinite; }
+@keyframes cj-brilho-roxo { 50% { box-shadow: 0 0 16px rgba(168, 85, 247, .55); } }
 .cj-dica { margin: 8px 0 0; color: #aeb2c7; font-size: 12px; text-align: center; }
 .cj-dica:empty { display: none; }
 
@@ -248,3 +250,7 @@
   .cj-item { flex-wrap: wrap; }
   .cj-item-acao { width: 100%; justify-content: flex-end; }
 }
+
+/* Segurar o dedo no botão dispara cliques em sequência: sem isso o Android/iOS
+   entende o toque longo como seleção de texto ou menu de contexto. */
+#cj-botao-clique { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
