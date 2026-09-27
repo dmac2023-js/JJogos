@@ -43,9 +43,9 @@ const LOJA_DECORACOES_POR_PAGINA = 12;
 // Roleta da sorte.
 let lojaRoletaFatias = null;
 let lojaRoletaAngulos = null;
-let lojaRoletaApostaMinima = 10;
-let lojaRoletaApostaMultiplo = 10;
-let lojaRoletaAposta = 10;
+let lojaRoletaApostaMinima = 100;
+let lojaRoletaApostaMultiplo = 100;
+let lojaRoletaAposta = 100;
 let lojaRoletaRotacaoAtual = 0;
 let lojaRoletaGirando = false;
 const LOJA_CORES_HEX = {
@@ -735,7 +735,7 @@ async function carregarRoleta() {
   lojaRoletaRenderLabels();
 }
 
-var LOJA_ROLETA_CORES = { "2x": "#ffd36a", "1.5x": "#7ddea3", "0.5x": "#ff8a8a" };
+var LOJA_ROLETA_CORES = { "2x": "#ffd36a", "1.5x": "#7ddea3", "0.75x": "#ffa94d", "0.5x": "#ff8a8a" };
 var LOJA_ROLETA_COR_PRESENTE = "#c9a6ff";
 
 /* A roda é pintada a partir dos setores que o servidor mandou — antes as
@@ -773,15 +773,13 @@ function lojaRoletaRenderLabels() {
 
 function lojaRoletaAtualizarValor() {
   document.querySelector("#loja-roleta-aposta-valor").textContent = lojaRoletaAposta;
+  // Só existe o par de botões ±100: a aposta anda de 100 em 100 e não desce
+  // abaixo de lojaRoletaApostaMinima (também 100).
   var botaoMenos = document.querySelector("#loja-roleta-menos");
   var botaoMais = document.querySelector("#loja-roleta-mais");
-  var botaoMenos100 = document.querySelector("#loja-roleta-menos100");
-  var botaoMais100 = document.querySelector("#loja-roleta-mais100");
   var botaoGirar = document.querySelector("#loja-roleta-girar");
   botaoMenos.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
   botaoMais.disabled = lojaRoletaAposta + lojaRoletaApostaMultiplo > minhaCarteira.saldo || lojaRoletaGirando;
-  botaoMenos100.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
-  botaoMais100.disabled = lojaRoletaAposta + 100 > minhaCarteira.saldo || lojaRoletaGirando;
   botaoGirar.textContent = lojaRoletaGirando ? "Girando..." : "Girar";
   botaoGirar.disabled = lojaRoletaGirando || lojaRoletaAposta > minhaCarteira.saldo || lojaRoletaAposta < lojaRoletaApostaMinima;
   var botaoAllIn = document.querySelector("#loja-roleta-allin");
@@ -1179,17 +1177,6 @@ document.querySelector("#loja-roleta-mais").addEventListener("click", function (
     lojaRoletaAposta += lojaRoletaApostaMultiplo;
     lojaRoletaAtualizarValor();
   }
-});
-document.querySelector("#loja-roleta-menos100").addEventListener("click", function () {
-  var novo = Math.max(lojaRoletaApostaMinima, lojaRoletaAposta - 100);
-  lojaRoletaAposta = novo - (novo % lojaRoletaApostaMultiplo);
-  lojaRoletaAtualizarValor();
-});
-document.querySelector("#loja-roleta-mais100").addEventListener("click", function () {
-  var novo = Math.min(minhaCarteira.saldo, lojaRoletaAposta + 100);
-  novo -= novo % lojaRoletaApostaMultiplo;
-  lojaRoletaAposta = Math.max(lojaRoletaApostaMinima, novo);
-  lojaRoletaAtualizarValor();
 });
 document.querySelector("#loja-roleta-girar").addEventListener("click", girarRoleta);
 document.querySelector("#loja-roleta-allin").addEventListener("click", lojaRoletaAllIn);

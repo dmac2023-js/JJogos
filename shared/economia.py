@@ -198,28 +198,35 @@ PARTIDAS_JOGOS = [
     "splano_io",
 ]
 
-# Roleta da sorte — 13 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 4 de 0.5x
-# e 1 de presente. Todos têm peso igual, então é sorte pura: cada setor tem a
-# mesma chance (1/13) e não há fatia "grande" pra mirar.
+# Roleta da sorte — 19 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 6 de
+# 0.75x, 4 de 0.5x e 1 de presente. Todos têm peso igual, então é sorte pura:
+# cada setor tem a mesma chance (1/19) e não há fatia "grande" pra mirar.
+# 10 setores pagam menos do que a aposta (0.75x e 0.5x) contra 9 que pagam
+# mais (2x, 1.5x e presente) — o jogador perde mais vezes do que ganha.
 #
 # A ordem abaixo é embaralhada de propósito e FIXA: uma roleta de verdade não
 # se remonta a cada giro, e com ordem fixa dá pra conferir o resultado olhando
 # onde o ponteiro parou. Não existe padrão — não alterna por categoria nem
 # repete ciclo; o presente fica fora do centro e fora das pontas.
-ROLETA_APOSTA_MINIMA = 10
-ROLETA_APOSTA_MULTIPLO = 10
+# A aposta só anda de 100 em 100 e começa em 100: com 10 de mínimo dava pra
+# girar quase de graça, e 100 é múltiplo de 4 — o 0.75x fecha em moeda cheia
+# (75 moedas de volta) em vez de perder fração no arredondamento.
+ROLETA_APOSTA_MINIMA = 100
+ROLETA_APOSTA_MULTIPLO = 100
 _ROLETA_ORDEM = [
-    "0.5x", "2x", "1.5x", "0.5x", "2x", "presente", "1.5x",
-    "0.5x", "1.5x", "2x", "0.5x", "2x", "1.5x",
+    "0.75x", "2x", "0.5x", "0.75x", "1.5x", "2x", "0.75x", "presente",
+    "0.5x", "0.75x", "2x", "1.5x", "0.5x", "0.75x", "2x", "0.75x",
+    "1.5x", "0.5x", "1.5x",
 ]
 _ROLETA_MODELOS = {
     "2x": {"tipo": "multiplicador", "valor": 2.0, "label": "2x"},
     "1.5x": {"tipo": "multiplicador", "valor": 1.5, "label": "1.5x"},
+    "0.75x": {"tipo": "multiplicador", "valor": 0.75, "label": "0.75x"},
     "0.5x": {"tipo": "multiplicador", "valor": 0.5, "label": "0.5x"},
     "presente": {"tipo": "presente", "label": "Presente"},
 }
 # peso = tamanho do setor em %, e a soma tem que dar 100 (o front desenha a
-# roda a partir disso). Com 13 setores iguais não fecha em número redondo, por
+# roda a partir disso). Com 19 setores iguais não fecha em número redondo, por
 # isso o resto vai pro último — a diferença é invisível e o sorteio não usa o
 # peso pra nada além do desenho.
 _ROLETA_PESO = round(100 / len(_ROLETA_ORDEM), 4)
