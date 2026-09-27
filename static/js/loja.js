@@ -506,6 +506,7 @@ async function salvarImagemSkinSplano() {
       return;
     }
     minhaCarteira = await resp.json();
+    lojaAvisarJogosDeCosmeticos();
     renderLojaSkinsSplano();
   } catch (e) { alert("Não deu pra salvar agora."); }
 }
@@ -679,6 +680,13 @@ async function comprarCor(cor) {
   } catch (e) { alert("Não foi possível comprar agora."); }
 }
 
+// O Splano.io desenha a bolinha com a skin que o servidor mandou quando o
+// jogador entrou. Abrir a loja não fecha aquele WebSocket, então sem este
+// aviso a troca só apareceria na próxima partida.
+function lojaAvisarJogosDeCosmeticos() {
+  if (typeof spAvisarCosmeticosMudaram === "function") spAvisarCosmeticosMudaram();
+}
+
 async function equiparItem(tipo, valor) {
   try {
     var resp = await fetch("./economia/equipar", {
@@ -689,6 +697,7 @@ async function equiparItem(tipo, valor) {
     if (!resp.ok) return;
     minhaCarteira = await resp.json();
     aplicarCosmeticosHeader();
+    lojaAvisarJogosDeCosmeticos();
     if (tipo === "decoracao") {
       renderLojaDecoracoes();
     } else if (tipo === "fonte_nick") {

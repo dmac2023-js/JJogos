@@ -453,6 +453,27 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
             alvo = _nome_por_pid(sala, dados.get("pid"))
             conexao["assistindo"] = alvo if alvo in sala["jogo"]["jogadores"] else None
         return
+    if tipo == "cosmeticos":
+        # Trocou skin/decoração na loja sem sair do jogo: a loja é só outra
+        # tela, o WebSocket continua aberto — sem isso a bolinha ficava com a
+        # aparência de quando entrou. Vale também pra quem está morto: quando
+        # renascer na próxima partida já entra com a skin nova.
+        conexao = sala["conexoes"].get(nome)
+        if conexao is None:
+            return
+        try:
+            novos = await asyncio.to_thread(cosmeticos_equipados, nome)
+        except Exception:
+            return
+        try:
+            nova_skin = await asyncio.to_thread(skin_splano, nome)
+        except Exception:
+            return
+        conexao["cosmeticos"], conexao["skin"] = novos, nova_skin
+        if jogador is not None:
+            jogador["cosmeticos"], jogador["skin"] = novos, nova_skin
+        await _mandar_sala(sala)
+        return
     if not jogador:
         return
     if tipo == "dir":

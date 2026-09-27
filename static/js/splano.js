@@ -41,6 +41,13 @@ var SP_CORES_ENERGIA = ["#7ef0e0", "#ffd36a", "#ff9ecf", "#a3e635", "#7de8ff"];
 // Conexão
 // ---------------------------------------------------------------------------
 
+// Chamado pela loja quando o jogador equipa outra skin/decoração. A loja é só
+// outra tela: o WebSocket do Splano continua aberto, então basta pedir ao
+// servidor que releia os cosméticos — ele reenvia a sala pra todo mundo.
+function spAvisarCosmeticosMudaram() {
+  spEnviar({ tipo: "cosmeticos" });
+}
+
 function spEnviar(obj) {
   if (spWs && spWs.readyState === WebSocket.OPEN) {
     spWs.send(JSON.stringify(obj));
