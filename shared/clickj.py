@@ -255,7 +255,7 @@ HEALING_MULT_CLASSE = {"guerreiro": 0.5}
 # PET_MAX_EQUIPADOS ids). Somem no rebirth (caros, mas não são "prestígio"
 # como os títulos).
 # ---------------------------------------------------------------------------
-PET_MAX_EQUIPADOS = 3
+PET_MAX_EQUIPADOS_BASE = 3
 PET_MAX_MOCHILA = 9
 PET_TIERS = {
     "basica": {"nome": "Roleta Básica", "preco": 1_000_000},
@@ -266,7 +266,7 @@ PET_REBIRTH_MINIMO = {"basica": 0, "epica": 1, "divina": 3}  # rebirths mínimos
 PET_VENDA_FATOR = 0.5  # vender devolve metade do preço pago na roleta
 PET_MULT_BASICA = (1.0, 2.0)  # sorteado uniformemente nesse intervalo
 PET_MULT_EPICA = (2.0, 2.5)   # idem
-PET_MULT_DIVINA = 3           # fixo
+PET_MULT_DIVINA = (3.0, 5.0)  # idem
 PET_BONUS_EPICA = 1_000
 PET_BONUS_DIVINA_FOCO = 2_000
 PET_BONUS_DIVINA_RESTO = 1_000
@@ -275,6 +275,14 @@ PET_NOMES = {
     "epica": ["Fênix", "Grifo", "Hidra", "Quimera", "Basilisco", "Ciclope"],
     "divina": ["Leviatã", "Behemoth", "Ancião Celestial", "Avatar Divino", "Serafim"],
 }
+
+
+def pet_max_equipados(rebirths: int) -> int:
+    """3 pets equipáveis até o 3º rebirth; do 4º em diante, 1 a mais por
+    rebirth (4º = 4, 5º = 5...) até o teto da mochila (9, no 9º rebirth)."""
+    if rebirths < 4:
+        return PET_MAX_EQUIPADOS_BASE
+    return min(PET_MAX_MOCHILA, rebirths)
 
 
 def catalogo() -> dict:
@@ -297,7 +305,7 @@ def catalogo() -> dict:
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
         "pets": {
-            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS, "max_mochila": PET_MAX_MOCHILA,
+            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS_BASE, "max_mochila": PET_MAX_MOCHILA,
             "rebirth_minimo": PET_REBIRTH_MINIMO,
             "venda_fator": PET_VENDA_FATOR,
             "mult_basica": PET_MULT_BASICA, "mult_epica": PET_MULT_EPICA, "mult_divina": PET_MULT_DIVINA,
@@ -477,6 +485,13 @@ def _bonus_slot(j: dict, slot: str) -> int:
     return MATERIAIS[idx]["bonus"] if 0 <= idx < len(MATERIAIS) else 0
 
 
+MULT_SKILL_POR_REBIRTH = 1.5  # cada rebirth multiplica todas as skills por isso
+
+
+def _mult_skill_rebirth(j: dict) -> float:
+    return MULT_SKILL_POR_REBIRTH ** j.get("rebirths", 0)
+
+
 def skills(j: dict, agora: float) -> dict:
     """Total de cada skill (base + classe + equipamento + livros + poções) e,
     separado, só a parte que vem de poção ativa (pra mostrar na tela)."""
@@ -506,6 +521,9 @@ def skills(j: dict, agora: float) -> dict:
     for s, valor in (j.get("respec_pontos") or {}).items():
         if s in total:
             total[s] += valor
+    mult_rebirth = _mult_skill_rebirth(j)
+    if mult_rebirth != 1:
+        total = {s: round(v * mult_rebirth) for s, v in total.items()}
     return {"total": total, "pocao": pocao}
 
 
@@ -693,7 +711,7 @@ def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dic
         mult = round(rng.uniform(*PET_MULT_EPICA), 2)
         skill_extra = {"tipo": "todas", "bonus": PET_BONUS_EPICA}
     else:  # divina
-        mult = PET_MULT_DIVINA
+        mult = round(rng.uniform(*PET_MULT_DIVINA), 2)
         total_atual = skills(j, agora)["total"]
         foco = min(SKILLS, key=lambda s: total_atual[s])
         skill_extra = {"tipo": "foco", "foco": foco,
@@ -718,8 +736,9 @@ def equipar_pet(j: dict, pet_id: str, equipar: bool) -> Tuple[bool, str]:
     if equipar:
         if pet_id in equipados:
             return False, "Esse pet já está equipado."
-        if len(equipados) >= PET_MAX_EQUIPADOS:
-            return False, "Você só pode equipar até %d pets." % PET_MAX_EQUIPADOS
+        maximo = pet_max_equipados(j.get("rebirths", 0))
+        if len(equipados) >= maximo:
+            return False, "Você só pode equipar até %d pets." % maximo
         equipados.append(pet_id)
         return True, "Pet equipado: %s." % por_id[pet_id]["nome"]
     if pet_id not in equipados:

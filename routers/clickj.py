@@ -36,6 +36,7 @@ INTERVALO_ONLINE = 3
 INTERVALO_COSMETICOS = 120
 CLIQUES_POR_SEGUNDO_MAX = 20
 CLIQUES_RAJADA_MAX = 40
+MOEDAS_POR_REBIRTH = 100
 PRAZO_TURNO = 30
 PRAZO_CONVITE = 20
 TOLERANCIA_DESCONEXAO = 30
@@ -173,6 +174,7 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "respec_total": regras.total_pontos_respec(j),
         "pets": j.get("pets", []),
         "pets_equipados": j.get("pets_equipados", []),
+        "pets_max_equipados": regras.pet_max_equipados(j["rebirths"]),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
@@ -542,6 +544,9 @@ async def _tratar(nome: str, dados: dict) -> None:
                 ok, msg = False, "Termine a luta antes do rebirth."
             else:
                 ok, msg = regras.fazer_rebirth(j)
+                if ok:
+                    await asyncio.to_thread(creditar_moedas, nome, MOEDAS_POR_REBIRTH)
+                    msg += " +%d moedas!" % MOEDAS_POR_REBIRTH
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
@@ -550,25 +555,6 @@ async def _tratar(nome: str, dados: dict) -> None:
         if tipo == "rebirth":
             await _salvar_se_sujo()
             await _transmitir_online(forcar=True)
-        return
-
-    if tipo == "converter_jcoins":
-        try:
-            trilhoes = max(1, int(dados.get("trilhoes", 0)))
-        except (TypeError, ValueError):
-            trilhoes = 0
-        if trilhoes < 1:
-            await _enviar(nome, {"tipo": "erro", "mensagem": "Quantidade inválida."})
-            return
-        custo = trilhoes * 1_000_000_000_000
-        if j["jcoins"] < custo:
-            await _enviar(nome, {"tipo": "erro", "mensagem": "Jcoins insuficientes."})
-            return
-        j["jcoins"] -= custo
-        moedas = trilhoes * 10  # 10T Jcoins = 100 moedas
-        await asyncio.to_thread(creditar_moedas, nome, moedas)
-        _marcar_sujo()
-        await _enviar_estado(nome, {"aviso": "Converteu %dT em %d moedas!" % (trilhoes, moedas)})
         return
 
     if tipo == "comprar_maximo_equip":

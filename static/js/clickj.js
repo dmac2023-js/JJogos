@@ -395,8 +395,6 @@ function cjAtualizarContadores() {
   var cliques = cjEu.cliques + extra * cjEu.cliques_por_clique;
   document.querySelector("#cj-jcoins").textContent = jcoins.toLocaleString("pt-BR");
   document.querySelector("#cj-loja-jcoins").textContent = cjFmt(jcoins);
-  var converterBtn = document.querySelector("#cj-converter");
-  if (converterBtn) converterBtn.style.display = jcoins >= 1e12 ? "" : "none";
   var cheioEl = document.querySelector("#cj-jcoins-cheio");
   if (cheioEl) cheioEl.style.display = (cjEu.jcoins_max && cjEu.jcoins >= cjEu.jcoins_max) ? "" : "none";
   var barra = document.querySelector("#cj-progresso-barra");
@@ -748,7 +746,7 @@ function cjAtualizarRespecRestante() {
 var CJ_PET_DESCRICAO = {
   basica: "Multiplica seu clique (e o autoclicker) entre 1x e 2x, sorteado na hora — só depende do pet.",
   epica: "Multiplica o clique entre 2x e 2,5x (sorteado) e dá +1.000 em TODAS as suas skills.",
-  divina: "Multiplica o clique por 3x e dá +2.000 na sua skill mais fraca e +1.000 no resto.",
+  divina: "Multiplica o clique entre 3x e 5x (sorteado) e dá +2.000 na sua skill mais fraca e +1.000 no resto.",
 };
 
 function cjPetDescricaoInstancia(p) {
@@ -774,7 +772,8 @@ function cjRenderPets() {
   var rebirths = cjEu.rebirths || 0;
   var minimos = pets.rebirth_minimo || {};
   var mochilaCheia = meusPets.length >= pets.max_mochila;
-  var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + pets.max_equipados +
+  var maxEquipados = cjEu.pets_max_equipados || pets.max_equipados;
+  var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + maxEquipados +
     " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Mochila com espaço pra até " +
     pets.max_mochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
     "% do preço pago. Pets somem no rebirth.</p>";
@@ -811,7 +810,7 @@ function cjRenderPets() {
       var acaoEquip;
       if (estaEquipado) {
         acaoEquip = '<button type="button" class="cj-comprar" data-pet-desequipar="' + p.id + '">Desequipar</button>';
-      } else if (equipados.length >= pets.max_equipados) {
+      } else if (equipados.length >= maxEquipados) {
         acaoEquip = '<span class="cj-tag">Slots cheios</span>';
       } else {
         acaoEquip = '<button type="button" class="cj-comprar" data-pet-equipar="' + p.id + '">Equipar</button>';
@@ -959,55 +958,19 @@ function cjResponderDesafio(aceitar) {
   cjFecharPopup();
 }
 
-function cjAbrirConverter() {
-  if (!cjEu) return;
-  if (cjPendentes > 0) { clearTimeout(cjEnvioTimer); cjEnviarLote(); }
-  var trilhoesMax = Math.floor(cjJcoinsAtuais() / 1e12);
-  if (trilhoesMax < 1) return;
-  cjPopup(
-    "🔄 Converter Jcoins em Moedas",
-    "<p>10T de Jcoins = 100 moedas. Você tem <strong>" + trilhoesMax.toLocaleString("pt-BR") + "T</strong> disponíveis.</p>" +
-    '<p style="color:#aeb2c7;font-size:13px;margin-top:4px;">Conversão apenas em múltiplos de 1T.</p>' +
-    '<div style="margin-top:14px;">' +
-    '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
-    '<input type="number" id="cj-converter-input" min="1" max="' + trilhoesMax + '" step="1" value="1"' +
-    ' style="width:80px;flex-shrink:0;padding:8px;border:1px solid #2d4470;border-radius:8px;background:#0d1424;color:#f4f6ff;font-size:18px;text-align:center;">' +
-    '<span style="color:#c9ccda;font-size:16px;">T</span>' +
-    "</div>" +
-    '<p style="margin:12px 0 0;color:#c9ccda;">= <strong id="cj-converter-moedas">10</strong> moedas</p>' +
-    "</div>",
-    [
-      { texto: "Converter", principal: true, acao: function () {
-        var input = document.querySelector("#cj-converter-input");
-        var n = Math.max(1, Math.min(trilhoesMax, parseInt(input ? input.value : "1", 10) || 1));
-        cjEnviar({ tipo: "converter_jcoins", trilhoes: n });
-        cjFecharPopup();
-        setTimeout(function () { if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader(); }, 800);
-      }},
-      { texto: "Cancelar", acao: cjFecharPopup },
-    ]
-  );
-  var input = document.querySelector("#cj-converter-input");
-  if (input) {
-    input.addEventListener("input", function () {
-      var n = Math.max(1, Math.min(trilhoesMax, parseInt(input.value, 10) || 1));
-      var el = document.querySelector("#cj-converter-moedas");
-      if (el) el.textContent = (n * 10).toLocaleString("pt-BR");
-    });
-    input.focus();
-    input.select();
-  }
-}
-
 function cjConfirmarRebirth() {
   if (!cjEu) return;
   var mult = 10 * (cjEu.rebirths + 1);
   cjPopup("🔁 Rebirth",
     "<p>Você volta ao nível 1 e perde Jcoins, cliques, armas, armaduras, livros, poções e a maestria.</p>" +
-    "<p>Em troca: cada clique passa a contar <strong>" + mult + "x</strong> mais pro nível (os Jcoins por clique continuam os mesmos), o autoclicker já vem no nível 1 e sua vida no PvP vai para <strong>" +
-    (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong>.</p>",
+    "<p>Em troca: cada clique passa a contar <strong>" + mult + "x</strong> mais pro nível (os Jcoins por clique continuam os mesmos), todas as suas skills ficam <strong>1,5x</strong> mais fortes, o autoclicker já vem no nível 1, sua vida no PvP vai para <strong>" +
+    (cjEu.hp_max + cjCatalogo.luta.hp_por_rebirth) + "</strong> e você ganha <strong>100 moedas</strong> automaticamente.</p>",
     [
-      { texto: "Fazer rebirth", principal: true, acao: function () { cjEnviar({ tipo: "rebirth" }); cjFecharPopup(); } },
+      { texto: "Fazer rebirth", principal: true, acao: function () {
+        cjEnviar({ tipo: "rebirth" });
+        cjFecharPopup();
+        setTimeout(function () { if (typeof atualizarMoedasHeader === "function") atualizarMoedasHeader(); }, 800);
+      } },
       { texto: "Cancelar", acao: cjFecharPopup },
     ]);
 }
@@ -1357,7 +1320,6 @@ function cjSair() {
     if (ev.target.classList.contains("cj-respec-input")) cjAtualizarRespecRestante();
   });
   document.querySelector("#cj-rebirth").addEventListener("click", cjConfirmarRebirth);
-  document.querySelector("#cj-converter").addEventListener("click", cjAbrirConverter);
 
   document.querySelector("#cj-online-lista").addEventListener("click", function (ev) {
     var b = ev.target.closest(".cj-desafiar");
