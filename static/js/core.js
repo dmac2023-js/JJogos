@@ -21,7 +21,22 @@ var conexaoDiscordPromise = null;
 // Discord às vezes limita /oauth2/token por um tempo — enquanto isso não
 // passa, nem tenta de novo (evita reforçar o rate limit chamando de novo
 // de qualquer uma das 20+ telas que esperam identidade).
-var discordLoginBloqueadoAte = 0;
+// Guardado em sessionStorage (não só em memória) porque no mobile o Discord
+// recarrega o iframe da Activity sozinho durante o boot (visto em produção:
+// 2 boots completos em ~2s) — sem persistir, cada recarga zera o cooldown e
+// repete authorize()+/token do zero, gastando outra troca de code
+// rate-limitada pelo Discord pro mesmo login.
+function lerCooldownLogin() {
+  try {
+    var salvo = Number(sessionStorage.getItem("discord-login-bloqueado-ate")) || 0;
+    return salvo > Date.now() ? salvo : 0;
+  } catch (e) { return 0; }
+}
+function definirCooldownLogin(ate) {
+  discordLoginBloqueadoAte = ate;
+  try { sessionStorage.setItem("discord-login-bloqueado-ate", String(ate)); } catch (e) { /* ignore */ }
+}
+var discordLoginBloqueadoAte = lerCooldownLogin();
 
 function escapeHtml(texto) {
   return String(texto == null ? "" : texto)
@@ -412,6 +427,12 @@ async function conectarAoDiscord() {
 
       try {
         if (!autenticou) {
+          // Reserva um cooldown curto ANTES de gastar a troca de code — se o
+          // Discord recarregar o iframe logo em seguida (comum no mobile), o
+          // próximo boot vê esse cooldown (persistido em sessionStorage) e
+          // espera em vez de repetir authorize()+/token pro mesmo login.
+          definirCooldownLogin(Date.now() + 5000);
+
           // Fluxo completo da Activity: authorize -> code -> /token -> access_token
           // -> authenticate({access_token}) -> user. authenticate() sem token
           // retorna sem user e deixava o header em "sem login".
@@ -442,7 +463,7 @@ async function conectarAoDiscord() {
               // causou o 429 originalmente.
               var jitterMs = Math.floor(Math.random() * 3000);
               var esperaMs = Math.ceil(espera * 1000) + 1500 + jitterMs;
-              discordLoginBloqueadoAte = Date.now() + esperaMs;
+              definirCooldownLogin(Date.now() + esperaMs);
               // Tenta de novo sozinho quando o cooldown passar — sem isso,
               // quem cai no rate limit assim que abre a Activity ficava preso
               // na tela "sem login" pra sempre, sem nenhuma ação disparar
@@ -669,7 +690,7 @@ async function processarCallbackOAuth() {
       var detalhe = token.detail;
       if (res.status === 429 && detalhe && typeof detalhe === "object") {
         var espera = Number(detalhe.retry_after) || 5;
-        discordLoginBloqueadoAte = Date.now() + Math.ceil(espera * 1000) + 1500;
+        definirCooldownLogin(Date.now() + Math.ceil(espera * 1000) + 1500);
         throw new Error(detalhe.mensagem || "Discord limitou os logins.");
       }
       throw new Error((typeof detalhe === "string" && detalhe) || "Falha ao trocar o código.");
