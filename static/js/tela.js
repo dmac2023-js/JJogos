@@ -1349,6 +1349,12 @@ async function carregarTransmissoes() {
 // ---------------------------------------------------------------------------
 function ehMobile() {
   var ua = navigator.userAgent || "";
+  // A Activity desktop pode ter touch points e uma viewport estreita por
+  // causa do iframe do Discord. Isso não deve ser tratado como celular:
+  // nesse caso precisamos exibir o botão para abrir o navegador.
+  if (typeof dentroDaActivity === "function" && dentroDaActivity()) {
+    return /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(ua);
+  }
   if (/Android|iPhone|iPad|iPod|Mobile|Silk/i.test(ua)) return true;
   return navigator.maxTouchPoints > 1 && Math.min(window.innerWidth, window.innerHeight) < 900;
 }
