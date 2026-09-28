@@ -23,6 +23,7 @@ from shared.economia import (
     cosmeticos_equipados,
     eh_admin_discord_id,
     registrar_fim_partida,
+    registrar_evento_missao,
 )
 from shared.logging_util import log_tela
 from shared.recordes import eh_anonimo
@@ -573,6 +574,8 @@ async def _tratar(nome: str, dados: dict) -> None:
                 ok, msg = False, "Termine a luta antes do rebirth."
             else:
                 ok, msg = regras.fazer_rebirth(j)
+                if ok:
+                    await asyncio.to_thread(registrar_evento_missao, nome, c["nick"], "rebirths", 1, c.get("avatar"))
                 if ok and j["rebirths"] <= regras.REBIRTHS_QUE_PAGAM:
                     moedas_rebirth = regras.MOEDAS_POR_REBIRTH + (j["rebirths"] - 1) * regras.MOEDAS_POR_REBIRTH_ADEMAIS
                     await asyncio.to_thread(creditar_moedas, nome, moedas_rebirth)

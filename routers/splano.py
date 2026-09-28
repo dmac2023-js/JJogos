@@ -236,7 +236,7 @@ async def _registrar_partida(sala: dict, nome: str, venceu: bool, segundos: int)
         await asyncio.to_thread(
             registrar_fim_partida, nome, jogador["nick"], segundos,
             "splano_io", (conexao or {}).get("avatar"), venceu,
-            "vitoria" if venceu else "derrota")
+            "vitoria" if venceu else "derrota", kills=jogador.get("kills", 0))
     except Exception as erro:
         log_tela("splano: falha ao registrar partida de %s: %r" % (nome, erro))
 

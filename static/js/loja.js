@@ -15,7 +15,10 @@ function jogoRegistrarTempo(jogoNome, venceu, resultado) {
   var seg = _jogoTempoInicioMs ? Math.round((Date.now() - _jogoTempoInicioMs) / 1000) : 0;
   _jogoTempoInicioMs = null;
   if (!usuarioDiscord || !nomeUsuario()) return;
-  // Registra sempre que há um jogo identificado (mesmo que curto), ou quando durou > 10s
+  // Um reinício logo após abrir a sala não é uma partida jogada. A atividade
+  // continua sendo contada pelo heartbeat separado (/economia/atividade).
+  // Cinco segundos evitam falsos positivos sem ignorar partidas muito rápidas.
+  if (jogoNome && seg < 5) return;
   if (!jogoNome && seg < 10) return;
   fetch("./economia/tempo", {
     method: "POST",

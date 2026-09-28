@@ -530,7 +530,8 @@ def trocar_missao(dados: TrocarMissao):
         if carteira.get("saldo", 0) < 500:
             raise HTTPException(status_code=400, detail="Você precisa de 500 moedas para trocar a missão.")
         estado = _missoes(carteira)
-        estado["itens"][dados.indice] = dict(MISSOES_MODELOS[dados.indice], progresso=0, concluida=False)
+        modelo = MISSOES_MODELOS[(dados.indice + int(time.time() // 14_400)) % len(MISSOES_MODELOS)]
+        estado["itens"][dados.indice] = dict(modelo, progresso=0, concluida=False, recompensa_resgatada=False)
         carteira["saldo"] -= 500
         salvar_economia(economia)
         return {"ok": True, "missoes": estado, "saldo": carteira["saldo"]}

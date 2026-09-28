@@ -228,9 +228,16 @@ LIMITE_TRANSFERENCIA_DIARIA = 1_000_000
 INTERVALO_MISSOES = 4 * 60 * 60
 MISSOES_MODELOS = [
     {"tipo": "tempo", "alvo": 3600, "recompensa": 1500, "texto": "Jogue por 1 hora"},
-    {"tipo": "partidas", "alvo": 3, "recompensa": 1000, "texto": "Jogue 3 partidas"},
+    {"tipo": "partidas", "alvo": 3, "recompensa": 1000, "texto": "Jogue 3 partidas online"},
     {"tipo": "vitorias", "alvo": 2, "recompensa": 2000, "texto": "Consiga 2 vitórias"},
+    {"tipo": "kills", "alvo": 5, "recompensa": 1500, "texto": "Consiga 5 kills no Splano.io"},
+    {"tipo": "rebirths", "alvo": 1, "recompensa": 2000, "texto": "Faça 1 rebirth no ClickJ"},
 ]
+
+
+def _modelos_missao(agora: int) -> list:
+    ciclo = (agora // INTERVALO_MISSOES) % (len(MISSOES_MODELOS) - 1)
+    return [MISSOES_MODELOS[0], MISSOES_MODELOS[1 + ciclo], MISSOES_MODELOS[1 + ((ciclo + 1) % (len(MISSOES_MODELOS) - 1))]]
 
 
 def progresso_doacao(total: int) -> dict:
@@ -247,6 +254,26 @@ def progresso_doacao(total: int) -> dict:
         progresso, falta = 100, 0
     return {"total": total, "insignias": ganhas, "atual": atual, "proxima": proxima,
             "anterior": anterior, "falta": falta, "progresso": progresso}
+
+
+def _historico_doacoes_publico(lista: list, destino: str) -> list:
+    carteiras = carregar_economia().get("carteiras", {})
+    carteira_clown = carteiras.get("clown") or carteiras.get("Clown") or {}
+    equipado_clown = carteira_clown.get("equipado") or {}
+    saida = []
+    for original in lista[:20]:
+        item = dict(original)
+        chave = item.get(destino)
+        # Registros antigos guardavam apenas o username. Agora exibimos o
+        # nome global conhecido para a conta que antes aparecia como username.
+        if not item.get("nick") and chave == "agoratobem":
+            item["nick"] = carteira_clown.get("nick") or "Clown"
+            item.setdefault("avatar", carteira_clown.get("avatar"))
+            item.setdefault("cor_nick", equipado_clown.get("cor_nick"))
+            item.setdefault("fonte_nick", equipado_clown.get("fonte_nick"))
+            item.setdefault("decoracao_imagem", _imagem_decoracao(equipado_clown.get("decoracao"), animada=True))
+        saida.append(item)
+    return saida
 
 
 def _conta_para_insignia(carteira: dict, destinatario: str, agora: int) -> bool:
@@ -271,7 +298,7 @@ def _missoes(carteira: dict, agora: int = None) -> dict:
     agora = int(agora or time.time())
     estado = carteira.get("missoes")
     if not estado or agora - int(estado.get("inicio", 0)) >= INTERVALO_MISSOES:
-        estado = {"inicio": agora, "itens": [dict(m, progresso=0, concluida=False, recompensa_resgatada=False) for m in MISSOES_MODELOS], "bonus_pago": False}
+        estado = {"inicio": agora, "itens": [dict(m, progresso=0, concluida=False, recompensa_resgatada=False) for m in _modelos_missao(agora)], "bonus_pago": False}
         carteira["missoes"] = estado
     for item in estado.get("itens", []):
         # Missões antigas já pagas antes da separação concluir/resgatar.
@@ -282,12 +309,14 @@ def _missoes(carteira: dict, agora: int = None) -> dict:
     return estado
 
 
-def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, agora: int) -> None:
+def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, agora: int, kills: int = 0, rebirths: int = 0) -> None:
     estado = _missoes(carteira, agora)
     for m in estado["itens"]:
         if m["tipo"] == "tempo": m["progresso"] += max(0, segundos)
-        elif m["tipo"] == "partidas" and jogo in PARTIDAS_JOGOS: m["progresso"] += 1
+        elif m["tipo"] == "partidas" and jogo in ("sudoku_online", "velha_online", "campo_online", "termo_online", "ludo", "clickj_pvp", "splano_io"): m["progresso"] += 1
         elif m["tipo"] == "vitorias" and venceu: m["progresso"] += 1
+        elif m["tipo"] == "kills" and jogo == "splano_io": m["progresso"] += max(0, kills)
+        elif m["tipo"] == "rebirths": m["progresso"] += max(0, rebirths)
         if m["progresso"] >= m["alvo"] and not m.get("concluida"):
             m["progresso"], m["concluida"] = m["alvo"], True
 
@@ -616,7 +645,7 @@ def skin_splano(nome: str) -> dict:
 
 def registrar_fim_partida(nome: str, nick: str, segundos: int,
                           jogo: str = "", avatar: str = None,
-                          venceu: bool = False, resultado: str = "") -> None:
+                          venceu: bool = False, resultado: str = "", kills: int = 0) -> None:
     """Registra fim de partida: acumula segundos, incrementa partidas e
     vitórias por jogo e guarda no histórico das últimas partidas."""
     if eh_anonimo(nome) or not nome:
@@ -637,7 +666,17 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
             historico = carteira.setdefault("historico", [])
             historico.insert(0, {"jogo": jogo, "resultado": resultado, "em": int(time.time())})
             del historico[HISTORICO_MAXIMO:]
-        _atualizar_missoes(carteira, segundos, jogo, venceu, int(time.time()))
+        _atualizar_missoes(carteira, segundos, jogo, venceu, int(time.time()), kills=kills)
+        salvar_economia(dados)
+
+
+def registrar_evento_missao(nome: str, nick: str, tipo: str, quantidade: int, avatar: str = None) -> None:
+    if eh_anonimo(nome) or not nome or quantidade <= 0:
+        return
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira = obter_carteira(dados, nome, nick=nick, avatar=avatar)
+        _atualizar_missoes(carteira, 0, "", False, int(time.time()), rebirths=quantidade if tipo == "rebirths" else 0)
         salvar_economia(dados)
 
 
@@ -661,8 +700,8 @@ def _entrada_publica(nome: str, carteira: dict) -> dict:
         "total_doado": total_doado,
         "doacao": progresso_doacao(total_doado),
         "missoes": _missoes(carteira),
-        "historico_doacoes": carteira.get("historico_envios", [])[:20],
-        "historico_recebidos": carteira.get("historico_recebidos", [])[:20],
+        "historico_doacoes": _historico_doacoes_publico(carteira.get("historico_envios", []), "para"),
+        "historico_recebidos": _historico_doacoes_publico(carteira.get("historico_recebidos", []), "de"),
     }
 
 
