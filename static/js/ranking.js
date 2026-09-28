@@ -261,7 +261,8 @@ function abrirFormularioDoacao(card, jogador) {
   fetch("./economia/jogador?nome=" + encodeURIComponent(meuNome || ""))
     .then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       meuPerfil = d;
-      form.querySelector(".rmodal-remetente-nick").textContent = d ? (d.nick || d.nome) : (meuNome || "Você");
+      if (d) form.querySelector(".rmodal-remetente-nick").outerHTML = '<strong class="rmodal-remetente-nick">' + rankingNickHtml(d) + '</strong>';
+      else form.querySelector(".rmodal-remetente-nick").textContent = meuNome || "Você";
       if (d) form.querySelector(".rmodal-transfer-pessoas > div:first-child .ranking-avatar-box").outerHTML = rankingAvatarHtml(d, 48);
       form.querySelector(".rmodal-remetente-saldo").textContent = d ? d.saldo.toLocaleString("pt-BR") + " moedas" : "Saldo indisponível";
       var atual = d && d.doacao && d.doacao.atual;
