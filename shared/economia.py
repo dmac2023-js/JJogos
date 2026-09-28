@@ -223,8 +223,10 @@ INSIGNIAS_DOACAO = [
 ]
 TAXA_DOACAO = 0.10
 DONO_DOACAO = "jovem7l"
-INTERVALO_INSIGNIA_MESMO_DESTINATARIO = 7 * 24 * 60 * 60
-LIMITE_TRANSFERENCIA_DIARIA = 1_000_000
+# Toda transferência válida conta para a progressão, inclusive para o mesmo
+# destinatário. O controle contra abuso passa a ser o teto diário total.
+INTERVALO_INSIGNIA_MESMO_DESTINATARIO = 0
+LIMITE_TRANSFERENCIA_DIARIA = 200_000
 INTERVALO_MISSOES = 4 * 60 * 60
 MISSOES_MODELOS = [
     {"tipo": "tempo", "alvo": 3600, "recompensa": 1500, "texto": "Jogue por 1 hora"},
@@ -285,8 +287,7 @@ def _historico_doacoes_publico(lista: list, destino: str) -> list:
 
 
 def _conta_para_insignia(carteira: dict, destinatario: str, agora: int) -> bool:
-    ultima = int((carteira.get("doacoes_por_destinatario") or {}).get(destinatario, 0) or 0)
-    return agora - ultima >= INTERVALO_INSIGNIA_MESMO_DESTINATARIO
+    return True
 
 
 def prever_transferencia(remetente: str, destinatario: str, quantidade: int) -> dict:

@@ -281,7 +281,7 @@ function abrirFormularioDoacao(card, jogador) {
       var p = await r.json();
       if (!r.ok) { resumo.textContent = p.detail || "Não foi possível simular."; return; }
       resumo.innerHTML = "Você ficará com <b>" + (p.saldo_remetente - quantidade).toLocaleString("pt-BR") + "</b> moedas. " + escapeHtml(jogador.nick || jogador.nome) + " ficará com <b>" + (p.saldo_destinatario + p.recebido).toLocaleString("pt-BR") + "</b> moedas.";
-      progresso.innerHTML = p.conta_insignia ? "<span class=\"rmodal-progresso-ok\">Esta doação contará para sua progressão.</span>" : "<span class=\"rmodal-progresso-alerta\">Esta transação não dará progresso: você já doou para esta mesma pessoa nos últimos 7 dias.</span>";
+      progresso.innerHTML = p.conta_insignia ? "<span class=\"rmodal-progresso-ok\">Esta doação contará para sua progressão.</span>" : "<span class=\"rmodal-progresso-alerta\">Esta transação não dará progresso.</span>";
     } catch (e) { resumo.textContent = "Não foi possível simular agora."; }
   }
   input.addEventListener("input", atualizarPrevia);
