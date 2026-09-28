@@ -53,7 +53,7 @@ var CJ_CLASSE_FRAQUEZAS = {
   curandeiro: ["Fraco contra ataques físicos (Força)"],
   monge: ["Pouco ágil — esquiva pior que as outras classes"],
 };
-var CJ_SKILL_ICONES = { magia: "🔮", precisao: "🎯", forca: "💪", resistencia: "🛡️", agilidade: "💨" };
+var CJ_SKILL_ICONES = { magia: "🔮", precisao: "🎯", forca: "💪", resistencia: "🛡️", agilidade: "💨", sorte: "🍀" };
 var CJ_CATEGORIAS = { basico: "Básico", medio: "Médio", avancado: "Avançado", lendario: "Lendário" };
 var CJ_PALETA = {
   m: { pano: "#3552c9", detalhe: "#f5c542", enfeite: "#5b9dff", borla: "#e03131" },
@@ -631,6 +631,10 @@ function cjLinhasPocoes(filtro) {
       var dur = p.dur >= 3600 ? (p.dur / 3600) + " h" : (p.dur / 60) + " min";
       var desc = "Cliques valem " + p.valor + "x por " + dur;
       acaoExtra = tenho ? '<button type="button" class="cj-comprar cj-usar" data-usar="' + p.id + '">Usar</button>' : "";
+    } else if (p.tipo === "sorte") {
+      var durSorte = p.dur >= 60 ? (p.dur / 60) + " min" : p.dur + " s";
+      desc = "+" + p.valor + " Sorte por " + durSorte + " — melhora a chance de pet bom";
+      acaoExtra = tenho ? '<button type="button" class="cj-comprar cj-usar" data-usar="' + p.id + '">Usar</button>' : "";
     } else {
       var desc = "+" + p.valor + " " + cjCatalogo.skill_nomes[p.skill] + " — só em combate, 1x por luta";
       acaoExtra = tenho ? '<span class="cj-tag">Use na tela de luta</span>' : "";
@@ -664,13 +668,14 @@ function cjRenderMaestria() {
   }
   var skill = cjEu.maestria_skill;
   var nivel = cjEu.maestria_nivel || 0;
+  var maxMaestria = skill === "sorte" ? m.max : (m.max_normal || 10);
   var html = '<div class="cj-auto-card"><strong>' + CJ_SKILL_ICONES[skill] + " Maestria de " + cjCatalogo.skill_nomes[skill] +
-    " — nível " + nivel + "/" + m.max + "</strong>" +
-    "<small>" + (nivel ? "+" + m.bonus_pct[nivel] + "% em " + cjCatalogo.skill_nomes[skill] : "Ainda sem bônus — compre o nível 1.") + "</small>";
-  if (nivel < m.max) {
+    " — nível " + nivel + "/" + maxMaestria + "</strong>" +
+    "<small>" + (nivel ? (skill === "sorte" ? "x" + Math.pow(1.10, nivel).toFixed(2) + " na Sorte" : "+" + m.bonus_pct[nivel] + "% em " + cjCatalogo.skill_nomes[skill]) : "Ainda sem bônus — compre o nível 1.") + "</small>";
+  if (nivel < maxMaestria) {
     var preco = m.precos[nivel + 1];
     html += cjBotaoComprar("data-maestria-melhorar", preco,
-      "Nível " + (nivel + 1) + " (+" + m.bonus_pct[nivel + 1] + "%)", cjJcoinsAtuais() < preco);
+      "Nível " + (nivel + 1) + " (" + (skill === "sorte" ? "x" + Math.pow(1.10, nivel + 1).toFixed(2) : "+" + m.bonus_pct[nivel + 1] + "%") + ")", cjJcoinsAtuais() < preco);
   } else {
     html += '<span class="cj-possui">✓ Nível máximo</span>';
   }
@@ -775,11 +780,12 @@ function cjRenderPets() {
   });
   var rebirths = cjEu.rebirths || 0;
   var minimos = pets.rebirth_minimo || {};
-  var mochilaCheia = meusPets.length >= pets.max_mochila;
+  var maxMochila = cjEu.pets_max_mochila || pets.max_mochila;
+  var mochilaCheia = meusPets.length >= maxMochila;
   var maxEquipados = cjEu.pets_max_equipados || pets.max_equipados;
   var html = '<p class="cj-dica" style="margin-bottom:10px;">Equipe até ' + maxEquipados +
     " pets de qualquer tipo — os efeitos de todos os equipados se acumulam. Mochila com espaço pra até " +
-    pets.max_mochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
+    maxMochila + " pets. Vender devolve " + Math.round(pets.venda_fator * 100) +
     "% do preço pago. Pets somem no rebirth.</p>";
 
   ["basica", "epica", "divina"].forEach(function (tier) {
@@ -803,7 +809,7 @@ function cjRenderPets() {
     html += '<p class="cj-dica" style="color:#ff9a9a;">Mochila cheia — venda um pet pra rolar de novo.</p>';
   }
 
-  html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + "/" + pets.max_mochila + ")</h4>";
+  html += '<h4 style="margin:16px 0 8px;">Seus pets (' + meusPets.length + "/" + maxMochila + ")</h4>";
   if (!meusPets.length) {
     html += '<p class="cj-dica">Você ainda não tem nenhum pet.</p>';
   } else {

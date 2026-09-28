@@ -8,15 +8,17 @@ import random
 import secrets
 from typing import Optional, Tuple
 
-SKILLS = ["magia", "precisao", "forca", "resistencia", "agilidade"]
+SKILLS = ["magia", "precisao", "forca", "resistencia", "agilidade", "sorte"]
 SKILL_NOMES = {
     "magia": "Magia",
     "precisao": "Precisão",
     "forca": "Força",
     "resistencia": "Resistência",
     "agilidade": "Agilidade",
+    "sorte": "Sorte",
 }
 SKILL_BASE = 10
+SORTE_BASE = 100
 BONUS_CLASSE = 5
 
 CLASSES = {
@@ -116,6 +118,8 @@ for _mult, _precos in ((2, (2_000, 20_000, 100_000)), (5, (10_000_000, 100_000_0
         POCOES[_id] = {"id": _id, "tipo": "clique", "valor": _mult, "dur": _dur, "preco": _preco,
                        "nome": "Poção de Clique %dx (%s)" % (_mult, _rotulo)}
 for _s in SKILLS:
+    if _s == "sorte":
+        continue
     # Só valem durante uma luta (usar_pocao_luta) — o bônus fica pro resto
     # daquela luta, sem gastar turno; só uma por skill por luta.
     for _nivel, _rotulo, _bonus, _preco in (
@@ -127,6 +131,11 @@ for _s in SKILLS:
         POCOES[_id] = {"id": _id, "tipo": "skill", "skill": _s, "valor": _bonus, "dur": 0,
                        "preco": _preco,
                        "nome": "Poção de %s %s (+%d na luta)" % (SKILL_NOMES[_s], _rotulo, _bonus)}
+for _valor, _preco in ((500, 100_000_000), (1_000, 1_000_000_000)):
+    _id = "sorte_%d_60" % _valor
+    POCOES[_id] = {"id": _id, "tipo": "sorte", "skill": "sorte", "valor": _valor,
+                   "dur": 60, "preco": _preco,
+                   "nome": "Poção de Sorte +%d (1 min)" % _valor}
 
 # Títulos — um por skill, específico de cada classe (comprado uma vez,
 # depois é só trocar de equipado). Persistem entre rebirths de propósito:
@@ -183,7 +192,8 @@ NIVEL_REBIRTHS_RESPEC = 2
 PRECO_RESPEC = 1_000_000_000
 
 NIVEL_MAESTRIA_DESBLOQUEIO = 10
-MAESTRIA_MAX = 10
+MAESTRIA_MAX = 15
+MAESTRIA_MAX_NORMAL = 10
 # Nível de maestria -> custo em Jcoins e % de bônus sobre o total da skill
 # escolhida (base + classe + equipamento + livros + poção), aplicado por
 # cima de tudo isso. Só uma maestria ativa por vez — trocar de skill zera o nível.
@@ -192,6 +202,10 @@ MAESTRIA_PRECO = {
     6: 12_000_000_000, 7: 25_000_000_000, 8: 50_000_000_000, 9: 100_000_000_000, 10: 1_000_000_000_000,
 }
 MAESTRIA_BONUS_PCT = {1: 20, 2: 40, 3: 80, 4: 150, 5: 250, 6: 400, 7: 600, 8: 900, 9: 1_300, 10: 2_000}
+MAESTRIA_PRECO.update({11: 2_000_000_000_000, 12: 4_000_000_000_000,
+                       13: 8_000_000_000_000, 14: 16_000_000_000_000,
+                       15: 32_000_000_000_000})
+MAESTRIA_BONUS_PCT.update({11: 3_000, 12: 4_500, 13: 6_500, 14: 9_000, 15: 12_000})
 
 # Nível necessário pra próxima rebirth, indexado pelo número de rebirths já
 # feitos (0 = ainda nenhuma). Da 3ª em diante sempre exige o nível máximo.
@@ -267,7 +281,7 @@ HEALING_MULT_CLASSE = {"guerreiro": 0.5}
 # como os títulos).
 # ---------------------------------------------------------------------------
 PET_MAX_EQUIPADOS_BASE = 3
-PET_MAX_MOCHILA = 9
+PET_MAX_MOCHILA = 14
 PET_TIERS = {
     "basica": {"nome": "Roleta Básica", "preco": 1_000_000},
     "epica": {"nome": "Roleta Épica", "preco": 10_000_000_000},
@@ -293,7 +307,12 @@ def pet_max_equipados(rebirths: int) -> int:
     rebirth (4º = 4, 5º = 5...) até o teto da mochila (9, no 9º rebirth)."""
     if rebirths < 4:
         return PET_MAX_EQUIPADOS_BASE
-    return min(PET_MAX_MOCHILA, rebirths)
+    return min(9, rebirths)
+
+
+def pet_max_mochila(rebirths: int) -> int:
+    """A mochila ganha um espaço a cada dois rebirths: 9 inicial, 14 no 10º."""
+    return min(PET_MAX_MOCHILA, 9 + max(0, rebirths) // 2)
 
 
 def catalogo() -> dict:
@@ -311,14 +330,15 @@ def catalogo() -> dict:
         "luta": {"hp_base": HP_BASE, "hp_por_rebirth": HP_POR_REBIRTH,
                  "esquiva_intervalo": ESQUIVA_INTERVALO},
         "maestria": {"desbloqueio": NIVEL_MAESTRIA_DESBLOQUEIO, "precos": MAESTRIA_PRECO,
-                     "bonus_pct": MAESTRIA_BONUS_PCT, "max": MAESTRIA_MAX},
+                     "bonus_pct": MAESTRIA_BONUS_PCT, "max": MAESTRIA_MAX,
+                     "max_normal": MAESTRIA_MAX_NORMAL},
         "titulos": TITULOS, "preco_titulo": PRECO_TITULO,
         "titulo_hp_bonus": TITULO_HP_BONUS, "titulo_skill_bonus": TITULO_SKILL_BONUS,
         "respec": {"rebirths_necessarios": NIVEL_REBIRTHS_RESPEC, "preco": PRECO_RESPEC},
         "rebirth_moedas": {"quantia": MOEDAS_POR_REBIRTH, "limite": REBIRTHS_QUE_PAGAM},
         "ascensao": {"rebirths": REBIRTHS_PARA_ASCENDER, "moedas": MOEDAS_POR_ASCENSAO},
         "pets": {
-            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS_BASE, "max_mochila": PET_MAX_MOCHILA,
+            "tiers": PET_TIERS, "max_equipados": PET_MAX_EQUIPADOS_BASE, "max_mochila": 9,
             "rebirth_minimo": PET_REBIRTH_MINIMO,
             "venda_fator": PET_VENDA_FATOR,
             "mult_basica": PET_MULT_BASICA, "mult_epica": PET_MULT_EPICA, "mult_divina": PET_MULT_DIVINA,
@@ -345,6 +365,7 @@ def normalizar(j: dict) -> dict:
     j.setdefault("cliques", 0)
     j.setdefault("nivel", 1)
     j.setdefault("rebirths", 0)
+    j.setdefault("sorte", SORTE_BASE)
     j.setdefault("ascensoes", 0)
     j.setdefault("auto_nivel", 0)
     j.setdefault("equip", {})
@@ -507,6 +528,7 @@ def skills(j: dict, agora: float) -> dict:
     """Total de cada skill (base + classe + equipamento + livros + poções) e,
     separado, só a parte que vem de poção ativa (pra mostrar na tela)."""
     total = {s: SKILL_BASE for s in SKILLS}
+    total["sorte"] = max(SORTE_BASE, int(j.get("sorte", SORTE_BASE)))
     skill_classe = CLASSES[j["classe"]]["skill"]
     total[skill_classe] += BONUS_CLASSE
     total[skill_classe] += _bonus_slot(j, "arma")
@@ -525,7 +547,10 @@ def skills(j: dict, agora: float) -> dict:
             total[s] += extra
     m_skill, m_nivel = j.get("maestria_skill"), j.get("maestria_nivel", 0)
     if m_skill and m_nivel:
-        total[m_skill] += round(total[m_skill] * MAESTRIA_BONUS_PCT[m_nivel] / 100)
+        if m_skill == "sorte":
+            total[m_skill] = round(total[m_skill] * (1.10 ** m_nivel))
+        else:
+            total[m_skill] += round(total[m_skill] * MAESTRIA_BONUS_PCT[m_nivel] / 100)
     titulo_info = _titulo_equipado_info(j)
     if titulo_info:
         total[titulo_info[1]] += TITULO_SKILL_BONUS
@@ -534,7 +559,7 @@ def skills(j: dict, agora: float) -> dict:
             total[s] += valor
     mult_rebirth = _mult_skill_rebirth(j)
     if mult_rebirth != 1:
-        total = {s: round(v * mult_rebirth) for s, v in total.items()}
+        total = {s: (round(v * mult_rebirth) if s != "sorte" else v) for s, v in total.items()}
     return {"total": total, "pocao": pocao}
 
 
@@ -614,20 +639,21 @@ def usar_pocao(j: dict, pocao_id: str, agora: float) -> Tuple[bool, str]:
     p = POCOES.get(pocao_id)
     if not p:
         return False, "Poção inválida."
-    if p["tipo"] != "clique":
+    if p["tipo"] not in ("clique", "sorte"):
         return False, "Essa poção só pode ser usada durante uma luta."
     if j["pocoes"].get(pocao_id, 0) <= 0:
         return False, "Você não tem essa poção."
-    ativo = j["efeitos"].get("clique")
+    chave_efeito = "clique" if p["tipo"] == "clique" else "sorte"
+    ativo = j["efeitos"].get(chave_efeito)
     if ativo and ativo.get("expira", 0) > agora:
         if ativo["valor"] > p["valor"]:
             return False, "Você já tem uma poção mais forte desse tipo ativa."
         if ativo["valor"] == p["valor"]:
             ativo["expira"] += p["dur"]
         else:
-            j["efeitos"]["clique"] = {"valor": p["valor"], "expira": agora + p["dur"]}
+            j["efeitos"][chave_efeito] = {"valor": p["valor"], "expira": agora + p["dur"]}
     else:
-        j["efeitos"]["clique"] = {"valor": p["valor"], "expira": agora + p["dur"]}
+        j["efeitos"][chave_efeito] = {"valor": p["valor"], "expira": agora + p["dur"]}
     j["pocoes"][pocao_id] -= 1
     if j["pocoes"][pocao_id] <= 0:
         del j["pocoes"][pocao_id]
@@ -709,22 +735,28 @@ def rolar_pet(j: dict, tier: str, agora: float) -> Tuple[bool, str, Optional[dic
     minimo = PET_REBIRTH_MINIMO.get(tier, 0)
     if j.get("rebirths", 0) < minimo:
         return False, "Essa roleta exige %d rebirth(s)." % minimo, None
-    if len(j.get("pets", [])) >= PET_MAX_MOCHILA:
-        return False, "Sua mochila de pets está cheia (máx. %d) — venda algum antes de rolar de novo." % PET_MAX_MOCHILA, None
+    limite_mochila = pet_max_mochila(j.get("rebirths", 0))
+    if len(j.get("pets", [])) >= limite_mochila:
+        return False, "Sua mochila de pets está cheia (máx. %d) — venda algum antes de rolar de novo." % limite_mochila, None
     preco = info["preco"]  # preço fixo — não varia com rebirth
     if j["jcoins"] < preco:
         return False, "Jcoins insuficientes.", None
     j["jcoins"] -= preco
     rng = random.Random()
+    sorte = skills(j, agora)["total"].get("sorte", SORTE_BASE)
+    chance_alto = min(0.95, max(0.10, sorte / 1000.0))
     nome = rng.choice(PET_NOMES[tier])
     if tier == "basica":
-        mult = round(rng.uniform(*PET_MULT_BASICA), 2)
+        baixo, alto = PET_MULT_BASICA
+        mult = round(rng.uniform(baixo, alto if rng.random() < chance_alto else 1.5), 2)
         skill_extra = None
     elif tier == "epica":
-        mult = round(rng.uniform(*PET_MULT_EPICA), 2)
+        baixo, alto = PET_MULT_EPICA
+        mult = round(rng.uniform(baixo, alto if rng.random() < chance_alto else 2.25), 2)
         skill_extra = {"tipo": "todas", "bonus": PET_BONUS_EPICA}
     else:  # divina
-        mult = round(rng.uniform(*PET_MULT_DIVINA), 2)
+        baixo, alto = PET_MULT_DIVINA
+        mult = round(rng.uniform(baixo, alto if rng.random() < chance_alto else 4.0), 2)
         total_atual = skills(j, agora)["total"]
         foco = min(SKILLS, key=lambda s: total_atual[s])
         skill_extra = {"tipo": "foco", "foco": foco,
@@ -868,6 +900,15 @@ def faltando_rebirth(j: dict) -> list:
     for slot in SLOTS_REBIRTH:
         if j["equip"].get(slot, -1) < ultimo:
             faltando.append(nome_item(j, slot, ultimo))
+    if j.get("auto_nivel", 0) > 0 and j.get("auto_nivel", 0) < max(AUTO_CPS):
+        faltando.append("Autoclicker nível máximo")
+    if j.get("nivel", 0) >= NIVEL_MAESTRIA_DESBLOQUEIO:
+        skill_m = j.get("maestria_skill")
+        max_m = MAESTRIA_MAX if skill_m == "sorte" else MAESTRIA_MAX_NORMAL
+        if not skill_m:
+            faltando.append("Escolher uma maestria")
+        elif j.get("maestria_nivel", 0) < max_m:
+            faltando.append("Maestria de %s nível máximo" % SKILL_NOMES[skill_m])
     return faltando
 
 
@@ -875,6 +916,7 @@ def fazer_rebirth(j: dict) -> Tuple[bool, str]:
     if faltando_rebirth(j):
         return False, "Ainda falta coisa pro rebirth."
     j["rebirths"] += 1
+    j["sorte"] = max(SORTE_BASE, int(j.get("sorte", SORTE_BASE))) + 50
     j.update({
         "jcoins": 0, "cliques": 0, "nivel": 1, "auto_nivel": 1,
         "equip": {}, "pocoes": {}, "efeitos": {},
@@ -921,15 +963,18 @@ def melhorar_maestria(j: dict) -> Tuple[bool, str]:
     if not skill:
         return False, "Escolha uma skill pra evoluir a maestria primeiro."
     nivel = j.get("maestria_nivel", 0)
-    if nivel >= MAESTRIA_MAX:
+    limite = MAESTRIA_MAX if skill == "sorte" else MAESTRIA_MAX_NORMAL
+    if nivel >= limite:
         return False, "Maestria já está no nível máximo."
     preco = MAESTRIA_PRECO[nivel + 1]
     if j["jcoins"] < preco:
         return False, "Jcoins insuficientes."
     j["jcoins"] -= preco
     j["maestria_nivel"] = nivel + 1
-    return True, "Maestria de %s agora é nível %d (+%d%%)." % (
-        SKILL_NOMES[skill], nivel + 1, MAESTRIA_BONUS_PCT[nivel + 1])
+    detalhe = ("x%.2f na Sorte" % (1.10 ** (nivel + 1)) if skill == "sorte"
+               else "+%d%%" % MAESTRIA_BONUS_PCT[nivel + 1])
+    return True, "Maestria de %s agora é nível %d (%s)." % (
+        SKILL_NOMES[skill], nivel + 1, detalhe)
 
 
 # ---------------------------------------------------------------------------

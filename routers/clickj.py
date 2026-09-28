@@ -179,6 +179,7 @@ def _estado_publico(nome: str, agora: float) -> dict:
         "pets": j.get("pets", []),
         "pets_equipados": j.get("pets_equipados", []),
         "pets_max_equipados": regras.pet_max_equipados(j["rebirths"]),
+        "pets_max_mochila": regras.pet_max_mochila(j["rebirths"]),
         "pvp_vitorias": j["pvp_vitorias"],
         "pvp_derrotas": j["pvp_derrotas"],
         "ack": c.get("ack", 0),
