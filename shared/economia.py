@@ -217,13 +217,14 @@ PARTIDAS_JOGOS = [
 ]
 
 INSIGNIAS_DOACAO = [
-    (1_000, "Patron", "🎁"), (15_000, "Champion", "🎁"),
-    (50_000, "Luminary", "🎁"), (100_000, "Icon", "🎁"),
-    (500_000, "Hero", "🎁"), (1_000_000, "Legend", "🎁"),
+    (10_000, "Patron", "🎁"), (100_000, "Champion", "🎁"),
+    (500_000, "Luminary", "🎁"), (1_000_000, "Icon", "🎁"),
+    (5_000_000, "Hero", "🎁"), (10_000_000, "Legend", "🎁"),
 ]
 TAXA_DOACAO = 0.10
 DONO_DOACAO = "jovem7l"
 INTERVALO_INSIGNIA_MESMO_DESTINATARIO = 7 * 24 * 60 * 60
+LIMITE_TRANSFERENCIA_DIARIA = 1_000_000
 
 
 def progresso_doacao(total: int) -> dict:
@@ -649,6 +650,16 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         carteira_rem = obter_carteira(dados, remetente)
         if carteira_rem.get("saldo", 0) < quantidade:
             raise ValueError("Moedas insuficientes.")
+        agora = int(time.time())
+        transferencias = carteira_rem.setdefault("transferencias_24h", [])
+        transferencias[:] = [
+            item for item in transferencias
+            if agora - int(item.get("em", 0)) < 24 * 60 * 60
+        ]
+        usado_hoje = sum(int(item.get("quantidade", 0)) for item in transferencias)
+        if usado_hoje + quantidade > LIMITE_TRANSFERENCIA_DIARIA:
+            restante = max(0, LIMITE_TRANSFERENCIA_DIARIA - usado_hoje)
+            raise ValueError("Limite diário de transferências atingido. Você ainda pode enviar %s moedas hoje." % restante)
         carteiras = dados.get("carteiras", {})
         if destinatario not in carteiras:
             raise ValueError("Usuário destinatário não encontrado.")
@@ -663,7 +674,8 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         historico_rem = carteira_rem.setdefault("historico_envios", [])
         historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": int(time.time())})
         del historico_rem[50:]
-        agora = int(time.time())
+        transferencias.append({"quantidade": quantidade, "em": agora})
+        del transferencias[:-100]
         ultimos = carteira_rem.setdefault("doacoes_por_destinatario", {})
         ultima = int(ultimos.get(destinatario, 0) or 0)
         conta_insignia = agora - ultima >= INTERVALO_INSIGNIA_MESMO_DESTINATARIO
