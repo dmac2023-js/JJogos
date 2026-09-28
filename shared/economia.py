@@ -30,12 +30,15 @@ SALDO_INICIAL = 100
 # "sumir" moedas/itens. Um único lock global serializa todo write.
 LOCK_ECONOMIA = threading.Lock()
 
-BONUS_INTERVALO_SEGUNDOS = 15 * 60
-BONUS_QUANTIDADE = 5
-PRECO_DECORACAO = 400  # valor médio, usado só como prêmio de roleta (preço real varia por item)
-PRECOS_DECORACAO_NIVEIS = [300, 350, 400, 450, 500]
-PRECO_COR_NICK = 400
-PRECO_FONTE_NICK = 500
+BONUS_INTERVALO_SEGUNDOS = 10 * 60
+BONUS_QUANTIDADE = 50
+# Prêmio da roleta quando o jogador já tem TUDO da loja (vira moedas no lugar
+# do item). O preço real das decorações varia por item — este é o do meio da
+# faixa, só usado nesse fallback.
+PRECO_DECORACAO = 10000
+PRECOS_DECORACAO_NIVEIS = [10000, 11000, 12000, 13000, 14000, 15000]
+PRECO_COR_NICK = 8000
+PRECO_FONTE_NICK = 9000
 
 
 def _preco_decoracao(sku_id: str) -> int:
@@ -57,21 +60,28 @@ FONTES_NICK = {
     "impacto": "Impacto",
     "versalete": "Versalete",
     "espacada": "Espaçada",
+    "caixa-alta": "Caixa alta",
+    "compacta": "Compacta",
+    "sublinhado": "Sublinhado",
+    "riscado": "Riscado",
+    "manual": "Manual",
+    "pixel": "Pixel",
 }
 
 # Moedas por vitória — cada jogo tem sua própria tabela (por dificuldade,
-# quando aplicável). Online sempre paga mais que o modo solo/vs-máquina.
-MOEDAS_SUDOKU_SOLO = {"facil": 5, "medio": 10, "dificil": 15}
-MOEDAS_SUDOKU_ONLINE = {"facil": 10, "medio": 20, "dificil": 30}
+# quando aplicável). Online paga o mesmo que o solo na mesma dificuldade —
+# exceto a Velha online, que não tem dificuldade e paga um valor fixo.
+MOEDAS_SUDOKU_SOLO = {"facil": 50, "medio": 150, "dificil": 300}
+MOEDAS_SUDOKU_ONLINE = {"facil": 50, "medio": 150, "dificil": 300}
 
-MOEDAS_VELHA_SOLO = 1
-MOEDAS_VELHA_ONLINE = 5
+MOEDAS_VELHA_SOLO = {"facil": 10, "medio": 20, "dificil": 100}
+MOEDAS_VELHA_ONLINE = 50
 
-MOEDAS_TERMO_SOLO = {"facil": 2, "medio": 5, "dificil": 10}
-MOEDAS_TERMO_ONLINE = {"facil": 5, "medio": 10, "dificil": 15}
+MOEDAS_TERMO_SOLO = {"facil": 30, "medio": 100, "dificil": 250}
+MOEDAS_TERMO_ONLINE = {"facil": 30, "medio": 100, "dificil": 250}
 
-MOEDAS_CAMPO_SOLO = {"facil": 2, "medio": 5, "dificil": 10}
-MOEDAS_CAMPO_ONLINE = {"facil": 5, "medio": 10, "dificil": 15}
+MOEDAS_CAMPO_SOLO = {"facil": 40, "medio": 80, "dificil": 200}
+MOEDAS_CAMPO_ONLINE = {"facil": 40, "medio": 80, "dificil": 200}
 
 # Ludo não tem modo solo nem dificuldade — todo mundo que participa até o
 # fim da partida ganha a moeda de participação; quem vence some MAIS a
@@ -89,7 +99,13 @@ CORES_NICK = {
     "rosa": "#ff9ecf",
     "laranja": "#ffab66",
     "ciano": "#7ef0e0",
-    "arco-iris": None,  # animação (ver .nick-arco-iris no css), não é cor fixa
+    "magenta": "#f72585",
+    "lima": "#b7f34d",
+    "turquesa": "#4cc9f0",
+    "violeta": "#8b5cf6",
+    "dourado": "#f59f00",
+    "branco": "#f4f6ff",
+    "arco-iris": None,  # animação (ver .nick-arco-ris no css), não é cor fixa
 }
 
 # --- Skins do Splano.io -----------------------------------------------------
@@ -100,9 +116,9 @@ CORES_NICK = {
 #   faixa     -> cor de fundo com uma faixa diagonal da segunda cor
 #   rainbow   -> matiz girando (animada)
 #   imagem    -> o próprio jogador escolhe a imagem (url na carteira)
-PRECO_SKIN_SPLANO = 1000
-PRECO_SKIN_SPLANO_IMAGEM = 2000
-PRECO_SKIN_SPLANO_RAINBOW = 1500
+PRECO_SKIN_SPLANO = 8000
+PRECO_SKIN_SPLANO_IMAGEM = 12000
+PRECO_SKIN_SPLANO_RAINBOW = 10000
 
 def _skin(nome, grupo, cores, padrao="solido"):
     return {"nome": nome, "grupo": grupo, "cores": cores, "padrao": padrao}
@@ -208,11 +224,10 @@ PARTIDAS_JOGOS = [
 # se remonta a cada giro, e com ordem fixa dá pra conferir o resultado olhando
 # onde o ponteiro parou. Não existe padrão — não alterna por categoria nem
 # repete ciclo; o presente fica fora do centro e fora das pontas.
-# A aposta só anda de 100 em 100 e começa em 100: com 10 de mínimo dava pra
-# girar quase de graça, e 100 é múltiplo de 4 — o 0.75x fecha em moeda cheia
-# (75 moedas de volta) em vez de perder fração no arredondamento.
-ROLETA_APOSTA_MINIMA = 100
-ROLETA_APOSTA_MULTIPLO = 100
+# A aposta só anda de 1000 em 1000 e começa em 1000 — o front oferece botões
+# de ±1k, ±10k, ±100k e ±1M em cima disso.
+ROLETA_APOSTA_MINIMA = 1000
+ROLETA_APOSTA_MULTIPLO = 1000
 _ROLETA_ORDEM = [
     "0.75x", "2x", "0.5x", "0.75x", "1.5x", "2x", "0.75x", "presente",
     "0.5x", "0.75x", "2x", "1.5x", "0.5x", "0.75x", "2x", "0.75x",
@@ -274,6 +289,84 @@ def preco_decoracao_item(sku_id: str) -> int:
     return item["preco"] if item else PRECO_DECORACAO
 
 
+# ---------------------------------------------------------------------------
+# Molduras de perfil
+# ---------------------------------------------------------------------------
+#
+# Moldura (type 3 do Discord) não tem um "asset" único como a decoração: são
+# 1 a 6 camadas PNG servidas por /media/v1/collectibles-shop/{sku}/{id}/static
+# e posicionadas em volta do perfil pelo client (anchor top/bottom, order
+# front/back, dentro de um perfil de inner_width px com overflow pra fora).
+ARQUIVO_LOJA_MOLDURAS = PASTA_BASE / "loja_molduras.json"
+CDN_MOLDURA = "https://cdn.discordapp.com/media/v1/collectibles-shop/{sku}/{camada}/static"
+PRECO_MOLDURA_NIVEIS = [15000, 16000, 17000, 18000, 19000, 20000]
+
+
+def _preco_moldura(sku_id: str) -> int:
+    # Preço fixo por moldura, derivado do id (igual a decoração): entre 15000
+    # e 20000, sem mudar a cada carregamento nem dar vantagem pra quem sorteia.
+    indice = int(hashlib.md5(str(sku_id).encode("utf-8")).hexdigest(), 16) % len(PRECO_MOLDURA_NIVEIS)
+    return PRECO_MOLDURA_NIVEIS[indice]
+
+
+def _carregar_catalogo_molduras() -> list:
+    try:
+        brutos = json.loads(ARQUIVO_LOJA_MOLDURAS.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    catalogo = []
+    for item in brutos:
+        sku_id = item.get("sku_id")
+        camadas = item.get("layers") or []
+        if not sku_id or not camadas:
+            continue
+        urls = [CDN_MOLDURA.format(sku=sku_id, camada=c.get("id")) for c in camadas if c.get("id")]
+        if not urls:
+            continue
+        catalogo.append({
+            "sku_id": sku_id,
+            "nome": item.get("name") or sku_id,
+            "preco": _preco_moldura(sku_id),
+            # primeira camada = preview do card na loja (a mais característica
+            # em geral é a de cima); o perfil usa TODAS as camadas.
+            "imagem": urls[0],
+            "camadas": [{
+                "url": CDN_MOLDURA.format(sku=sku_id, camada=c["id"]),
+                "order": c.get("order") or "front",
+                "anchor": c.get("anchor") or "top",
+                # staple = topo/base vaza pro fora; border/rail = arte dentro
+                # do card, recortada (é o tipo que manda no desenho).
+                "type": c.get("type") or "staple",
+                "responsive": bool(c.get("responsive")),
+            } for c in camadas if c.get("id")],
+            "inner_width": item.get("inner_width") or 1200,
+            "overflow_top": item.get("overflow_top") or 0,
+            "overflow_bottom": item.get("overflow_bottom") or 0,
+            "overflow_horizontal": item.get("overflow_horizontal") or 0,
+        })
+    return catalogo
+
+
+CATALOGO_MOLDURAS = _carregar_catalogo_molduras()
+_MOLDURAS_POR_SKU = {item["sku_id"]: item for item in CATALOGO_MOLDURAS}
+
+
+def moldura_existe(sku_id: str) -> bool:
+    return sku_id in _MOLDURAS_POR_SKU
+
+
+def preco_moldura_item(sku_id: str) -> int:
+    item = _MOLDURAS_POR_SKU.get(sku_id)
+    return item["preco"] if item else min(PRECO_MOLDURA_NIVEIS)
+
+
+def moldura_publica(sku_id: Optional[str]) -> Optional[dict]:
+    """Moldura equipada pronta pro front desenhar (geometria + camadas)."""
+    if not sku_id:
+        return None
+    return _MOLDURAS_POR_SKU.get(sku_id)
+
+
 _cache_carteiras = {"em": 0.0, "carteiras": None}
 CACHE_CARTEIRAS_SEGUNDOS = 5
 
@@ -308,8 +401,9 @@ def obter_carteira(dados: dict, nome: str, nick: str = None, avatar: str = None,
     carteira.setdefault("fontes_nick", [])
     carteira.setdefault("skins_splano", [])
     carteira.setdefault("skin_splano_imagem", "")
+    carteira.setdefault("molduras", [])
     equipado = carteira.setdefault("equipado", {})
-    for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano"):
+    for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano", "moldura"):
         equipado.setdefault(chave, None)
     carteira.setdefault("segundos_jogados", 0)
     carteira.setdefault("partidas", {})
@@ -374,15 +468,20 @@ def carteira_publica(carteira: dict) -> dict:
         "fontes_nick": carteira.get("fontes_nick", []),
         "skins_splano": carteira.get("skins_splano", []),
         "skin_splano_imagem": carteira.get("skin_splano_imagem", ""),
+        "molduras": carteira.get("molduras", []),
         "equipado": {
             "decoracao": equipado.get("decoracao"),
             "cor_nick": equipado.get("cor_nick"),
             "fonte_nick": equipado.get("fonte_nick"),
             "skin_splano": equipado.get("skin_splano"),
+            "moldura": equipado.get("moldura"),
         },
         # URL pronta da decoração equipada, pro front não precisar carregar o
         # catálogo inteiro só pra desenhar o avatar do cabeçalho/perfil.
         "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
+        # Moldura equipada com geometria e camadas (o equipado["moldura"] só
+        # guarda o sku) — o perfil desenha em cima disso.
+        "moldura_perfil": moldura_publica(equipado.get("moldura")),
         "historico": carteira.get("historico", []),
     }
 
@@ -465,6 +564,7 @@ def _entrada_publica(nome: str, carteira: dict) -> dict:
         "fonte_nick": equipado.get("fonte_nick"),
         "avatar": carteira.get("avatar"),
         "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
+        "moldura_perfil": moldura_publica(equipado.get("moldura")),
         "saldo": carteira.get("saldo", 0),
         "segundos": carteira.get("segundos_jogados", 0),
         "partidas": partidas,
@@ -521,6 +621,7 @@ def _contagem_itens(carteira: dict) -> dict:
         "cores_nick": len(carteira.get("cores_nick") or []),
         "fontes_nick": len(carteira.get("fontes_nick") or []),
         "skins_splano": len(carteira.get("skins_splano") or []),
+        "molduras": len(carteira.get("molduras") or []),
     }
     contagem["total"] = sum(v for k, v in contagem.items() if k != "total")
     return contagem
@@ -552,19 +653,19 @@ def consulta_admin(nome: str) -> dict:
 
 def limpar_itens_admin(nome: str) -> dict:
     """Apaga tudo que o jogador comprou/ganhou na loja (decorações, cores,
-    fontes e skins do Splano). As moedas ficam na conta."""
+    fontes, skins do Splano e molduras). As moedas ficam na conta."""
     if not nome:
         return {"nome": "", "removidos": 0, "saldo": 0, "itens": _contagem_itens({})}
     with LOCK_ECONOMIA:
         dados = carregar_economia()
         carteira = obter_carteira(dados, nome)
         removidos = 0
-        for chave in ("decoracoes", "cores_nick", "fontes_nick", "skins_splano"):
+        for chave in ("decoracoes", "cores_nick", "fontes_nick", "skins_splano", "molduras"):
             removidos += len(carteira.get(chave) or [])
             carteira[chave] = []
         carteira["skin_splano_imagem"] = ""
         equipado = carteira.setdefault("equipado", {})
-        for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano"):
+        for chave in ("decoracao", "cor_nick", "fonte_nick", "skin_splano", "moldura"):
             equipado[chave] = None
         salvar_economia(dados)
         return {"nome": nome, "removidos": removidos, "saldo": carteira.get("saldo", 0),
@@ -572,7 +673,7 @@ def limpar_itens_admin(nome: str) -> dict:
 
 
 def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> dict:
-    """Credita o bônus de atividade (5 moedas a cada 15 min), se já deu
+    """Credita o bônus de atividade (50 moedas a cada 10 min), se já deu
     tempo desde o último. O cliente chama isso periodicamente enquanto a
     aba/Activity está aberta — o servidor decide, não confia no relógio do
     cliente."""

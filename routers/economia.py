@@ -10,6 +10,7 @@ from shared.imagem_proxy import ImagemRecusada, buscar as buscar_imagem_externa
 
 from shared.economia import (
     CATALOGO_DECORACOES,
+    CATALOGO_MOLDURAS,
     CORES_NICK,
     FONTES_NICK,
     LOCK_ECONOMIA,
@@ -32,9 +33,11 @@ from shared.economia import (
     girar_roleta,
     limpar_itens_admin,
     zerar_saldo_admin,
+    moldura_existe,
     obter_carteira,
     perfil_publico,
     preco_decoracao_item,
+    preco_moldura_item,
     registrar_fim_partida,
     resolver_nome_alvo,
     salvar_economia,
@@ -53,6 +56,12 @@ class BonusRequest(BaseModel):
 
 
 class CompraDecoracao(BaseModel):
+    nome: str
+    nick: str = "Anônimo"
+    sku_id: str
+
+
+class CompraMoldura(BaseModel):
     nome: str
     nick: str = "Anônimo"
     sku_id: str
@@ -119,7 +128,8 @@ class TempoJogo(BaseModel):
 
 def _carteira_vazia() -> dict:
     return {"saldo": 0, "decoracoes": [], "cores_nick": [], "fontes_nick": [], "historico": [],
-            "equipado": {"decoracao": None, "cor_nick": None, "fonte_nick": None}}
+            "molduras": [],
+            "equipado": {"decoracao": None, "cor_nick": None, "fonte_nick": None, "moldura": None}}
 
 
 @router.get("/economia/carteira")
@@ -143,6 +153,9 @@ def obter_loja():
     return {
         "decoracoes": CATALOGO_DECORACOES,
         "preco_decoracao": PRECO_DECORACAO,
+        "molduras": CATALOGO_MOLDURAS,
+        "preco_moldura_min": min((m["preco"] for m in CATALOGO_MOLDURAS), default=0),
+        "preco_moldura_max": max((m["preco"] for m in CATALOGO_MOLDURAS), default=0),
         "cores_nick": [c for c in CORES_NICK if c != "arco-iris"],
         "tem_arco_iris": True,
         "preco_cor_nick": PRECO_COR_NICK,
@@ -179,6 +192,28 @@ def comprar_decoracao(dados: CompraDecoracao):
 
         carteira["saldo"] -= preco
         carteira["decoracoes"].append(dados.sku_id)
+        salvar_economia(economia)
+        return carteira_publica(carteira)
+
+
+@router.post("/economia/comprar/moldura")
+def comprar_moldura(dados: CompraMoldura):
+    if eh_anonimo(dados.nick) or not dados.nome:
+        raise HTTPException(status_code=400, detail="Entre com Discord pra comprar.")
+    if not moldura_existe(dados.sku_id):
+        raise HTTPException(status_code=404, detail="Moldura não encontrada.")
+
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome, nick=dados.nick)
+        if dados.sku_id in carteira["molduras"]:
+            raise HTTPException(status_code=409, detail="Você já tem essa moldura.")
+        preco = preco_moldura_item(dados.sku_id)
+        if carteira["saldo"] < preco:
+            raise HTTPException(status_code=402, detail="Moedas insuficientes.")
+
+        carteira["saldo"] -= preco
+        carteira["molduras"].append(dados.sku_id)
         salvar_economia(economia)
         return carteira_publica(carteira)
 
@@ -304,7 +339,8 @@ def equipar(dados: EquiparRequest):
     if eh_anonimo(dados.nick) or not dados.nome:
         raise HTTPException(status_code=400, detail="Entre com Discord.")
     listas = {"decoracao": "decoracoes", "cor_nick": "cores_nick",
-              "fonte_nick": "fontes_nick", "skin_splano": "skins_splano"}
+              "fonte_nick": "fontes_nick", "skin_splano": "skins_splano",
+              "moldura": "molduras"}
     if dados.tipo not in listas:
         raise HTTPException(status_code=400, detail="Tipo inválido.")
 

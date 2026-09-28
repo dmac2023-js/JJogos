@@ -284,7 +284,8 @@ document.querySelectorAll(".voltar").forEach(function (botao) {
   });
 });
 
-var FONTES_NICK_IDS = ["negrito", "italico", "mono", "serifa", "cursiva", "impacto", "versalete", "espacada"];
+var FONTES_NICK_IDS = ["negrito", "italico", "mono", "serifa", "cursiva", "impacto", "versalete", "espacada",
+  "caixa-alta", "compacta", "sublinhado", "riscado", "manual", "pixel"];
 
 /** Marca um elemento como clicável pra abrir o perfil do jogador (o clique é
  *  tratado por um ouvinte único, lá embaixo). */
@@ -378,6 +379,108 @@ document.addEventListener("click", function (ev) {
   ev.preventDefault();
   abrirPerfilJogador(alvo.dataset.perfil);
 });
+
+
+// ---------------------------------------------------------------------------
+// Molduras de perfil (camadas PNG do Discord em volta do card)
+// ---------------------------------------------------------------------------
+//
+// A geometria vem do catálogo do Discord: o perfil é projetado pra um retângulo
+// de inner_width px e cada camada vaza overflow_top / overflow_bottom /
+// overflow_horizontal px pra fora dele. Aqui a gente mede o card real, calcula
+// o fator de escala (largura do card / inner_width) e posiciona as camadas em
+// volta — as de "back" atrás do card, as de "front" na frente.
+//
+// O card e o container (host) precisam de position:relative + z-index:0 pra
+// existir contexto de empilhamento: assim a camada de trás fica atrás do
+// fundo do card e a da frente, na frente de todo o conteúdo.
+var moldurasAtivas = [];
+
+function aplicarMolduraPerfil(host, card, moldura) {
+  if (!host || !card) return;
+  var antiga = host.querySelector(":scope > .moldura-perfil");
+  if (antiga) antiga.remove();
+  if (!moldura || !moldura.camadas || !moldura.camadas.length) return;
+
+  var camadas = document.createElement("span");
+  camadas.className = "moldura-perfil";
+  camadas.setAttribute("aria-hidden", "true");
+  moldura.camadas.forEach(function (c) {
+    if (!c.url) return;
+    var tipo = c.type || (c.anchor === "center" ? "border" : "staple");
+    var frente = c.order === "back" ? "moldura-camada-atras" : "moldura-camada-frente";
+
+    if (tipo === "rail") {
+      // Rail é fundo da div (como no Discord): no-repeat, tamanho 100% da
+      // largura, posicionado pela âncora e recortado na altura do card.
+      var rail = document.createElement("span");
+      rail.className = "moldura-camada moldura-camada-rail " + frente;
+      rail.setAttribute("data-ancora", c.anchor || "center");
+      rail.style.backgroundImage = 'url("' + c.url + '")';
+      camadas.appendChild(rail);
+      return;
+    }
+
+    if (tipo === "border") {
+      // Borda é uma caixa do tamanho do card com overflow:hidden: a arte é
+      // bem mais alta e o que passa da altura do card é cortado.
+      var caixa = document.createElement("span");
+      caixa.className = "moldura-camada moldura-camada-borda " + frente;
+      var imgBorda = document.createElement("img");
+      imgBorda.src = c.url;
+      imgBorda.alt = "";
+      imgBorda.loading = "lazy";
+      imgBorda.addEventListener("error", function () { caixa.remove(); });
+      caixa.appendChild(imgBorda);
+      camadas.appendChild(caixa);
+      return;
+    }
+
+    // staple: arte na escala natural, vaza overflow_top / overflow_bottom
+    // pra fora do card (topo e base da moldura).
+    var img = document.createElement("img");
+    img.className = "moldura-camada " +
+      (c.anchor === "bottom" ? "moldura-camada-baixo " : "moldura-camada-cima ") +
+      frente;
+    img.src = c.url;
+    img.alt = "";
+    img.loading = "lazy";
+    // Camada que o CDN não serve some do card em vez de deixar ícone quebrado.
+    img.addEventListener("error", function () { img.remove(); });
+    camadas.appendChild(img);
+  });
+  host.appendChild(camadas);
+  molduraAtualizar(camadas, card, moldura);
+
+  moldurasAtivas = moldurasAtivas.filter(function (m) { return m.camadas.isConnected; });
+  moldurasAtivas.push({ camadas: camadas, card: card, moldura: moldura });
+}
+
+/** Recalcula todas as molduras na tela — usado quando o conteúdo de um card
+ *  muda depois de desenhado (o modal de perfil preenche as estatísticas
+ *  depois, mudando a altura do card). */
+function atualizarMoldurasPerfil() {
+  moldurasAtivas = moldurasAtivas.filter(function (m) { return m.camadas.isConnected; });
+  moldurasAtivas.forEach(function (m) { molduraAtualizar(m.camadas, m.card, m.moldura); });
+}
+
+function molduraAtualizar(camadas, card, moldura) {
+  var retangulo = card.getBoundingClientRect();
+  var k = retangulo.width / (moldura.inner_width || 1200);
+  camadas.style.setProperty("--moldura-topo", ((moldura.overflow_top || 0) * k) + "px");
+  camadas.style.setProperty("--moldura-base", ((moldura.overflow_bottom || 0) * k) + "px");
+  camadas.style.setProperty("--moldura-lado", ((moldura.overflow_horizontal || 0) * k) + "px");
+
+  var host = camadas.parentNode;
+  if (!host) return;
+  var retanguloHost = host.getBoundingClientRect();
+  camadas.style.left = (retangulo.left - retanguloHost.left) + "px";
+  camadas.style.top = (retangulo.top - retanguloHost.top) + "px";
+  camadas.style.width = retangulo.width + "px";
+  camadas.style.height = retangulo.height + "px";
+}
+
+window.addEventListener("resize", atualizarMoldurasPerfil);
 
 
 // ---------------------------------------------------------------------------

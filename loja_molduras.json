@@ -1,0 +1,2161 @@
+[
+  {
+    "sku_id": "1536493354450288680",
+    "name": "Simbionte",
+    "layers": [
+      {
+        "id": "1536493443591708682",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536493448750825562",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1536493453150658600",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536493458490003548",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1545538607811534988",
+    "name": "Pãozinho de Folhas",
+    "layers": [
+      {
+        "id": "1549900374805184522",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1549900379196624936",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1549900383076220939",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1549900387216269445",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1541464541966114826",
+    "name": "Galhos Secos",
+    "layers": [
+      {
+        "id": "1541464621884510258",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1541464626057711706",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1541464629321011250",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1541464632957472842",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 215,
+    "overflow_bottom": 133,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1538992680552636548",
+    "name": "Filigrana de Rosas",
+    "layers": [
+      {
+        "id": "1538992839197720769",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1538992843312464012",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1538992846814576751",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1538992850535059466",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1517303399799062668",
+    "name": "Mariposa (Branca)",
+    "layers": [
+      {
+        "id": "1524824219844739122",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524824224559268011",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1524824229810278460",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 298,
+    "overflow_bottom": 107,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1545193750261923880",
+    "name": "Estampa de Leopardo",
+    "layers": [
+      {
+        "id": "1545193820377849937",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1545193824370954351",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1545193829689200710",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 132,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1491907428344795276",
+    "name": "Gatinho Miau Miau (Branco)",
+    "layers": [
+      {
+        "id": "1522378688971411657",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522378692112809994",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1522378695187238972",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522378698207264809",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 301,
+    "overflow_bottom": 147,
+    "overflow_horizontal": 54
+  },
+  {
+    "sku_id": "1545538988813844600",
+    "name": "Jardim de Outono",
+    "layers": [
+      {
+        "id": "1549900234438610985",
+        "type": "rail",
+        "order": "front",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1549900243699503185",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1549900247415787601",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1549900251425669130",
+        "type": "rail",
+        "order": "back",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1549900255443685446",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1549900259289735229",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1511834130294247555",
+    "name": "Rosas Sombrias (Preto)",
+    "layers": [
+      {
+        "id": "1515086606665646213",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1515086611896078477",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 211,
+    "overflow_bottom": 186,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524191647854891039",
+    "name": "Doçura de Coelhinho",
+    "layers": [
+      {
+        "id": "1524192390502551724",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524192394801713222",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 126,
+    "overflow_bottom": 116,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1541464049919983667",
+    "name": "Damas-da-noite",
+    "layers": [
+      {
+        "id": "1541464161576423504",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1541464165909012671",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1541464169302335608",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1541464173194518649",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 303,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 55
+  },
+  {
+    "sku_id": "1524190883036266636",
+    "name": "Carta Celeste",
+    "layers": [
+      {
+        "id": "1524191327024320522",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1524191334083067904",
+        "type": "rail",
+        "order": "front",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1524191337790836907",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524191342538915931",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 127,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1526698360080306276",
+    "name": "Oceano",
+    "layers": [
+      {
+        "id": "1526698477919146044",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526698483346706442",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1526698487780212849",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526698492448211005",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1533925887098224730",
+    "name": "Senhor dos Mortos (Vermelho)",
+    "layers": [
+      {
+        "id": "1534992785206411324",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1534992798002974751",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1534992807885017249",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 148,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1522378878083924051",
+    "name": "Gatinho Miau Miau (Preto)",
+    "layers": [
+      {
+        "id": "1524824357199675523",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524824361503166484",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1524824365282099231",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524824369212424203",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 301,
+    "overflow_bottom": 147,
+    "overflow_horizontal": 54
+  },
+  {
+    "sku_id": "1524193178586972441",
+    "name": "Galáxia Fantasiosa (Azul)",
+    "layers": [
+      {
+        "id": "1526660272021045418",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1526660277838282893",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526660281802031224",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1511834131242287195",
+    "name": "Rosas Sombrias (Branco)",
+    "layers": [
+      {
+        "id": "1515086653209841684",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1515086657794081029",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 211,
+    "overflow_bottom": 186,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1541462746032381982",
+    "name": "Espinhos Demoníacos",
+    "layers": [
+      {
+        "id": "1541463498339516477",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1541463501657215026",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1541463505176109087",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 270,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1551647831360671905",
+    "name": "Tilcayo",
+    "layers": [
+      {
+        "id": "1551648251701100665",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524192423260061706",
+    "name": "Galáxia Fantasiosa (Rosa)",
+    "layers": [
+      {
+        "id": "1526660205738328175",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1526660211274944754",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526660216026828950",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1491908830844424302",
+    "name": "Primavera de Sakura",
+    "layers": [
+      {
+        "id": "1511895595718148197",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1511895599232843937",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1511895603041407016",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1511895606392651979",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 274,
+    "overflow_bottom": 209,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1526697977513509007",
+    "name": "Coelhinho de Morango",
+    "layers": [
+      {
+        "id": "1526698280728133723",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526698286248099932",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1526698290215784569",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526698294841970698",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 140,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524193825130811604",
+    "name": "Paisagem Lofi",
+    "layers": [
+      {
+        "id": "1524193966818459790",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 0
+  },
+  {
+    "sku_id": "1544103549892300830",
+    "name": "Estouro Perolado",
+    "layers": [
+      {
+        "id": "1547368615408566302",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1547368619091042364",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1547368622840746045",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1547368626535796888",
+        "type": "rail",
+        "order": "back",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1547368630142902282",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1547368633867571310",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 190,
+    "overflow_bottom": 159,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1511908350324113478",
+    "name": "Mariposa (Rosa)",
+    "layers": [
+      {
+        "id": "1524824070691229817",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524824076630364290",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1524824082325966848",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 298,
+    "overflow_bottom": 107,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1511869969921609874",
+    "name": "Caos Neon (Roxo)",
+    "layers": [
+      {
+        "id": "1514424192471404596",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1514424195486842940",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514424199001669695",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1514424202038345828",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1491910305603911881",
+    "name": "Rosas Sombrias (Penumbra)",
+    "layers": [
+      {
+        "id": "1515086535480049714",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1515086540794237099",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 211,
+    "overflow_bottom": 186,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1545193867710562406",
+    "name": "Guaxinim Alternativo",
+    "layers": [
+      {
+        "id": "1545565659092623491",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1545565664134037606",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1547000420180693142",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1547000553375137823",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1507152063078072454",
+    "name": "Vingança (Laranja)",
+    "layers": [
+      {
+        "id": "1514421770197663875",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1514421773637259365",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514421776967405728",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1531413463623139328",
+    "name": "Coroa Solar",
+    "layers": [
+      {
+        "id": "1532536721248616610",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1532536724981547221",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1532536729821511811",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524512601827180624",
+    "name": "Contorno Prismático (Rosa)",
+    "layers": [
+      {
+        "id": "1524557375024009436",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1524557380090593321",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524557384922697981",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 127,
+    "overflow_bottom": 123,
+    "overflow_horizontal": 38
+  },
+  {
+    "sku_id": "1522380815538065549",
+    "name": "Gatinho Miau Miau (Laranja)",
+    "layers": [
+      {
+        "id": "1522381608047345756",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522381611776348200",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1522381615484108914",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522381620278067314",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 301,
+    "overflow_bottom": 147,
+    "overflow_horizontal": 54
+  },
+  {
+    "sku_id": "1524512219298267187",
+    "name": "Contorno Prismático (Azul)",
+    "layers": [
+      {
+        "id": "1524512576686526606",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1524512580935352410",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524512586375237712",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 127,
+    "overflow_bottom": 123,
+    "overflow_horizontal": 38
+  },
+  {
+    "sku_id": "1484726324592640056",
+    "name": "Vingança (Rosa)",
+    "layers": [
+      {
+        "id": "1514421380328722451",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1514421385064087734",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514421389044482159",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1515124557290410204",
+    "name": "Rosas Sombrias (Azul)",
+    "layers": [
+      {
+        "id": "1515124885113012234",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1515124888313266236",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 211,
+    "overflow_bottom": 186,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1484726324580061191",
+    "name": "Cristais (Ametista)",
+    "layers": [
+      {
+        "id": "1514422966870347837",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514422970251083806",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1536491679949922304",
+    "name": "Homem-Aranha",
+    "layers": [
+      {
+        "id": "1536492376778870896",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536492380520452238",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1536492384177618954",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536492387927466055",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 285,
+    "overflow_bottom": 190,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1489398661619384321",
+    "name": "Retrofuturismo",
+    "layers": [
+      {
+        "id": "1511863801518227588",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1511863804592521317",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1511863813127929897",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 271,
+    "overflow_bottom": 182,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1517301132211388507",
+    "name": "Mariposa (Azul)",
+    "layers": [
+      {
+        "id": "1524824143315599390",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1524824154560397552",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1524824160310792243",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 298,
+    "overflow_bottom": 107,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1522381656684761098",
+    "name": "Gatinho Miau Miau (Cinza)",
+    "layers": [
+      {
+        "id": "1522381902995132536",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522381906627268640",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1522381910544879691",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1522381916764897321",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 301,
+    "overflow_bottom": 147,
+    "overflow_horizontal": 54
+  },
+  {
+    "sku_id": "1509183143905857589",
+    "name": "Cristais (Água-marinha)",
+    "layers": [
+      {
+        "id": "1514423210181918872",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514423213403279380",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1493974583311859733",
+    "name": "Reino da Luz Estelar",
+    "layers": [
+      {
+        "id": "1511864755675992145",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1511864761183244478",
+        "type": "rail",
+        "order": "front",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1511864765062975640",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1511864769370394735",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 156,
+    "overflow_bottom": 63,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1491910929141727413",
+    "name": "Caos Neon (Verde)",
+    "layers": [
+      {
+        "id": "1514424112079048794",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1514424115258200205",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514424118911566014",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1514424121641930803",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1536492428268281996",
+    "name": "Teia do Homem-Aranha",
+    "layers": [
+      {
+        "id": "1536492935170760895",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536492940480872449",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1536492944750542958",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536492948894515230",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 160,
+    "overflow_bottom": 190,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1507152062134358176",
+    "name": "Vingança (Azul)",
+    "layers": [
+      {
+        "id": "1514421630108041226",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1514421634222526506",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514421637540352071",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1511871218633146408",
+    "name": "Caos Neon (Azul)",
+    "layers": [
+      {
+        "id": "1514424370377003119",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1514424379709198548",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514424383790387230",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1514424387443359915",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1509183145751220377",
+    "name": "Cristais (Cornalina)",
+    "layers": [
+      {
+        "id": "1514423553527779490",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514423556451205140",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1509183144786657413",
+    "name": "Cristais (Peridoto)",
+    "layers": [
+      {
+        "id": "1514423455905349705",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514423458833109165",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1491911825837785238",
+    "name": "Amigos do Lago",
+    "layers": [
+      {
+        "id": "1514422210209644636",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514422213829464105",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1514422217692283042",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514422221584470208",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1526704581168468161",
+    "name": "Croac, croac",
+    "layers": [
+      {
+        "id": "1526704820344455319",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526704827751596202",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 280,
+    "overflow_bottom": 202,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1519072056560455851",
+    "name": "Dragão (Rubi)",
+    "layers": [
+      {
+        "id": "1519072278669692938",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519072284084797571",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1519072288887148705",
+        "type": "rail",
+        "order": "back",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1519072295086330008",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519072302766100520",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1527812336750952489",
+    "name": "Sinfonia Tropical",
+    "layers": [
+      {
+        "id": "1527812760669388840",
+        "type": "rail",
+        "order": "front",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1527812764574421124",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1527812769129304214",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1527812773143122030",
+        "type": "rail",
+        "order": "back",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1527812777664708718",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1489396533643448380",
+    "name": "Gato Kawaii",
+    "layers": [
+      {
+        "id": "1511832450052133044",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1511832453369827559",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1511832456381071471",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 135,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1536492991093678183",
+    "name": "Venom",
+    "layers": [
+      {
+        "id": "1536493305460686919",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536493309436895253",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1536493313946026135",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 295,
+    "overflow_bottom": 161,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1489399523238477855",
+    "name": "Divisão Dimensional",
+    "layers": [
+      {
+        "id": "1517237005921157280",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1517237009217753168",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1517237013818900621",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 288,
+    "overflow_bottom": 145,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524191448898080929",
+    "name": "Metal Precioso",
+    "layers": [
+      {
+        "id": "1526660575952764958",
+        "type": "border",
+        "order": "front",
+        "anchor": "center",
+        "responsive": false
+      },
+      {
+        "id": "1526660580260188300",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526660586237067364",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 216,
+    "overflow_bottom": 103,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1519072339185369239",
+    "name": "Dragão (Safira)",
+    "layers": [
+      {
+        "id": "1519072528654401563",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519072534073708775",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1519072545016512703",
+        "type": "rail",
+        "order": "back",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1519072552004096192",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519072557339246703",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1506402031986802930",
+    "name": "Dragão (Jade)",
+    "layers": [
+      {
+        "id": "1519088935509295224",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519088941628919828",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1519088946922131637",
+        "type": "rail",
+        "order": "back",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1519088951892250755",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519088957789311066",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 178,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1519071720672329779",
+    "name": "Dragão (Rosa)",
+    "layers": [
+      {
+        "id": "1519071938754904185",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519071945079914577",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1519071949551177809",
+        "type": "rail",
+        "order": "back",
+        "anchor": "center",
+        "responsive": true
+      },
+      {
+        "id": "1519071954408046633",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1519071961353949394",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 178,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1527085511544410274",
+    "name": "Bis",
+    "layers": [
+      {
+        "id": "1527085678985220128",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1527085684559708260",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1527085689269911692",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1527085693535391774",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1484726324592640058",
+    "name": "Tigre Guardião",
+    "layers": [
+      {
+        "id": "1514422015787012136",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514422019163291710",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1514422022787043438",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1514422025803010048",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 297,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1531413285243719880",
+    "name": "Ocultação Total",
+    "layers": [
+      {
+        "id": "1533986938368036915",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1533986943057137715",
+        "type": "staple",
+        "order": "front",
+        "anchor": "bottom",
+        "responsive": false
+      },
+      {
+        "id": "1533986948220321862",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1524193380492509345",
+    "name": "Galáxia Fantasiosa (Branca)",
+    "layers": [
+      {
+        "id": "1526660354694844456",
+        "type": "rail",
+        "order": "front",
+        "anchor": "top",
+        "responsive": true
+      },
+      {
+        "id": "1526660358712852691",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1526660363071000666",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 0,
+    "overflow_horizontal": 56
+  },
+  {
+    "sku_id": "1533925498961264871",
+    "name": "Senhor dos Mortos (Azul)",
+    "layers": [
+      {
+        "id": "1533925847021518939",
+        "type": "staple",
+        "order": "front",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1533925851752825032",
+        "type": "staple",
+        "order": "back",
+        "anchor": "top",
+        "responsive": false
+      },
+      {
+        "id": "1533925855338827867",
+        "type": "staple",
+        "order": "back",
+        "anchor": "bottom",
+        "responsive": false
+      }
+    ],
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 148,
+    "overflow_horizontal": 56
+  }
+]

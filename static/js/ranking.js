@@ -204,14 +204,22 @@ async function abrirPerfilRanking(jogador) {
   document.body.appendChild(overlay);
   card.querySelector(".rmodal-fechar").addEventListener("click", fecharModalRanking);
 
+  // Moldura de perfil equipada em volta do card (as camadas vazam pra fora,
+  // por isso o host é o overlay e não o card: o card rola com overflow-y).
+  if (typeof aplicarMolduraPerfil === "function") {
+    aplicarMolduraPerfil(overlay, card, jogador.moldura_perfil);
+  }
+
   try {
     var resp = await fetch("./perfil/recordes?nome=" + encodeURIComponent(jogador.nome));
     var perfil = resp.ok ? await resp.json() : {};
     var conteudo = card.querySelector("#rmodal-conteudo");
     _renderizarConteudoModal(conteudo, jogador, perfil);
+    if (typeof atualizarMoldurasPerfil === "function") atualizarMoldurasPerfil();
   } catch (e) {
     var conteudo = card.querySelector("#rmodal-conteudo");
     if (conteudo) conteudo.innerHTML = '<p class="vazio">Erro ao carregar perfil.</p>';
+    if (typeof atualizarMoldurasPerfil === "function") atualizarMoldurasPerfil();
   }
 }
 

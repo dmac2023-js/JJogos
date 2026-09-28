@@ -36,21 +36,27 @@ let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], fontes_nick: [], historico: [], equipado: { decoracao: null, cor_nick: null, fonte_nick: null } };
 let lojaPaginaDecoracoes = 0;
 let lojaFiltroDecoracoes = "";
+let lojaPaginaMolduras = 0;
+let lojaFiltroMolduras = "";
+let lojaMolduraSelecionadaSku = null;
 let lojaCorSelecionada = null;
 let lojaDecoracaoSelecionadaSku = null;
 const LOJA_DECORACOES_POR_PAGINA = 12;
+const LOJA_MOLDURAS_POR_PAGINA = 12;
 
 // Roleta da sorte.
 let lojaRoletaFatias = null;
 let lojaRoletaAngulos = null;
-let lojaRoletaApostaMinima = 100;
-let lojaRoletaApostaMultiplo = 100;
-let lojaRoletaAposta = 100;
+let lojaRoletaApostaMinima = 1000;
+let lojaRoletaApostaMultiplo = 1000;
+let lojaRoletaAposta = 1000;
 let lojaRoletaRotacaoAtual = 0;
 let lojaRoletaGirando = false;
 const LOJA_CORES_HEX = {
   azul: "#5b9dff", verde: "#7ddea3", vermelho: "#ff8a8a", amarelo: "#ffd36a",
   roxo: "#c9a6ff", rosa: "#ff9ecf", laranja: "#ffab66", ciano: "#7ef0e0",
+  magenta: "#f72585", lima: "#b7f34d", turquesa: "#4cc9f0", violeta: "#8b5cf6",
+  dourado: "#f59f00", branco: "#f4f6ff",
 };
 
 async function atualizarMoedasHeader() {
@@ -131,7 +137,7 @@ function ordenarPossuidosPrimeiro(lista, chaveDe, possuidos) {
 // ---------------------------------------------------------------------------
 function lojaMostrarSomente(id) {
   ["#loja-menu", "#loja-secao-cores", "#loja-secao-fontes", "#loja-secao-skins-splano",
-   "#loja-secao-decoracoes", "#loja-secao-roleta"].forEach(function (sel) {
+   "#loja-secao-decoracoes", "#loja-secao-molduras", "#loja-secao-roleta"].forEach(function (sel) {
     document.querySelector(sel).style.display = sel === id ? "" : "none";
   });
 }
@@ -160,6 +166,12 @@ function lojaMostrarSecaoDecoracoes() {
   renderLojaDecoracoes();
 }
 
+function lojaMostrarSecaoMolduras() {
+  lojaMostrarSomente("#loja-secao-molduras");
+  renderLojaMolduras();
+  lojaPreviewMolduraEquipada();
+}
+
 async function lojaMostrarSecaoRoleta() {
   lojaMostrarSomente("#loja-secao-roleta");
   await carregarRoleta();
@@ -172,11 +184,32 @@ async function abrirLoja() {
   await atualizarMoedasHeader();
   await carregarCatalogoLoja();
   lojaPaginaDecoracoes = 0;
+  lojaPaginaMolduras = 0;
   lojaCorSelecionada = null;
   lojaDecoracaoSelecionadaSku = null;
+  lojaMolduraSelecionadaSku = null;
   document.querySelector("#loja-saldo").textContent = minhaCarteira.saldo;
   document.querySelector("#loja-preco-cor").textContent = lojaCatalogo.preco_cor_nick;
   document.querySelector("#loja-preco-fonte").textContent = lojaCatalogo.preco_fonte_nick;
+  // Faixa real das decorações (o preço de cada uma é fixo por item e vem no
+  // catálogo) — sem isso o título ficava com o texto velho do HTML.
+  var precosDecoracao = (lojaCatalogo.decoracoes || [])
+    .map(function (d) { return d.preco; })
+    .filter(function (p) { return p > 0; })
+    .sort(function (a, b) { return a - b; });
+  if (precosDecoracao.length) {
+    document.querySelector("#loja-preco-decoracao").textContent =
+      precosDecoracao[0] + " a " + precosDecoracao[precosDecoracao.length - 1];
+  }
+  // Mesma coisa pras molduras: preço fixo por item, a faixa vem do catálogo.
+  var precosMoldura = (lojaCatalogo.molduras || [])
+    .map(function (m) { return m.preco; })
+    .filter(function (p) { return p > 0; })
+    .sort(function (a, b) { return a - b; });
+  if (precosMoldura.length) {
+    document.querySelector("#loja-preco-moldura").textContent =
+      precosMoldura[0] + " a " + precosMoldura[precosMoldura.length - 1];
+  }
   lojaMostrarMenu();
 }
 
@@ -394,11 +427,15 @@ function lojaAmostraSkin(skin) {
 function renderLojaSkinsSplano() {
   var alvo = document.querySelector("#loja-skins-splano");
   if (!alvo || !lojaCatalogo.skins_splano) return;
-  document.querySelector("#loja-preco-skin").textContent = 1000;
+  // Os preços vêm do servidor (o texto do HTML é só um placeholder até aqui).
   var especiais = {};
   lojaCatalogo.skins_splano.forEach(function (s) { especiais[s.id] = s.preco; });
-  document.querySelector("#loja-preco-skin-rainbow").textContent = especiais.rainbow || 1500;
-  document.querySelector("#loja-preco-skin-imagem").textContent = especiais.imagem || 2000;
+  var comuns = lojaCatalogo.skins_splano.filter(function (s) {
+    return s.id !== "rainbow" && s.id !== "imagem";
+  });
+  document.querySelector("#loja-preco-skin").textContent = comuns.length ? comuns[0].preco : 8000;
+  document.querySelector("#loja-preco-skin-rainbow").textContent = especiais.rainbow || 10000;
+  document.querySelector("#loja-preco-skin-imagem").textContent = especiais.imagem || 12000;
 
   if (!usuarioDiscord) {
     alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar skins.</p>';
@@ -640,8 +677,166 @@ function renderLojaDecoracoes() {
 }
 
 // ---------------------------------------------------------------------------
+// Molduras de perfil
+// ---------------------------------------------------------------------------
+function lojaPreviewMoldura(item) {
+  lojaMolduraSelecionadaSku = item.sku_id;
+  var card = document.querySelector("#loja-preview-moldura-card");
+  var nomeEl = document.querySelector("#loja-preview-moldura-nome");
+  var avatarImg = document.querySelector("#loja-preview-moldura-avatar");
+  if (!card) return;
+  avatarImg.src = avatarAtual() || "https://cdn.discordapp.com/embed/avatars/0.png";
+  nomeEl.textContent = item.nome;
+  aplicarMolduraPerfil(document.querySelector("#loja-preview-moldura"), card, item);
+}
+
+function lojaPreviewMolduraEquipada() {
+  // Prévia da moldura equipada (ou card limpo quando não tem nenhuma).
+  var card = document.querySelector("#loja-preview-moldura-card");
+  if (!card) return;
+  var moldura = (minhaCarteira && minhaCarteira.moldura_perfil) || null;
+  lojaMolduraSelecionadaSku = moldura ? moldura.sku_id : null;
+  document.querySelector("#loja-preview-moldura-avatar").src =
+    avatarAtual() || "https://cdn.discordapp.com/embed/avatars/0.png";
+  document.querySelector("#loja-preview-moldura-nome").textContent =
+    moldura ? moldura.nome : "Nenhuma moldura equipada";
+  aplicarMolduraPerfil(document.querySelector("#loja-preview-moldura"), card, moldura);
+}
+
+function renderLojaMolduras() {
+  var alvo = document.querySelector("#loja-molduras");
+  var paginacaoAlvo = document.querySelector("#loja-molduras-paginacao");
+  if (!alvo) return;
+  if (!usuarioDiscord) {
+    alvo.innerHTML = '<p class="perfil-vazio">Entre com Discord para comprar molduras.</p>';
+    paginacaoAlvo.innerHTML = "";
+    return;
+  }
+  var itens = lojaCatalogo.molduras || [];
+  if (!itens.length) {
+    alvo.innerHTML = '<p class="perfil-vazio">Nenhuma moldura disponível no momento.</p>';
+    paginacaoAlvo.innerHTML = "";
+    return;
+  }
+
+  var lista = ordenarPossuidosPrimeiro(itens, function (m) { return m.sku_id; }, minhaCarteira.molduras);
+  if (lojaFiltroMolduras) {
+    var termo = lojaFiltroMolduras.toLowerCase();
+    lista = lista.filter(function (m) { return (m.nome || "").toLowerCase().indexOf(termo) !== -1; });
+  }
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="perfil-vazio">Nenhuma moldura encontrada pra "' + escapeHtml(lojaFiltroMolduras) + '".</p>';
+    paginacaoAlvo.innerHTML = "";
+    return;
+  }
+  var totalPaginas = Math.max(1, Math.ceil(lista.length / LOJA_MOLDURAS_POR_PAGINA));
+  if (lojaPaginaMolduras >= totalPaginas) lojaPaginaMolduras = totalPaginas - 1;
+  var inicio = lojaPaginaMolduras * LOJA_MOLDURAS_POR_PAGINA;
+  var pagina = lista.slice(inicio, inicio + LOJA_MOLDURAS_POR_PAGINA);
+
+  alvo.innerHTML = "";
+  var miniCards = [];
+  pagina.forEach(function (item) {
+    var possui = minhaCarteira.molduras.indexOf(item.sku_id) !== -1;
+    var equipada = minhaCarteira.equipado.moldura === item.sku_id;
+    var card = document.createElement("div");
+    card.className = "loja-item" + (equipada ? " equipado" : "");
+    card.addEventListener("click", function () {
+      lojaPreviewMoldura(item);
+      if (possui && !equipada) equiparItem("moldura", item.sku_id);
+    });
+
+    var mini = document.createElement("span");
+    mini.className = "loja-moldura-mini";
+    var miniCard = document.createElement("span");
+    miniCard.className = "loja-moldura-mini-card";
+    miniCard.innerHTML = '<span class="loja-moldura-mini-inicial">A</span>' +
+      '<span class="loja-moldura-mini-nome">Nome</span>';
+    mini.appendChild(miniCard);
+    if (equipada) mini.appendChild(lojaBadgeEquipado());
+    card.appendChild(mini);
+    miniCards.push({ mini: mini, miniCard: miniCard, item: item });
+
+    var nome = document.createElement("span");
+    nome.className = "loja-item-nome";
+    nome.textContent = item.nome;
+    card.appendChild(nome);
+
+    if (!possui) {
+      card.appendChild(lojaBotaoPreco(item.preco, possui, equipada, function (ev) {
+        ev.stopPropagation();
+        lojaPreviewMoldura(item);
+        comprarMoldura(item.sku_id);
+      }));
+    }
+    alvo.appendChild(card);
+  });
+
+  // As camadas dependem do card já estar medível (position na tela), então o
+  // frame só é aplicado depois que todos os cards entraram no DOM.
+  miniCards.forEach(function (m) {
+    aplicarMolduraPerfil(m.mini, m.miniCard, m.item);
+  });
+
+  paginacaoAlvo.innerHTML = "";
+  if (totalPaginas > 1) {
+    var botaoAnterior = document.createElement("button");
+    botaoAnterior.className = "botao-copiar";
+    botaoAnterior.textContent = "← Anterior";
+    botaoAnterior.disabled = lojaPaginaMolduras === 0;
+    botaoAnterior.addEventListener("click", function () {
+      lojaPaginaMolduras--;
+      renderLojaMolduras();
+    });
+    paginacaoAlvo.appendChild(botaoAnterior);
+
+    var info = document.createElement("span");
+    info.className = "loja-paginacao-info";
+    info.textContent = "Página " + (lojaPaginaMolduras + 1) + " de " + totalPaginas;
+    paginacaoAlvo.appendChild(info);
+
+    var botaoProxima = document.createElement("button");
+    botaoProxima.className = "botao-copiar";
+    botaoProxima.textContent = "Próxima →";
+    botaoProxima.disabled = lojaPaginaMolduras >= totalPaginas - 1;
+    botaoProxima.addEventListener("click", function () {
+      lojaPaginaMolduras++;
+      renderLojaMolduras();
+    });
+    paginacaoAlvo.appendChild(botaoProxima);
+  }
+
+  if (minhaCarteira.equipado.moldura) {
+    var limpar = document.createElement("button");
+    limpar.className = "botao-copiar";
+    limpar.textContent = "Remover moldura";
+    limpar.addEventListener("click", function () { equiparItem("moldura", null); });
+    alvo.appendChild(limpar);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Compra / equipar
 // ---------------------------------------------------------------------------
+async function comprarMoldura(skuId) {
+  try {
+    var resp = await fetch("./economia/comprar/moldura", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), sku_id: skuId }),
+    });
+    if (!resp.ok) {
+      var erro = await resp.json().catch(function () { return {}; });
+      alert(erro.detail || "Não foi possível comprar.");
+      return;
+    }
+    minhaCarteira = await resp.json();
+    aplicarCosmeticosHeader();
+    lojaAtualizarSaldoTelas();
+    renderLojaMolduras();
+  } catch (e) { alert("Não foi possível comprar agora."); }
+}
+
 async function comprarDecoracao(skuId) {
   try {
     var resp = await fetch("./economia/comprar/decoracao", {
@@ -700,6 +895,9 @@ async function equiparItem(tipo, valor) {
     lojaAvisarJogosDeCosmeticos();
     if (tipo === "decoracao") {
       renderLojaDecoracoes();
+    } else if (tipo === "moldura") {
+      renderLojaMolduras();
+      lojaPreviewMolduraEquipada();
     } else if (tipo === "fonte_nick") {
       renderLojaFontes();
     } else if (tipo === "skin_splano") {
@@ -771,15 +969,38 @@ function lojaRoletaRenderLabels() {
   });
 }
 
+// Passos dos botões da roleta: −1M/−100k/−10k/−1k e +1k/+10k/+100k/+1M.
+// Tudo é arredondado pro múltiplo (1000) e nunca passa do saldo nem desce
+// abaixo da aposta mínima.
+const LOJA_ROLETA_PASSOS = [
+  { id: "#loja-roleta-menos1m", passo: -1000000 },
+  { id: "#loja-roleta-menos100k", passo: -100000 },
+  { id: "#loja-roleta-menos10k", passo: -10000 },
+  { id: "#loja-roleta-menos", passo: -1000 },
+  { id: "#loja-roleta-mais", passo: 1000 },
+  { id: "#loja-roleta-mais10k", passo: 10000 },
+  { id: "#loja-roleta-mais100k", passo: 100000 },
+  { id: "#loja-roleta-mais1m", passo: 1000000 },
+];
+
+function lojaRoletaApostaApos(passo) {
+  var saldo = (minhaCarteira && minhaCarteira.saldo) || 0;
+  var novo = lojaRoletaAposta + passo;
+  novo = Math.max(lojaRoletaApostaMinima, Math.min(saldo, novo));
+  novo -= novo % lojaRoletaApostaMultiplo;
+  return Math.max(lojaRoletaApostaMinima, novo);
+}
+
 function lojaRoletaAtualizarValor() {
   document.querySelector("#loja-roleta-aposta-valor").textContent = lojaRoletaAposta;
-  // Só existe o par de botões ±100: a aposta anda de 100 em 100 e não desce
-  // abaixo de lojaRoletaApostaMinima (também 100).
-  var botaoMenos = document.querySelector("#loja-roleta-menos");
-  var botaoMais = document.querySelector("#loja-roleta-mais");
   var botaoGirar = document.querySelector("#loja-roleta-girar");
-  botaoMenos.disabled = lojaRoletaAposta <= lojaRoletaApostaMinima || lojaRoletaGirando;
-  botaoMais.disabled = lojaRoletaAposta + lojaRoletaApostaMultiplo > minhaCarteira.saldo || lojaRoletaGirando;
+  LOJA_ROLETA_PASSOS.forEach(function (item) {
+    var botao = document.querySelector(item.id);
+    if (!botao) return;
+    // Desabilita o que não faria nada (chegou no mínimo, no saldo ou num
+    // múltiplo já alcançado) — evita botão que "clica e não muda".
+    botao.disabled = lojaRoletaGirando || lojaRoletaApostaApos(item.passo) === lojaRoletaAposta;
+  });
   botaoGirar.textContent = lojaRoletaGirando ? "Girando..." : "Girar";
   botaoGirar.disabled = lojaRoletaGirando || lojaRoletaAposta > minhaCarteira.saldo || lojaRoletaAposta < lojaRoletaApostaMinima;
   var botaoAllIn = document.querySelector("#loja-roleta-allin");
@@ -921,7 +1142,7 @@ async function girarRoleta() {
   }
 }
 
-// Bônus de atividade — 5 moedas a cada 15 min; o servidor decide quando pode.
+// Bônus de atividade — 50 moedas a cada 10 min; o servidor decide quando pode.
 async function tentarBonusAtividade() {
   if (!usuarioDiscord) return;
   try {
@@ -1159,6 +1380,12 @@ document.querySelector("#loja-decoracoes-busca").addEventListener("input", funct
   lojaPaginaDecoracoes = 0;
   renderLojaDecoracoes();
 });
+document.querySelector("#loja-btn-molduras").addEventListener("click", lojaMostrarSecaoMolduras);
+document.querySelector("#loja-molduras-busca").addEventListener("input", function (ev) {
+  lojaFiltroMolduras = ev.target.value.trim();
+  lojaPaginaMolduras = 0;
+  renderLojaMolduras();
+});
 document.querySelector("#loja-btn-fontes").addEventListener("click", lojaMostrarSecaoFontes);
 document.querySelector("#loja-btn-skins-splano").addEventListener("click", lojaMostrarSecaoSkinsSplano);
 document.querySelector("#loja-skin-imagem-salvar").addEventListener("click", salvarImagemSkinSplano);
@@ -1166,17 +1393,15 @@ document.querySelector("#loja-btn-roleta").addEventListener("click", lojaMostrar
 document.querySelectorAll(".loja-sub-voltar").forEach(function (botao) {
   botao.addEventListener("click", lojaMostrarMenu);
 });
-document.querySelector("#loja-roleta-menos").addEventListener("click", function () {
-  if (lojaRoletaAposta - lojaRoletaApostaMultiplo >= lojaRoletaApostaMinima) {
-    lojaRoletaAposta -= lojaRoletaApostaMultiplo;
+LOJA_ROLETA_PASSOS.forEach(function (item) {
+  var botao = document.querySelector(item.id);
+  if (!botao) return;
+  botao.addEventListener("click", function () {
+    var nova = lojaRoletaApostaApos(item.passo);
+    if (nova === lojaRoletaAposta) return;
+    lojaRoletaAposta = nova;
     lojaRoletaAtualizarValor();
-  }
-});
-document.querySelector("#loja-roleta-mais").addEventListener("click", function () {
-  if (lojaRoletaAposta + lojaRoletaApostaMultiplo <= minhaCarteira.saldo) {
-    lojaRoletaAposta += lojaRoletaApostaMultiplo;
-    lojaRoletaAtualizarValor();
-  }
+  });
 });
 document.querySelector("#loja-roleta-girar").addEventListener("click", girarRoleta);
 document.querySelector("#loja-roleta-allin").addEventListener("click", lojaRoletaAllIn);

@@ -59,6 +59,11 @@ RECONNECT_GRACE_SECONDS = 15
 # Jogo da Velha — IA
 # ---------------------------------------------------------------------------
 
+# % de jogadas em que o bot do DIFÍCIL erra de propósito (abaixo de 10% pra
+# continuar sendo difícil, mas com uma fresta real de derrota — com minimax
+# perfeito o placar nunca saía do empate).
+ERRO_DIFICIL_PORCENTAGEM = 5
+
 LINHAS_VITORIA = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8],
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
@@ -112,16 +117,22 @@ def jogada_ia(tabuleiro: List[str], dificuldade: str) -> int:
         return secrets.choice(vazios)
     if dificuldade == "medio" and secrets.randbelow(2) == 0:
         return secrets.choice(vazios)
+    pontuacoes = []
     melhor_pontuacao = -2
-    melhor_jogada = vazios[0]
     for i in vazios:
         tabuleiro[i] = "O"
         pontuacao = minimax(tabuleiro, False)
         tabuleiro[i] = ""
+        pontuacoes.append((i, pontuacao))
         if pontuacao > melhor_pontuacao:
             melhor_pontuacao = pontuacao
-            melhor_jogada = i
-    return melhor_jogada
+    if dificuldade == "dificil" and secrets.randbelow(100) < ERRO_DIFICIL_PORCENTAGEM:
+        # Erra de propósito (só entre as jogadas PIORES que a melhor, senão o
+        # "erro" podia acabar sendo a jogada certa). Sem essa brecha o
+        # minimax perfeito empatava sempre e o jogador nunca vencia.
+        piores = [i for i, pontuacao in pontuacoes if pontuacao < melhor_pontuacao]
+        return secrets.choice(piores) if piores else secrets.choice(vazios)
+    return max(pontuacoes, key=lambda par: par[1])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +432,8 @@ def salvar_record_velha(dados: NovoRecordVelha):
         recordes["velha_vitorias"] = _registrar_vitoria(
             vitorias, dados.nick, dados.nome, dados.avatar, dados.dificuldade)
         salvar_recordes(recordes)
-        moedas = MOEDAS_VELHA_ONLINE if dados.modo == "multiplayer" else MOEDAS_VELHA_SOLO
+        moedas = (MOEDAS_VELHA_ONLINE if dados.modo == "multiplayer"
+                  else MOEDAS_VELHA_SOLO.get(dados.dificuldade, MOEDAS_VELHA_SOLO["facil"]))
         creditar_moedas(dados.nome, moedas)
 
     top3 = ranking_top(recordes["velha"].get(dados.dificuldade, [])[-10:],

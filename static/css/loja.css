@@ -20,8 +20,9 @@
   .loja-grade { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Menu principal da loja: Nametags / Decorações de perfil / Roleta. */
-.loja-menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 8px; }
+/* Menu principal da loja: Nametags / Fontes / Decorações / Molduras /
+   Skins do Splano / Roleta — 2 linhas de 3. */
+.loja-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 8px; }
 @media (max-width: 720px) {
   .loja-menu { grid-template-columns: 1fr 1fr; }
 }
@@ -44,7 +45,8 @@
 .loja-preview-avatar-box { position: relative; width: 96px; height: 96px; display: inline-block; }
 .loja-preview-avatar-img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: #1c2c4a; }
 .loja-preview-decoracao-img { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain; pointer-events: none; }
-.loja-preview-nome { color: #c9ccda; font-size: 13px; }
+/* acima das camadas da moldura (z-index:1) pra não sumir atrás da arte */
+.loja-preview-nome { color: #c9ccda; font-size: 13px; position: relative; z-index: 2; }
 
 /* Cards de item (cor ou decoração). */
 .loja-item {
@@ -150,6 +152,12 @@
 .nick-fonte-impacto { font-family: Impact, "Arial Black", sans-serif !important; letter-spacing: .02em; }
 .nick-fonte-versalete { font-variant: small-caps !important; letter-spacing: .05em; }
 .nick-fonte-espacada { letter-spacing: .18em !important; text-transform: uppercase; }
+.nick-fonte-caixa-alta { text-transform: uppercase !important; font-weight: 700; letter-spacing: .04em; }
+.nick-fonte-compacta { letter-spacing: -.04em !important; font-weight: 800; }
+.nick-fonte-sublinhado { text-decoration: underline !important; text-underline-offset: 2px; }
+.nick-fonte-riscado { text-decoration: line-through !important; }
+.nick-fonte-manual { font-family: "Segoe Print", "Comic Sans MS", cursive !important; }
+.nick-fonte-pixel { font-family: "Lucida Console", "Courier New", monospace !important; letter-spacing: .04em; }
 @keyframes loja-arco-iris {
   0% { background-position: 0% 50%; }
   100% { background-position: 300% 50%; }
@@ -163,3 +171,53 @@
 .loja-confirma-corpo p:last-child { margin-bottom: 0; }
 .loja-confirma-botoes { display: flex; gap: 8px; }
 .loja-confirma-botoes button { flex: 1; }
+
+/* ---------------------------------------------------------------------------
+   Molduras de perfil. Tanto a prévia grande quanto a miniatura de cada item
+   são um "card" de mentira com as camadas da moldura em volta (ver base.css e
+   aplicarMolduraPerfil em core.js): container e card com position:relative +
+   z-index:0, e folga no container pro frame vazar pra fora. */
+.loja-preview-moldura {
+  position: relative;
+  z-index: 0;
+  padding: 58px 24px 46px;
+  overflow: visible;
+}
+.loja-preview-moldura .loja-preview-titulo { position: absolute; top: 10px; left: 14px; z-index: 3; }
+/* nome do item fica FORA da caixa da prévia, embaixo: dentro ele encostava
+   na arte da base da moldura. */
+.loja-preview-moldura-legenda { display: block; text-align: center; margin-top: 10px; }
+.loja-moldura-preview-card {
+  position: relative;
+  z-index: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  box-sizing: border-box;
+  width: 220px; min-height: 78px; padding: 12px 14px;
+  background: #141c30; border: 1px solid #26314f; border-radius: 12px;
+}
+.loja-preview-moldura .loja-preview-avatar-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #1c2c4a; }
+.loja-moldura-preview-nome { font-size: 13px; color: #c9ccda; }
+
+.loja-moldura-mini {
+  position: relative;
+  z-index: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 132px;
+  overflow: visible;
+}
+.loja-moldura-mini-card {
+  position: relative;
+  z-index: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  box-sizing: border-box;
+  width: 132px; height: 58px;
+  background: #1c2440; border: 1px solid #2b3a5e; border-radius: 8px;
+}
+.loja-moldura-mini-inicial {
+  display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #2d4470; color: #9dc2ff; font-size: 11px; font-weight: bold;
+}
+.loja-moldura-mini-nome { font-size: 10px; color: #8a93ab; }
+.loja-moldura-mini .loja-badge-equipado { z-index: 4; }
+.loja-item--moldura { overflow: visible; }

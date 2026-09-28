@@ -175,3 +175,49 @@ footer a:hover { color: #9dc2ff; }
 .cartao-online.tem-gente .online-bolinha {
   background: #7ddea3; box-shadow: 0 0 8px rgba(125, 222, 163, .7);
 }
+
+/* Moldura de perfil: camadas PNG do Discord em volta do card.
+   O container e o card precisam de position:relative + z-index:0 (contexto de
+   empilhamento) pra camada de trás ficar atrás do fundo e a da frente na
+   frente do conteúdo. As variáveis (--moldura-*) são calculadas em JS pelo
+   fator de escala largura do card / inner_width (1200). */
+.moldura-perfil {
+  position: absolute;
+  pointer-events: none;
+  --moldura-topo: 0px;
+  --moldura-base: 0px;
+  --moldura-lado: 0px;
+}
+.moldura-camada {
+  position: absolute;
+  display: block;
+  width: calc(100% + var(--moldura-lado) * 2);
+  left: calc(var(--moldura-lado) * -1);
+  height: auto;
+}
+.moldura-camada-cima { top: calc(var(--moldura-topo) * -1); bottom: auto; }
+.moldura-camada-baixo { bottom: calc(var(--moldura-base) * -1); top: auto; }
+/* border e rail: a caixa é o próprio card (top:0, height:100%) com
+   overflow:hidden — a arte é bem mais alta e só sobra a parte que cabe na
+   altura do card, igual ao Discord faz. */
+.moldura-camada-borda,
+.moldura-camada-rail {
+  top: 0;
+  bottom: auto;
+  height: 100%;
+  overflow: hidden;
+}
+.moldura-camada-borda img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.moldura-camada-rail {
+  background-repeat: no-repeat;
+  background-size: 100%;
+}
+.moldura-camada-rail[data-ancora="center"] { background-position: 50% center; }
+.moldura-camada-rail[data-ancora="top"] { background-position: center top; }
+.moldura-camada-rail[data-ancora="bottom"] { background-position: center bottom; }
+.moldura-camada-atras { z-index: -1; }
+.moldura-camada-frente { z-index: 1; }
