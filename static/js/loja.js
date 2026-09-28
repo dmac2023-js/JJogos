@@ -974,9 +974,11 @@ function lojaRoletaRenderLabels() {
     var y = -raio * Math.cos(rad);
     var label = document.createElement("span");
     label.className = "loja-roleta-label";
+    var graus = lojaRoletaAngulos[indice].fim - lojaRoletaAngulos[indice].inicio;
+    label.style.fontSize = graus < 12 ? "8px" : (graus < 20 ? "10px" : "12px");
     label.style.left = "calc(50% + " + x + "px)";
     label.style.top = "calc(50% + " + y + "px)";
-    label.textContent = fatia.tipo === "presente" ? "🎁" : fatia.label;
+    label.textContent = fatia.tipo === "presente" ? "🎁" : (fatia.label === "0.25x" ? "¼x" : fatia.label);
     roda.appendChild(label);
   });
 }

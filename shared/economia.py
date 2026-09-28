@@ -271,8 +271,14 @@ def _missoes(carteira: dict, agora: int = None) -> dict:
     agora = int(agora or time.time())
     estado = carteira.get("missoes")
     if not estado or agora - int(estado.get("inicio", 0)) >= INTERVALO_MISSOES:
-        estado = {"inicio": agora, "itens": [dict(m, progresso=0, concluida=False) for m in MISSOES_MODELOS], "bonus_pago": False}
+        estado = {"inicio": agora, "itens": [dict(m, progresso=0, concluida=False, recompensa_resgatada=False) for m in MISSOES_MODELOS], "bonus_pago": False}
         carteira["missoes"] = estado
+    for item in estado.get("itens", []):
+        # Missões antigas já pagas antes da separação concluir/resgatar.
+        if item.get("concluida") and "recompensa_resgatada" not in item:
+            item["recompensa_resgatada"] = True
+        else:
+            item.setdefault("recompensa_resgatada", False)
     return estado
 
 
@@ -284,10 +290,25 @@ def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, a
         elif m["tipo"] == "vitorias" and venceu: m["progresso"] += 1
         if m["progresso"] >= m["alvo"] and not m.get("concluida"):
             m["progresso"], m["concluida"] = m["alvo"], True
-            carteira["saldo"] = carteira.get("saldo", 0) + m["recompensa"]
-    if all(m.get("concluida") for m in estado["itens"]) and not estado.get("bonus_pago"):
-        carteira["saldo"] = carteira.get("saldo", 0) + 1000
+
+
+def resgatar_missao(carteira: dict, indice: int) -> dict:
+    estado = _missoes(carteira)
+    if indice < 0 or indice >= len(estado["itens"]):
+        raise ValueError("Missão inválida.")
+    missao = estado["itens"][indice]
+    if not missao.get("concluida"):
+        raise ValueError("Essa missão ainda não foi concluída.")
+    if missao.get("recompensa_resgatada"):
+        raise ValueError("Essa recompensa já foi resgatada.")
+    carteira["saldo"] = carteira.get("saldo", 0) + missao["recompensa"]
+    missao["recompensa_resgatada"] = True
+    bonus = False
+    if all(m.get("recompensa_resgatada") for m in estado["itens"]) and not estado.get("bonus_pago"):
+        carteira["saldo"] += 1000
         estado["bonus_pago"] = True
+        bonus = True
+    return {"missao": missao, "bonus": bonus, "saldo": carteira["saldo"], "missoes": estado}
 
 # Roleta da sorte: setores maiores têm mais chance real, não só visual.
 # A aposta só anda de 1000 em 1000 e começa em 1000 — o front oferece botões
@@ -308,8 +329,9 @@ _ROLETA_MODELOS = {
     "?": {"tipo": "interrogacao", "label": "?"},
 }
 # Exatos 60% de perda/redução e 40% de ganho. Dentro dos ganhos: presente
-# = 5%, ? = 2%, 1.25x + 1.5x = 33%. O 0.5x caiu 10% por setor (19 -> 17,1).
-_ROLETA_PESOS = {"1.25x": 14, "0.5x": 17.1, "0.25x": 10, "0.75x": 2.9, "1.5x": 2.5, "presente": 5, "?": 2}
+# = 5%, ? = 2%, 1.25x + 1.5x = 33%. O peso dos dois 0.5x cai 25%,
+# e a diferença é transferida para os dois 1.5x.
+_ROLETA_PESOS = {"1.25x": 14, "0.5x": 12.825, "0.25x": 10, "0.75x": 2.9, "1.5x": 6.775, "presente": 5, "?": 2}
 ROLETA_FATIAS = []
 for _i, _chave in enumerate(_ROLETA_ORDEM):
     _fatia = dict(_ROLETA_MODELOS[_chave])

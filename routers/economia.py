@@ -48,6 +48,7 @@ from shared.economia import (
     top_doadores,
     _missoes,
     MISSOES_MODELOS,
+    resgatar_missao,
     carregar_economia,
     salvar_economia,
 )
@@ -495,6 +496,11 @@ class TrocarMissao(BaseModel):
     indice: int
 
 
+class ResgatarMissao(BaseModel):
+    nome: str
+    indice: int
+
+
 @router.post("/economia/transferir")
 def rota_transferir_moedas(dados: TransferirMoedas):
     """Transfere moedas de um jogador para outro."""
@@ -528,6 +534,21 @@ def trocar_missao(dados: TrocarMissao):
         carteira["saldo"] -= 500
         salvar_economia(economia)
         return {"ok": True, "missoes": estado, "saldo": carteira["saldo"]}
+
+
+@router.post("/economia/missoes/resgatar")
+def resgatar_missao_rota(dados: ResgatarMissao):
+    if eh_anonimo(dados.nome):
+        raise HTTPException(status_code=400, detail="Entre com Discord para resgatar a recompensa.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome)
+        try:
+            resultado = resgatar_missao(carteira, dados.indice)
+        except ValueError as erro:
+            raise HTTPException(status_code=400, detail=str(erro))
+        salvar_economia(economia)
+        return {"ok": True, **resultado}
 
 
 @router.get("/economia/top-doadores")

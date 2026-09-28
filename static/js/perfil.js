@@ -22,8 +22,11 @@ async function renderPerfilEconomia() {
     var estado = d.missoes || { itens: [] };
     renderMissoesPainel(estado);
     missoes.innerHTML = "<h3>Missões atuais</h3>" + (estado.itens || []).map(function (m, i) {
-      var pct = Math.min(100, Math.round(m.progresso / m.alvo * 100));
-      return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + '</small></span><button type="button" class="botao-copiar" data-trocar-missao data-indice="' + i + '">Trocar (500)</button></div>';
+      var pronta = m.concluida === true;
+      var acao = pronta && !m.recompensa_resgatada
+        ? '<button type="button" class="botao-copiar missao-resgatar" data-resgatar-missao data-indice="' + i + '">Resgatar</button>'
+        : (!pronta ? '<button type="button" class="botao-copiar" data-trocar-missao data-indice="' + i + '">Trocar (500)</button>' : '<span class="missao-resgatada">✓ Resgatada</span>');
+      return '<div class="perfil-missao' + (pronta ? ' concluida' : '') + '"><span>' + (pronta ? '✅ ' : '') + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + '</small></span>' + acao + '</div>';
     }).join("");
     var agora = Date.now() / 1000;
     function tempoDoacao(ts) {
@@ -48,15 +51,29 @@ async function renderPerfilEconomia() {
       var r = await fetch("./economia/missoes/trocar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
       var j = await r.json(); if (!r.ok) { alert(j.detail || "Não foi possível trocar."); return; } renderPerfilEconomia();
     }); });
+    missoes.querySelectorAll("[data-resgatar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
+      var r = await fetch("./economia/missoes/resgatar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
+      var j = await r.json(); if (!r.ok) { alert(j.detail || "Não foi possível resgatar."); return; }
+      if (j.bonus) alert("Missões concluídas! Você recebeu o bônus de 1.000 moedas.");
+      renderPerfilEconomia();
+    }); });
   } catch (e) { missoes.innerHTML = ""; doacoes.innerHTML = ""; }
 }
 
 function renderMissoesPainel(estado) {
   var painel = document.querySelector("#missoes-painel-principal");
   if (!painel || !usuarioDiscord) return;
-  painel.innerHTML = "<h3>🎯 Missões atuais</h3>" + (estado.itens || []).map(function (m) {
-    return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + "</small></span></div>";
+  painel.innerHTML = "<h3>🎯 Missões atuais</h3>" + (estado.itens || []).map(function (m, i) {
+    var pronta = m.concluida === true;
+    var acao = pronta && !m.recompensa_resgatada ? '<button type="button" class="botao-copiar missao-resgatar-principal" data-resgatar-missao data-indice="' + i + '">Resgatar</button>' : "";
+    return '<div class="perfil-missao' + (pronta ? ' concluida' : '') + '"><span>' + (pronta ? '✅ ' : '') + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + "</small></span>" + acao + "</div>";
   }).join("") + (estado.bonus_pago ? '<small>✅ Bônus de 1000 moedas já recebido.</small>' : '<small>Conclua as três e receba mais 1000 moedas.</small>');
+  painel.querySelectorAll("[data-resgatar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
+    var r = await fetch("./economia/missoes/resgatar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
+    var d = await r.json(); if (!r.ok) { alert(d.detail || "Não foi possível resgatar."); return; }
+    if (d.bonus) alert("Missões concluídas! Você recebeu o bônus de 1.000 moedas.");
+    atualizarPainelMissoes();
+  }); });
 }
 
 async function atualizarPainelMissoes() {
