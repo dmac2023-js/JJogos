@@ -235,12 +235,15 @@ function mostrarPopupInsignia(insignia) {
 }
 
 function abrirFormularioDoacao(card, jogador) {
-  var antigo = card.querySelector(".rmodal-transfer");
+  var antigo = document.querySelector(".rmodal-transfer-overlay");
   if (antigo) { antigo.remove(); return; }
+  var overlay = document.createElement("div");
+  overlay.className = "rmodal-transfer-overlay";
   var form = document.createElement("div");
   form.className = "rmodal-transfer";
-  form.innerHTML = '<div class="rmodal-transfer-pessoas"><div><b>Enviando</b><strong class="rmodal-remetente-nick">Carregando...</strong><span class="rmodal-remetente-saldo"></span></div><span class="rmodal-seta">→</span><div><b>Recebendo</b><strong>' + escapeHtml(jogador.nick || jogador.nome) + '</strong><span>' + (jogador.saldo || 0).toLocaleString("pt-BR") + ' moedas</span></div></div><label>Valor a enviar<input type="number" min="1" step="1" placeholder="Digite o valor" /></label><div class="rmodal-transfer-resumo">Digite um valor para ver a simulação.</div><div class="rmodal-transfer-progresso"></div><div class="rmodal-transfer-acoes"><button type="button" class="botao principal rmodal-confirmar">Enviar</button><button type="button" class="botao rmodal-cancelar">Cancelar</button></div><small class="rmodal-transfer-taxa">A transação tem taxa de 10%: o destinatário recebe 90% do valor. 1% da taxa vai para o dono.</small>';
-  card.querySelector(".rmodal-cabecalho").after(form);
+  form.innerHTML = '<div class="rmodal-transfer-pessoas"><div><b>Enviando</b><strong class="rmodal-remetente-nick">Carregando...</strong><span class="rmodal-remetente-saldo"></span></div><span class="rmodal-seta">→</span><div><b>Recebendo</b><strong>' + escapeHtml(jogador.nick || jogador.nome) + '</strong><span>' + (jogador.saldo || 0).toLocaleString("pt-BR") + ' moedas</span></div></div><div class="rmodal-transfer-insignia"></div><div class="rmodal-transfer-barra"><div></div><small></small></div><label>Valor a enviar<input type="number" min="1" step="1" placeholder="Digite o valor" /></label><div class="rmodal-transfer-resumo">Digite um valor para ver a simulação.</div><div class="rmodal-transfer-progresso"></div><div class="rmodal-transfer-acoes"><button type="button" class="botao principal rmodal-confirmar">Enviar</button><button type="button" class="botao rmodal-cancelar">Cancelar</button></div><small class="rmodal-transfer-taxa">A transação tem taxa de 10%: o destinatário recebe 90% do valor. 1% da taxa vai para o dono.</small>';
+  overlay.appendChild(form);
+  document.body.appendChild(overlay);
   var input = form.querySelector("input");
   var resumo = form.querySelector(".rmodal-transfer-resumo");
   var progresso = form.querySelector(".rmodal-transfer-progresso");
@@ -251,6 +254,11 @@ function abrirFormularioDoacao(card, jogador) {
       meuPerfil = d;
       form.querySelector(".rmodal-remetente-nick").textContent = d ? (d.nick || d.nome) : (meuNome || "Você");
       form.querySelector(".rmodal-remetente-saldo").textContent = d ? d.saldo.toLocaleString("pt-BR") + " moedas" : "Saldo indisponível";
+      var atual = d && d.doacao && d.doacao.atual;
+      form.querySelector(".rmodal-transfer-insignia").innerHTML = atual ? '<span>Insígnia atual</span><img src="./img/insignia-' + escapeHtml(atual.icone) + '.svg" alt="" /><b>' + escapeHtml(atual.nome) + '</b>' : '<span>Insígnia atual</span><b>Nenhuma ainda</b>';
+      var doacao = (d && d.doacao) || { total: 0, progresso: 0, falta: 0, proxima: null };
+      form.querySelector(".rmodal-transfer-barra div").style.width = doacao.progresso + "%";
+      form.querySelector(".rmodal-transfer-barra small").textContent = doacao.total.toLocaleString("pt-BR") + " doadas · " + (doacao.proxima ? "faltam " + doacao.falta.toLocaleString("pt-BR") : "todas conquistadas");
       atualizarPrevia();
     });
   async function atualizarPrevia() {
@@ -265,7 +273,8 @@ function abrirFormularioDoacao(card, jogador) {
     } catch (e) { resumo.textContent = "Não foi possível simular agora."; }
   }
   input.addEventListener("input", atualizarPrevia);
-  form.querySelector(".rmodal-cancelar").addEventListener("click", function () { form.remove(); });
+  form.querySelector(".rmodal-cancelar").addEventListener("click", function () { overlay.remove(); });
+  overlay.addEventListener("click", function (ev) { if (ev.target === overlay) overlay.remove(); });
   form.querySelector(".rmodal-confirmar").addEventListener("click", async function () {
     var quantidade = parseInt(form.querySelector("input").value, 10);
     var remetente = (typeof nomeUsuario === "function") ? nomeUsuario() : null;
@@ -275,7 +284,7 @@ function abrirFormularioDoacao(card, jogador) {
       var dados = await resp.json();
       if (!resp.ok) { alert(dados.detail || "Falha na transferência."); return; }
       if (dados.insignia_nova) mostrarPopupInsignia(dados.insignia_nova);
-      form.remove();
+      overlay.remove();
     } catch (e) { alert("Erro ao enviar moedas."); }
   });
 }

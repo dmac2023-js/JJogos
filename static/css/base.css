@@ -70,7 +70,7 @@ h2 { margin-bottom: 8px; font-size: 22px; }
 .modo-selecao { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .botao-modo { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 120px; border: 1px solid #26314f; border-radius: 14px; padding: 18px; color: #f4f6ff; background: #111a2e; cursor: pointer; text-align: center; }
 .botao-modo:hover { border-color: #3b82f6; background: #16233d; }
-.botao-modo .icone { font-size: 32px; }
+.botao-modo .icone { font-size: 32px; width: 42px; height: 42px; display: grid; place-items: center; object-fit: contain; flex: 0 0 42px; }
 .botao-modo strong { font-size: 16px; }
 .botao-modo small { color: #aeb2c7; font-size: 12px; }
 
