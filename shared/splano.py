@@ -340,7 +340,13 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
     jogador conseguisse sobrepor as metades na mão.
     """
     celulas = jogador["celulas"]
-    for i in range(len(celulas)):
+    # Uma passagem não basta quando há 4-8 partes: corrigir A-B pode empurrar
+    # A para cima de C. Repetimos a resolução para que todos os pares acabem
+    # com as bordas encostadas, nunca sobrepostas.
+    iteracoes = 16
+    for _ in range(iteracoes):
+      houve_correcao = False
+      for i in range(len(celulas)):
         for k in range(i + 1, len(celulas)):
             a, b = celulas[i], celulas[k]
             if a.get("_comida") or b.get("_comida"):
@@ -360,7 +366,7 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
                     continue
                 # Ainda longe: puxa uma na direção da outra (o passo nunca passa
                 # da metade da distância, senão elas atravessariam uma à outra).
-                passo = min(VELOCIDADE_JUNTAR * dt, d / 2.0)
+                passo = min(VELOCIDADE_JUNTAR * dt / iteracoes, d / 2.0)
                 nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
                 a["x"] -= nx * passo
                 a["y"] -= ny * passo
@@ -383,12 +389,43 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
                 a["y"] += ny * afastamento
                 b["x"] -= nx * afastamento
                 b["y"] -= ny * afastamento
+                houve_correcao = True
             elif d > distancia_alvo:
-                aproximacao = min(VELOCIDADE_JUNTAR * dt, (d - distancia_alvo) / 2.0)
+                aproximacao = min(VELOCIDADE_JUNTAR * dt / iteracoes, (d - distancia_alvo) / 2.0)
                 a["x"] -= nx * aproximacao
                 a["y"] -= ny * aproximacao
                 b["x"] += nx * aproximacao
                 b["y"] += ny * aproximacao
+                houve_correcao = True
+      if not houve_correcao:
+        break
+    # Uma última passada só de afastamento remove qualquer sobreposição que
+    # tenha sido criada ao resolver um par vizinho durante a mesma iteração.
+    for _ in range(64):
+      corrigiu = False
+      for i in range(len(celulas)):
+        for k in range(i + 1, len(celulas)):
+          a, b = celulas[i], celulas[k]
+          if a.get("_comida") or b.get("_comida"):
+            continue
+          ra, rb = raio(a["energia"]), raio(b["energia"])
+          d = _distancia(a["x"], a["y"], b["x"], b["y"])
+          alvo = ra + rb + 1.0
+          if d >= alvo:
+            continue
+          if d < 0.01:
+            nx, ny = (1.0, 0.0) if (i + k) % 2 == 0 else (0.0, 1.0)
+            d = 0.01
+          else:
+            nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
+          ajuste = (alvo - d) / 2.0
+          a["x"] += nx * ajuste
+          a["y"] += ny * ajuste
+          b["x"] -= nx * ajuste
+          b["y"] -= ny * ajuste
+          corrigiu = True
+      if not corrigiu:
+        break
     jogador["celulas"] = [c for c in celulas if not c.get("_comida")]
 
 
