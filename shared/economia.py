@@ -216,6 +216,27 @@ PARTIDAS_JOGOS = [
     "splano_io",
 ]
 
+INSIGNIAS_DOACAO = [
+    (1_000, "Patron", "🎁"), (15_000, "Champion", "🎁"),
+    (50_000, "Luminary", "🎁"), (100_000, "Icon", "🎁"),
+    (500_000, "Hero", "🎁"), (1_000_000, "Legend", "🎁"),
+]
+
+
+def progresso_doacao(total: int) -> dict:
+    total = max(0, int(total or 0))
+    ganhas = [{"valor": v, "nome": n, "icone": i} for v, n, i in INSIGNIAS_DOACAO if total >= v]
+    proxima = next(({"valor": v, "nome": n, "icone": i} for v, n, i in INSIGNIAS_DOACAO if total < v), None)
+    anterior = ganhas[-1]["valor"] if ganhas else 0
+    if proxima:
+        faixa = max(1, proxima["valor"] - anterior)
+        progresso = min(100, round((total - anterior) / faixa * 100, 1))
+        falta = proxima["valor"] - total
+    else:
+        progresso, falta = 100, 0
+    return {"total": total, "insignias": ganhas, "proxima": proxima,
+            "anterior": anterior, "falta": falta, "progresso": progresso}
+
 # Roleta da sorte — 19 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 6 de
 # 0.75x, 4 de 0.5x e 1 de presente. Todos têm peso igual, então é sorte pura:
 # cada setor tem a mesma chance (1/19) e não há fatia "grande" pra mirar.
@@ -559,6 +580,7 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
 def _entrada_publica(nome: str, carteira: dict) -> dict:
     equipado = carteira.get("equipado") or {}
     partidas = carteira.get("partidas", {})
+    total_doado = carteira.get("total_doado", 0)
     return {
         "nome": nome,
         "nick": carteira.get("nick") or nome,
@@ -572,6 +594,8 @@ def _entrada_publica(nome: str, carteira: dict) -> dict:
         "partidas": partidas,
         "vitorias": carteira.get("vitorias", {}),
         "total_partidas": sum(partidas.values()),
+        "total_doado": total_doado,
+        "doacao": progresso_doacao(total_doado),
     }
 
 
@@ -641,6 +665,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         return {
             "novo_saldo_remetente": carteira_rem["saldo"],
             "novo_saldo_destinatario": carteira_dest["saldo"],
+            "doacao": progresso_doacao(total_doado),
         }
 
 

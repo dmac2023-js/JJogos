@@ -187,6 +187,7 @@ function _renderizarConteudoModal(container, jogador, perfil) {
     html += '<span>⏱ ' + formatarHoras(jogador.segundos) + " jogados</span>";
   }
   html += "</div>";
+  html += doacaoHtml(jogador);
 
   var partidas = jogador.partidas || {};
   var vitorias = jogador.vitorias || {};
@@ -214,6 +215,36 @@ function _renderizarConteudoModal(container, jogador, perfil) {
   }
 
   container.innerHTML = html;
+}
+
+function doacaoHtml(jogador) {
+  var d = jogador.doacao || { total: jogador.total_doado || 0, progresso: 0, falta: 0, insignias: [], proxima: null };
+  var proxima = d.proxima ? "Próxima: " + d.proxima.icone + " " + d.proxima.nome + " · faltam " + d.falta.toLocaleString("pt-BR") : "Todas as insignias conquistadas";
+  var badges = (d.insignias || []).map(function (b) { return '<span class="rmodal-doacao-badge">' + b.icone + " " + escapeHtml(b.nome) + "</span>"; }).join("");
+  return '<div class="rmodal-doacao" title="' + escapeHtml(proxima) + '"><h4>💝 Progresso de doador</h4><strong>' + d.total.toLocaleString("pt-BR") + ' moedas doadas</strong><div class="rmodal-doacao-bar"><div style="width:' + d.progresso + '%"></div></div><div class="rmodal-doacao-meta"><span>' + escapeHtml(proxima) + '</span><span>' + d.progresso + '%</span></div><div class="rmodal-doacao-badges">' + (badges || '<span class="rmodal-doacao-badge">Nenhuma ainda</span>') + '</div></div>';
+}
+
+function abrirFormularioDoacao(card, jogador) {
+  var antigo = card.querySelector(".rmodal-transfer");
+  if (antigo) { antigo.remove(); return; }
+  var form = document.createElement("div");
+  form.className = "rmodal-transfer";
+  form.innerHTML = '<strong>Enviar dinheiro para ' + escapeHtml(jogador.nick || jogador.nome) + '</strong><span>Saldo atual: <b>' + (jogador.saldo || 0).toLocaleString("pt-BR") + ' moedas</b></span><input type="number" min="1" step="1" placeholder="Valor a enviar" /><div class="rmodal-transfer-acoes"><button type="button" class="botao principal rmodal-confirmar">Enviar</button><button type="button" class="botao rmodal-cancelar">Cancelar</button></div>';
+  card.querySelector(".rmodal-cabecalho").after(form);
+  form.querySelector(".rmodal-cancelar").addEventListener("click", function () { form.remove(); });
+  form.querySelector(".rmodal-confirmar").addEventListener("click", async function () {
+    var quantidade = parseInt(form.querySelector("input").value, 10);
+    var remetente = (typeof nomeUsuario === "function") ? nomeUsuario() : null;
+    if (!quantidade || quantidade <= 0) { alert("Digite um valor válido."); return; }
+    try {
+      var resp = await fetch("./economia/transferir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ remetente: remetente, destinatario: jogador.nome, quantidade: quantidade }) });
+      var dados = await resp.json();
+      if (!resp.ok) { alert(dados.detail || "Falha na transferência."); return; }
+      alert("Doação enviada com sucesso!"); form.remove();
+      jogador.doacao = dados.doacao;
+      _renderizarConteudoModal(card.querySelector("#rmodal-conteudo"), jogador, {});
+    } catch (e) { alert("Erro ao enviar moedas."); }
+  });
 }
 
 async function enviarDinheiro(destinatario, nickDest) {
@@ -276,7 +307,7 @@ async function abrirPerfilRanking(jogador) {
   var btnEnviar = card.querySelector(".rmodal-btn-enviar");
   if (btnEnviar) {
     btnEnviar.addEventListener("click", function () {
-      enviarDinheiro(jogador.nome, jogador.nick || jogador.nome);
+      abrirFormularioDoacao(card, jogador);
     });
   }
 

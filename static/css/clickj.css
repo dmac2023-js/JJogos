@@ -82,13 +82,13 @@
 .cj-skill-valor small { color: #c9a6ff; font-weight: normal; }
 
 /* Online */
-.cj-online { position: sticky; top: 70px; padding: 12px; border: 1px solid #20293f; border-radius: 14px; background: #111a2e; }
+.cj-online { position: sticky; top: 70px; min-width: 360px; padding: 18px; border: 1px solid #20293f; border-radius: 14px; background: #111a2e; margin-left: 28px; }
 .cj-online .cj-subtitulo { margin-top: 0; }
-.cj-online-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid #1c2640; }
+.cj-online-item { display: flex; align-items: center; gap: 12px; padding: 14px 8px; min-height: 72px; border-bottom: 1px solid #1c2640; }
 .cj-online-item:last-child { border-bottom: none; }
 .cj-online-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.cj-online-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cj-online-info small { color: #aeb2c7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cj-online-info strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cj-online-info small { color: #aeb2c7; font-size: 12px; white-space: normal; line-height: 1.35; }
 .cj-online-info .cj-online-jcoins { color: #ffd36a; font-size: 11px; }
 .cj-online-info .cj-moeda { width: 14px; height: 14px; margin-right: 3px; font-size: 9px; }
 .cj-desafiar { padding: 5px 9px; border: 1px solid #b64a4a; border-radius: 8px; background: transparent; color: #ff9a9a; font-size: 12px; cursor: pointer; white-space: nowrap; }
@@ -235,7 +235,7 @@
 }
 @media (max-width: 720px) {
   .cj-layout { grid-template-columns: 1fr; }
-  .cj-online { position: static; }
+  .cj-online { position: static; min-width: 0; margin-left: 0; }
 }
 @media (max-width: 480px) {
   .cj-heroi { gap: 16px; padding: 22px 6px 12px; }

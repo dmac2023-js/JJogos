@@ -225,6 +225,17 @@
   white-space: nowrap;
 }
 
+.rmodal-doacao { padding: 12px; border: 1px solid #26314f; border-radius: 10px; background: #111a2e; }
+.rmodal-doacao h4 { margin: 0 0 8px; color: #ffd36a; }
+.rmodal-doacao-bar { height: 10px; margin: 8px 0 6px; border-radius: 999px; background: #202d4b; overflow: hidden; }
+.rmodal-doacao-bar div { height: 100%; background: linear-gradient(90deg, #f5c542, #ff7eb3); }
+.rmodal-doacao-meta { display: flex; justify-content: space-between; gap: 8px; color: #aeb2c7; font-size: 12px; }
+.rmodal-doacao-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.rmodal-doacao-badge { padding: 4px 7px; border-radius: 7px; background: #242c46; color: #ffd36a; font-size: 12px; }
+.rmodal-transfer { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #26314f; border-radius: 10px; background: #111a2e; }
+.rmodal-transfer input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #354568; border-radius: 8px; background: #0d1424; color: #f4f6ff; }
+.rmodal-transfer-acoes { display: flex; gap: 8px; }
+
 .rmodal-jogo {
   background: #1a2135;
   border-radius: 10px;
