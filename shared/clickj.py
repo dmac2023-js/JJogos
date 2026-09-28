@@ -398,17 +398,12 @@ LIMITE_JCOINS_MARGEM = 1.10  # teto = preço do autoclick nível 10 + 10%
 
 
 def limite_jcoins(rebirths: int) -> int:
-    """Teto de jcoins guardados: 10% a mais que o preço do autoclick nível 10
-    (do rebirth atual) — o autoclick nível 10 encarece MUITO a cada rebirth
-    (mult_preco_autoclicker), então o teto precisa acompanhar isso pra sempre
-    dar pra juntar o suficiente pra comprá-lo."""
-    preco_nivel_10 = AUTO_PRECO_UPGRADE[10] * mult_preco_autoclicker(max(0, rebirths))
-    return round(preco_nivel_10 * LIMITE_JCOINS_MARGEM)
+    """Compatibilidade do payload antigo: Jcoins não têm mais teto."""
+    return 0
 
 
 def _adicionar_jcoins(j: dict, quantidade: int) -> None:
-    limite = limite_jcoins(j.get("rebirths", 0))
-    j["jcoins"] = min(limite, j.get("jcoins", 0) + quantidade)
+    j["jcoins"] = max(0, j.get("jcoins", 0) + quantidade)
 
 
 def limpar_efeitos(j: dict, agora: float) -> bool:
