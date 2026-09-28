@@ -944,7 +944,7 @@ async function carregarRoleta() {
   lojaRoletaRenderLabels();
 }
 
-var LOJA_ROLETA_CORES = { "1.25x": "#5b9dff", "1.5x": "#7ddea3", "0.75x": "#ffa94d", "0.5x": "#ff8a8a", "?": "#f4f6ff" };
+var LOJA_ROLETA_CORES = { "1.25x": "#5b9dff", "1.5x": "#7ddea3", "0.75x": "#ffa94d", "0.5x": "#ff8a8a", "0.25x": "#b94a68", "?": "#f4f6ff" };
 var LOJA_ROLETA_COR_PRESENTE = "#c9a6ff";
 
 /* A roda é pintada a partir dos setores que o servidor mandou — antes as

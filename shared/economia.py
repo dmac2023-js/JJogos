@@ -295,10 +295,11 @@ def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, a
 ROLETA_APOSTA_MINIMA = 1000
 ROLETA_APOSTA_MULTIPLO = 1000
 _ROLETA_ORDEM = [
-    "1.25x", "0.5x", "0.75x", "1.5x", "presente", "?", "0.5x", "1.25x",
-    "0.75x", "1.5x",
+    "1.25x", "0.5x", "0.25x", "1.5x", "presente", "?", "0.5x", "1.25x",
+    "0.75x", "0.25x", "0.75x", "1.5x",
 ]
 _ROLETA_MODELOS = {
+    "0.25x": {"tipo": "multiplicador", "valor": 0.25, "label": "0.25x"},
     "1.25x": {"tipo": "multiplicador", "valor": 1.25, "label": "1.25x"},
     "1.5x": {"tipo": "multiplicador", "valor": 1.5, "label": "1.5x"},
     "0.75x": {"tipo": "multiplicador", "valor": 0.75, "label": "0.75x"},
@@ -306,8 +307,9 @@ _ROLETA_MODELOS = {
     "presente": {"tipo": "presente", "label": "Presente"},
     "?": {"tipo": "interrogacao", "label": "?"},
 }
-# 1.25x e 0.5x são maiores; 1.5x e 0.75x menores; ? é o menor.
-_ROLETA_PESOS = {"1.25x": 17, "0.5x": 17, "0.75x": 10, "1.5x": 5, "presente": 1.5, "?": 0.5}
+# 0.5x é o maior setor; 1.25x e 0.75x ficam médios; 1.5x menor;
+# presente e ? crescem um pouco, mas ? continua sendo o menor setor.
+_ROLETA_PESOS = {"1.25x": 7, "0.5x": 19, "0.25x": 12, "0.75x": 8, "1.5x": 2, "presente": 3, "?": 1}
 ROLETA_FATIAS = []
 for _i, _chave in enumerate(_ROLETA_ORDEM):
     _fatia = dict(_ROLETA_MODELOS[_chave])
