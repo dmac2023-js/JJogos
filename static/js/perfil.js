@@ -54,6 +54,9 @@ async function renderPerfilEconomia() {
     missoes.querySelectorAll("[data-resgatar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
       var r = await fetch("./economia/missoes/resgatar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
       var j = await r.json(); if (!r.ok) { alert(j.detail || "Não foi possível resgatar."); return; }
+      var badge = document.querySelector("#moedas-valor");
+      if (badge && Number.isFinite(Number(j.saldo))) badge.textContent = Number(j.saldo).toLocaleString("pt-BR");
+      if (typeof atualizarMoedasHeader === "function") await atualizarMoedasHeader();
       if (j.bonus) alert("Missões concluídas! Você recebeu o bônus de 1.000 moedas.");
       renderPerfilEconomia();
     }); });
@@ -71,6 +74,9 @@ function renderMissoesPainel(estado) {
   painel.querySelectorAll("[data-resgatar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
     var r = await fetch("./economia/missoes/resgatar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
     var d = await r.json(); if (!r.ok) { alert(d.detail || "Não foi possível resgatar."); return; }
+    var badge = document.querySelector("#moedas-valor");
+    if (badge && Number.isFinite(Number(d.saldo))) badge.textContent = Number(d.saldo).toLocaleString("pt-BR");
+    if (typeof atualizarMoedasHeader === "function") await atualizarMoedasHeader();
     if (d.bonus) alert("Missões concluídas! Você recebeu o bônus de 1.000 moedas.");
     atualizarPainelMissoes();
   }); });
