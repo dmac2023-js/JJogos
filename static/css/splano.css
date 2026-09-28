@@ -84,6 +84,7 @@
 
 #sp-pronto { display: block; width: 100%; margin-top: 14px; }
 #sp-pronto.sp-pronto-marcado { background: #2f7d4a; border-color: #4bbf76; }
+#sp-forcar { display: block; width: 100%; margin-top: 8px; border-color: #b8872f; color: #ffd36a; }
 
 /* Opções da tela de espera (fica entre o botão pronto e a borda da caixa) */
 .sp-opcoes {

@@ -53,6 +53,7 @@ def _nova_sala(codigo: str) -> dict:
         "proximo_pid": 1,
         "prontos": set(),      # quem já votou "pronto" nesta rodada
         "contagem_ate": 0.0,
+        "contagem_forcada": False,
         "fim_em": 0.0,
         "resultado": None,
         "tarefa": None,
@@ -84,6 +85,19 @@ def _todos_prontos(sala: dict) -> bool:
     """A votação só passa quando TODOS os humanos conectados votaram pronto."""
     conectados = _humanos_conectados(sala)
     return bool(conectados) and len(_humanos_prontos(sala)) == len(conectados)
+
+
+def _maioria_pronta(sala: dict) -> bool:
+    """Libera o início manual quando pelo menos 75% dos humanos votaram.
+
+    Isso dá 4/5, 6/8 e 8/10, além de funcionar para salas menores. Com
+    apenas um jogador, o fluxo normal de pronto contra bots já é suficiente.
+    """
+    humanos = _humanos_conectados(sala)
+    if len(humanos) < 2:
+        return False
+    prontos = len(_humanos_prontos(sala))
+    return prontos >= max(2, math.ceil(len(humanos) * 0.75))
 
 
 def _nome_por_pid(sala: dict, pid) -> Optional[str]:
@@ -148,6 +162,8 @@ async def _mandar_sala(sala: dict, para: Optional[str] = None) -> None:
         "humanos": len(_humanos_conectados(sala)),
         "humanos_necessarios": HUMANOS_PARA_COMECAR,
         "prontos": len(_humanos_prontos(sala)),
+        "total_humanos": len(_humanos_conectados(sala)),
+        "pode_forcar": sala["jogo"]["fase"] == "espera" and _maioria_pronta(sala),
         "contagem": max(0, int(math.ceil(sala["contagem_ate"] - time.time()))) if sala["jogo"]["fase"] == "contagem" else 0,
     }
     if para:
@@ -191,6 +207,16 @@ async def _talvez_comecar(sala: dict) -> None:
         return
     jogo["fase"] = "contagem"
     sala["contagem_ate"] = time.time() + SEGUNDOS_CONTAGEM
+    await _mandar_sala(sala)
+
+
+async def _forcar_inicio(sala: dict) -> None:
+    jogo = sala["jogo"]
+    if jogo["fase"] != "espera" or not _maioria_pronta(sala):
+        return
+    jogo["fase"] = "contagem"
+    sala["contagem_forcada"] = True
+    sala["contagem_ate"] = time.time() + 5
     await _mandar_sala(sala)
 
 
@@ -286,6 +312,7 @@ def _reiniciar_para_espera(sala: dict) -> None:
     jogo["vencedor"] = None
     sala["resultado"] = None
     sala["prontos"].clear()
+    sala["contagem_forcada"] = False
 
 
 # ---------------------------------------------------------------------------
@@ -396,9 +423,11 @@ async def _tick(sala: dict) -> None:
     sala["tick"] += 1
 
     if jogo["fase"] == "contagem":
-        if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR or not _todos_prontos(sala):
+        pronto_valido = _maioria_pronta(sala) if sala.get("contagem_forcada") else _todos_prontos(sala)
+        if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR or not pronto_valido:
             # Alguém desistiu/entrou no meio da contagem: volta pra votação.
             jogo["fase"] = "espera"
+            sala["contagem_forcada"] = False
             await _mandar_sala(sala)
         elif agora >= sala["contagem_ate"]:
             _comecar_partida(sala, agora)
@@ -551,10 +580,18 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
             # Desistiu no meio da contagem: volta pra votação.
             if sala["jogo"]["fase"] == "contagem":
                 sala["jogo"]["fase"] = "espera"
+                sala["contagem_forcada"] = False
         fase = sala["jogo"]["fase"]
         await _talvez_comecar(sala)          # só transmite se começar de fato
         if sala["jogo"]["fase"] == fase:
             await _mandar_sala(sala)
+    elif tipo == "forcar_inicio":
+        if sala["jogo"]["fase"] != "espera":
+            return
+        if not _maioria_pronta(sala):
+            await _enviar(sala, nome, {"tipo": "erro_jogada", "mensagem": "A maioria ainda não está pronta."})
+            return
+        await _forcar_inicio(sala)
 
 
 # ---------------------------------------------------------------------------

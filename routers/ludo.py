@@ -478,14 +478,14 @@ async def criar_sala_ludo(dados: NovaSalaLudo):
 # WebSocket — Ludo online
 # ---------------------------------------------------------------------------
 
-async def _iniciar_contagem_ludo(sala: str):
+async def _iniciar_contagem_ludo(sala: str, duracao: int = 3):
     s = salas_ludo.get(sala)
     if not s or s.get("fase") not in ("esperando", "contagem", "fim"):
         return
     s["fase"] = "contagem"
     s["countdown_task"] = asyncio.current_task()
     try:
-        for n in (3, 2, 1, 0):
+        for n in range(max(0, int(duracao)), -1, -1):
             s = salas_ludo.get(sala)
             if not s or s.get("fase") != "contagem":
                 return
@@ -815,8 +815,11 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     if not s_ or s_.get("fase") not in ("esperando", "fim"):
                         return
                     if not s_.get("countdown_task"):
+                        # Os cinco segundos da votação forçada já são a
+                        # contagem: não acrescentar outra contagem de 3s.
+                        s_["forcar_inicio_task"] = None
                         s_["countdown_task"] = asyncio.create_task(
-                            _iniciar_contagem_ludo(sala_))
+                            _iniciar_contagem_ludo(sala_, duracao=0))
                     s_["forcar_inicio_task"] = None
                 s["forcar_inicio_task"] = asyncio.create_task(_forcar_task())
                 continue

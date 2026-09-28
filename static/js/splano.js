@@ -212,6 +212,7 @@ function spAtualizarEspera(d) {
   var prontos = d.prontos || 0;
   var faltam = Math.max(0, humanos - prontos);
   var contendo = d.fase === "contagem";
+  var podeForcar = d.fase !== "contagem" && !!d.pode_forcar;
 
   document.querySelector("#sp-espera-titulo").textContent =
     contendo ? "Começando em " + d.contagem + "..." : "Votação pra começar";
@@ -231,6 +232,13 @@ function spAtualizarEspera(d) {
   var botao = document.querySelector("#sp-pronto");
   botao.textContent = spPronto ? "👍 Pronto! (tocar pra voltar)" : "✅ Estou pronto";
   botao.classList.toggle("sp-pronto-marcado", spPronto);
+  var botaoForcar = document.querySelector("#sp-forcar");
+  if (botaoForcar) {
+    botaoForcar.style.display = podeForcar ? "" : "none";
+    botaoForcar.textContent = podeForcar
+      ? "⚡ Forçar início (" + (d.prontos || 0) + "/" + (d.total_humanos || 0) + ")"
+      : "⚡ Forçar início";
+  }
 
   var lista = document.querySelector("#sp-espera-lista");
   var humanosInfo = jogadores.filter(function (j) { return !j.bot; });
@@ -1007,6 +1015,9 @@ function spSair() {
     spEnviar({ tipo: "pronto", ativo: spPronto, foto: spOpFoto });
     // O clique é gesto do usuário: é o momento certo pra pedir tela cheia.
     if (spPronto && spOpTelacheia && !spTelaCheiaAtiva()) spTelaCheiaEntrar();
+  });
+  document.querySelector("#sp-forcar").addEventListener("click", function () {
+    spEnviar({ tipo: "forcar_inicio" });
   });
   // Preferências da tela de espera (tela cheia e foto de perfil).
   spOpcoesCarregar();
