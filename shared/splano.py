@@ -252,9 +252,17 @@ def dividir(jogo: dict, jogador: dict, agora: float) -> bool:
         celula["energia"] = metade
         celula["juntar_em"] = agora + SEGUNDOS_PARA_JUNTAR
         filha = nova_celula(jogo, celula["x"], celula["y"], metade)
-        distancia = raio(metade) * 2.0 + 2.0
-        filha["x"] = min(max(celula["x"] + dx * distancia, raio(metade)), ARENA - raio(metade))
-        filha["y"] = min(max(celula["y"] + dy * distancia, raio(metade)), ARENA - raio(metade))
+        distancia = raio(metade) * 2.0 + 1.0
+        nx, ny = dx, dy
+        r_filha = raio(metade)
+        teste_x = celula["x"] + nx * distancia
+        teste_y = celula["y"] + ny * distancia
+        if not (r_filha <= teste_x <= ARENA - r_filha and r_filha <= teste_y <= ARENA - r_filha):
+            # Perto de uma borda, usa o eixo perpendicular para não nascer
+            # em cima da célula original depois do clamp da arena.
+            nx, ny = -dy, dx
+        filha["x"] = min(max(celula["x"] + nx * distancia, r_filha), ARENA - r_filha)
+        filha["y"] = min(max(celula["y"] + ny * distancia, r_filha), ARENA - r_filha)
         filha["juntar_em"] = agora + SEGUNDOS_PARA_JUNTAR
         novas.append(filha)
     if not novas:
@@ -360,17 +368,27 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
                 b["y"] += ny * passo
                 continue
 
-            # Durante a divisão não há repulsão: as partes se aproximam até
-            # encostar e seguem como um conjunto, sem ficarem travadas longe.
-            distancia_alvo = ra + rb + 2.0
-            if d <= distancia_alvo or d < 0.01:
-                continue
-            aproximacao = min(VELOCIDADE_JUNTAR * dt, (d - distancia_alvo) / 2.0)
-            nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
-            a["x"] -= nx * aproximacao
-            a["y"] -= ny * aproximacao
-            b["x"] += nx * aproximacao
-            b["y"] += ny * aproximacao
+            # Durante a divisão, mantenha as bordas encostadas sem permitir
+            # sobreposição. A correção também resolve o primeiro frame da
+            # divisão, quando as duas células podem nascer no mesmo ponto.
+            distancia_alvo = ra + rb + 1.0
+            if d < 0.01:
+                nx, ny = (1.0, 0.0) if (i + k) % 2 == 0 else (0.0, 1.0)
+                d = 0.01
+            else:
+                nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
+            if d < distancia_alvo:
+                afastamento = (distancia_alvo - d) / 2.0
+                a["x"] += nx * afastamento
+                a["y"] += ny * afastamento
+                b["x"] -= nx * afastamento
+                b["y"] -= ny * afastamento
+            elif d > distancia_alvo:
+                aproximacao = min(VELOCIDADE_JUNTAR * dt, (d - distancia_alvo) / 2.0)
+                a["x"] -= nx * aproximacao
+                a["y"] -= ny * aproximacao
+                b["x"] += nx * aproximacao
+                b["y"] += ny * aproximacao
     jogador["celulas"] = [c for c in celulas if not c.get("_comida")]
 
 
