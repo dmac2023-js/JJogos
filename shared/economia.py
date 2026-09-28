@@ -769,6 +769,7 @@ def top_doadores(limit: int = 10) -> list:
             "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
             "moldura_perfil": moldura_publica(equipado.get("moldura")),
             "total_doado": total,
+            "doacao": progresso_doacao(total),
         })
     return sorted(entradas, key=lambda x: x["total_doado"], reverse=True)[:limit]
 

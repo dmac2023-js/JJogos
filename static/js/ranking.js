@@ -36,6 +36,14 @@ function rankingNickHtml(jogador) {
   return nickHtml(jogador.nick || jogador.nome || "?", { cor_nick: jogador.cor_nick, fonte_nick: jogador.fonte_nick });
 }
 
+function insigniaPerfilHtml(jogador) {
+  var d = jogador.doacao;
+  if (!d || !d.atual) return "";
+  var proxima = d.proxima ? "Próxima: " + d.proxima.nome + " · faltam " + d.falta.toLocaleString("pt-BR") : "Todas as insignias conquistadas";
+  var cor = d.proxima ? (INSIGNIA_CORES[d.proxima.icone] || "#5b9dff") : (INSIGNIA_CORES[d.atual.icone] || "#ffd36a");
+  return '<span class="insignia-perfil" tabindex="0"><img src="./img/insignia-' + escapeHtml(d.atual.icone) + '.svg" alt="Insignia ' + escapeHtml(d.atual.nome) + '" /><span class="insignia-tooltip"><b>' + escapeHtml(d.atual.nome) + '</b><strong>' + d.total.toLocaleString("pt-BR") + ' moedas doadas</strong><span class="insignia-tooltip-bar"><i style="width:' + d.progresso + '%;background:' + cor + '"></i></span><small>' + escapeHtml(proxima) + '</small></span></span>';
+}
+
 /** Abre o perfil de qualquer jogador pelo nome (username) — usado quando se
  *  clica em alguém numa sala, placar ou tabela de vitórias. */
 async function abrirPerfilJogador(nome) {
@@ -145,7 +153,7 @@ async function renderizarRankingDoadores(lista) {
       btn.className = "ranking-linha" + (i < 3 ? " ranking-top" + (i + 1) : "");
       var posHtml = '<span class="ranking-pos">' + (medalhas[i] || "#" + (i + 1)) + "</span>";
       var avatarHtml = rankingAvatarHtml(jogador, 38);
-      var nickLinha = '<span class="ranking-nick">' + rankingNickHtml(jogador) + "</span>";
+      var nickLinha = '<span class="ranking-nick">' + rankingNickHtml(jogador) + insigniaPerfilHtml(jogador) + "</span>";
       var valorHtml = '<span class="ranking-valor">💝 ' + (jogador.total_doado || 0).toLocaleString("pt-BR") + "</span>";
       btn.innerHTML = posHtml + avatarHtml + nickLinha + valorHtml;
       btn.addEventListener("click", function () { abrirPerfilRanking(jogador); });
@@ -188,7 +196,6 @@ function _renderizarConteudoModal(container, jogador, perfil) {
     html += '<span>⏱ ' + formatarHoras(jogador.segundos) + " jogados</span>";
   }
   html += "</div>";
-  html += doacaoHtml(jogador);
 
   var partidas = jogador.partidas || {};
   var vitorias = jogador.vitorias || {};
@@ -333,7 +340,7 @@ async function abrirPerfilRanking(jogador) {
   var usernameExtra = (jogador.nome && jogador.nome !== jogador.nick)
     ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>"
     : "";
-  var cabecalhoNick = '<span class="rmodal-nick">' + rankingNickHtml(jogador) + "</span>" + usernameExtra;
+  var cabecalhoNick = '<span class="rmodal-nick">' + rankingNickHtml(jogador) + insigniaPerfilHtml(jogador) + "</span>" + usernameExtra;
 
   var meuNome = (typeof nomeUsuario === "function") ? nomeUsuario() : null;
   var btnEnviarHtml = (jogador.nome && meuNome && jogador.nome !== meuNome)
@@ -372,7 +379,7 @@ async function abrirPerfilRanking(jogador) {
     var perfil = resp.ok ? await resp.json() : {};
     var economiaPerfil = respEconomia.ok ? await respEconomia.json() : {};
     jogador = Object.assign({}, jogador, economiaPerfil);
-    card.querySelector(".rmodal-cabecalho").innerHTML = rankingAvatarHtml(jogador, 72) + '<span class="rmodal-nick">' + rankingNickHtml(jogador) + "</span>" + ((jogador.nome && jogador.nome !== jogador.nick) ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>" : "");
+    card.querySelector(".rmodal-cabecalho").innerHTML = rankingAvatarHtml(jogador, 72) + '<span class="rmodal-nick">' + rankingNickHtml(jogador) + insigniaPerfilHtml(jogador) + "</span>" + ((jogador.nome && jogador.nome !== jogador.nick) ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>" : "");
     var conteudo = card.querySelector("#rmodal-conteudo");
     _renderizarConteudoModal(conteudo, jogador, perfil);
     if (typeof atualizarMoldurasPerfil === "function") atualizarMoldurasPerfil();
