@@ -307,9 +307,9 @@ _ROLETA_MODELOS = {
     "presente": {"tipo": "presente", "label": "Presente"},
     "?": {"tipo": "interrogacao", "label": "?"},
 }
-# 0.5x é o maior setor; 1.25x e 0.75x ficam médios; 1.5x menor;
-# presente e ? crescem um pouco, mas ? continua sendo o menor setor.
-_ROLETA_PESOS = {"1.25x": 7, "0.5x": 19, "0.25x": 12, "0.75x": 8, "1.5x": 2, "presente": 3, "?": 1}
+# Exatos 60% de perda/redução e 40% de ganho. Dentro dos ganhos: presente
+# = 5%, ? = 2%, 1.25x + 1.5x = 33%. O 0.5x caiu 10% por setor (19 -> 17,1).
+_ROLETA_PESOS = {"1.25x": 14, "0.5x": 17.1, "0.25x": 10, "0.75x": 2.9, "1.5x": 2.5, "presente": 5, "?": 2}
 ROLETA_FATIAS = []
 for _i, _chave in enumerate(_ROLETA_ORDEM):
     _fatia = dict(_ROLETA_MODELOS[_chave])
