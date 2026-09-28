@@ -43,9 +43,11 @@ async function renderPerfilEconomia() {
       var nomeHtml = typeof nickHtml === "function" ? nickHtml(nome, { cor_nick: x.cor_nick, fonte_nick: x.fonte_nick }) : escapeHtml(nome);
       return '<div class="perfil-doacao-item"><span class="perfil-doacao-avatar">' + avatar + deco + '</span><span class="perfil-doacao-info"><strong>' + (enviou ? "Enviou para " : "Recebeu de ") + nomeHtml + '</strong><small><span class="loja-moeda-icone">🪙</span> ' + Number(x.quantidade || 0).toLocaleString("pt-BR") + ' moedas · ' + tempoDoacao(x.em) + '</small></span></div>';
     }
-    var enviados = (d.historico_doacoes || []).map(function (x) { return doacaoLinha(x, true); });
-    var recebidos = (d.historico_recebidos || []).map(function (x) { return doacaoLinha(x, false); });
-    var hist = enviados.concat(recebidos).join("") || '<p class="perfil-vazio">Nenhuma movimentação de doação ainda.</p>';
+    var movimentos = [];
+    (d.historico_doacoes || []).forEach(function (x) { movimentos.push({ item: x, enviou: true }); });
+    (d.historico_recebidos || []).forEach(function (x) { movimentos.push({ item: x, enviou: false }); });
+    movimentos.sort(function (a, b) { return Number(b.item.em || 0) - Number(a.item.em || 0); });
+    var hist = movimentos.slice(0, 3).map(function (x) { return doacaoLinha(x.item, x.enviou); }).join("") || '<p class="perfil-vazio">Nenhuma movimentação de doação ainda.</p>';
     doacoes.innerHTML = "<h3>Histórico de doações</h3><div class=\"perfil-doacoes-lista\">" + hist + "</div>";
     missoes.querySelectorAll("[data-trocar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
       var r = await fetch("./economia/missoes/trocar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });

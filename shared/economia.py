@@ -261,18 +261,26 @@ def _historico_doacoes_publico(lista: list, destino: str) -> list:
     carteira_clown = carteiras.get("clown") or carteiras.get("Clown") or {}
     equipado_clown = carteira_clown.get("equipado") or {}
     saida = []
-    for original in lista[:20]:
+    agrupado = {}
+    # O username antigo e o nome global apontam para a mesma pessoa. A
+    # normalização também impede que um snapshot antigo fique sem foto.
+    for original in lista[:3]:
         item = dict(original)
         chave = item.get(destino)
-        # Registros antigos guardavam apenas o username. Agora exibimos o
-        # nome global conhecido para a conta que antes aparecia como username.
-        if not item.get("nick") and chave == "agoratobem":
+        eh_clown = str(chave or "").lower() in ("agoratobem", "clown")
+        if eh_clown:
             item["nick"] = carteira_clown.get("nick") or "Clown"
-            item.setdefault("avatar", carteira_clown.get("avatar"))
-            item.setdefault("cor_nick", equipado_clown.get("cor_nick"))
-            item.setdefault("fonte_nick", equipado_clown.get("fonte_nick"))
-            item.setdefault("decoracao_imagem", _imagem_decoracao(equipado_clown.get("decoracao"), animada=True))
-        saida.append(item)
+            item["avatar"] = item.get("avatar") or carteira_clown.get("avatar")
+            item["cor_nick"] = item.get("cor_nick") or equipado_clown.get("cor_nick")
+            item["fonte_nick"] = item.get("fonte_nick") or equipado_clown.get("fonte_nick")
+            item["decoracao_imagem"] = item.get("decoracao_imagem") or _imagem_decoracao(equipado_clown.get("decoracao"), animada=True)
+            chave = "clown"
+        agrupamento = chave or item.get("nick") or "desconhecido"
+        if agrupamento in agrupado:
+            agrupado[agrupamento]["quantidade"] = int(agrupado[agrupamento].get("quantidade", 0)) + int(item.get("quantidade", 0))
+        else:
+            agrupado[agrupamento] = item
+            saida.append(item)
     return saida
 
 
