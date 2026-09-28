@@ -417,7 +417,7 @@ async function criarSalaCampo() {
   }
 }
 
-async function entrarSalaCampo(codigo) {
+async function entrarSalaCampo(codigo, espectador) {
   codigo = (codigo || "").trim().toLowerCase();
   if (!codigo) {
     campoLobbyMsg("Digite o código da sala.", "erro");
@@ -432,7 +432,7 @@ async function entrarSalaCampo(codigo) {
   campoPlacar = { p1: 0, p2: 0 };
   prepararTelaCampoOnline(codigo);
   campoMsg("Entrando na sala " + codigo + "...", "");
-  conectarWsCampo(codigo);
+    conectarWsCampo(codigo, espectador);
 }
 
 function prepararTelaCampoOnline(sala) {
@@ -520,12 +520,16 @@ function renderizarSalasCampo(salas) {
       "<span><strong" + corNickAtributoHtml(s.lider_cosmeticos) + ">" + escapeHtml(s.lider || "?") + "</strong>" +
       "<small>" + escapeHtml(s.sala) + " · " + (campoNomeDif[s.dificuldade] || s.dificuldade) + "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
+    item.innerHTML += '<button type="button" class="botao-copiar sala-espectar">👁 Espectar</button>';
+    item.querySelector(".sala-espectar").addEventListener("click", function (ev) {
+      ev.stopPropagation(); entrarSalaCampo(s.sala, true);
+    });
     item.addEventListener("click", function () { entrarSalaCampo(s.sala); });
     container.appendChild(item);
   });
 }
 
-function conectarWsCampo(sala) {
+function conectarWsCampo(sala, espectador) {
   campoFecharWs();
   var nome = nomeUsuario();
   var nick = nomeExibicao();
@@ -534,6 +538,7 @@ function conectarWsCampo(sala) {
   var url = protocolo + "//" + location.host + "/ws/campo/" + encodeURIComponent(sala) +
     "?nome=" + encodeURIComponent(nome) +
     "&nick=" + encodeURIComponent(nick) +
+    (espectador ? "&espectador=true" : "") +
     "&avatar=" + encodeURIComponent(avatar);
   campoWs = new WebSocket(url);
   var ws = campoWs;
@@ -562,7 +567,7 @@ function conectarWsCampo(sala) {
     campoMsg("Conexão perdida. Reconectando...", "erro");
     clearTimeout(campoReconectarTimer);
     campoReconectarTimer = setTimeout(function () {
-      conectarWsCampo(sala);
+      conectarWsCampo(sala, espectador);
     }, 2000);
   };
   ws.onerror = function () {};
@@ -928,6 +933,10 @@ document.querySelectorAll("[data-modo-campo]").forEach(function (botao) {
     if (modo === "solo") {
       mostrarTela(document.querySelector("#tela-dificuldade-campo"));
     } else if (modo === "online") {
+      mostrarTela(document.querySelector("#tela-lobby-campo"));
+      carregarSalasCampo();
+      conectarLobbyWs();
+    } else if (modo === "espectar") {
       mostrarTela(document.querySelector("#tela-lobby-campo"));
       carregarSalasCampo();
       conectarLobbyWs();

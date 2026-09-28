@@ -14,7 +14,7 @@
   width: 100%; height: 100%; border: none; border-radius: 0;
 }
 .sp-sair-tela-cheia {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   z-index: 6; padding: 8px 13px; border: 1px solid #2d4470; border-radius: 10px;
   background: rgba(20, 28, 48, .94); color: #9dc2ff;
   font-size: 13px; font-weight: 600; cursor: pointer;

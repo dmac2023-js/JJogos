@@ -609,7 +609,7 @@ function processarMensagemLudo(d) {
   }
 }
 
-function conectarLudoWs(sala) {
+function conectarLudoWs(sala, espectador) {
   if (ludoWs) {
     try { ludoWs.close(); } catch (e) {}
   }
@@ -620,6 +620,7 @@ function conectarLudoWs(sala) {
   var url = protocolo + "//" + location.host + "/ws/ludo/" + encodeURIComponent(sala) +
     "?nome=" + encodeURIComponent(nome) +
     "&nick=" + encodeURIComponent(nick) +
+    (espectador ? "&espectador=true" : "") +
     (avatar ? "&avatar=" + encodeURIComponent(avatar) : "");
 
   jogoIniciarTimer();
@@ -660,7 +661,7 @@ function conectarLudoWs(sala) {
       ludoMsg("Conexão perdida. Reconectando...", "erro");
       clearTimeout(ludoReconectarTimer);
       ludoReconectarTimer = setTimeout(function () {
-        conectarLudoWs(sala);
+        conectarLudoWs(sala, espectador);
       }, 2000);
     }
   };
@@ -700,7 +701,7 @@ async function criarSalaLudo() {
   }
 }
 
-async function entrarSalaLudo(codigo) {
+async function entrarSalaLudo(codigo, espectador) {
   codigo = (codigo || "").trim().toLowerCase();
   if (!codigo) {
     ludoMsgLobby("Digite o código da sala.", "erro");
@@ -715,7 +716,7 @@ async function entrarSalaLudo(codigo) {
   mostrarTela(telaLudo);
   ludoMsg("Entrando na sala " + codigo + "...", "");
   carregarRankingLudo();
-  conectarLudoWs(codigo);
+  conectarLudoWs(codigo, espectador);
 }
 
 async function carregarSalasLudo() {
@@ -749,6 +750,10 @@ function renderizarSalasLudo(salas) {
       (s.fase === "esperando" ? "Aguardando" : s.fase === "fim" ? "Encerrado" : "Em jogo") +
       "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/4</span>";
+    item.innerHTML += '<button type="button" class="botao-copiar sala-espectar">👁 Espectar</button>';
+    item.querySelector(".sala-espectar").addEventListener("click", function (ev) {
+      ev.stopPropagation(); entrarSalaLudo(s.sala, true);
+    });
     item.addEventListener("click", function () {
       entrarSalaLudo(s.sala);
     });

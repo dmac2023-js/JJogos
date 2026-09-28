@@ -18,6 +18,10 @@ function renderizarSalasTermo(salas) {
       "<small>" + escapeHtml(s.sala) + " · " + (NOMES_TERMO_DIFICULDADE[s.dificuldade] || s.dificuldade) +
       " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></span></div>" +
       '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
+    item.innerHTML += '<button type="button" class="botao-copiar sala-espectar">👁 Espectar</button>';
+    item.querySelector(".sala-espectar").addEventListener("click", function (ev) {
+      ev.stopPropagation(); entrarSalaTermo(s.sala, true);
+    });
     item.addEventListener("click", function () { entrarSalaTermo(s.sala); });
     container.appendChild(item);
   });
@@ -462,7 +466,7 @@ async function criarSalaTermo() {
   }
 }
 
-async function entrarSalaTermo(codigo) {
+async function entrarSalaTermo(codigo, espectador) {
   codigo = (codigo || "").trim().toLowerCase();
   if (!codigo) {
     termoMsg("Digite o código da sala.", "erro");
@@ -475,7 +479,7 @@ async function entrarSalaTermo(codigo) {
   }
   prepararTelaTermoOnline(codigo);
   termoMsg("Entrando na sala " + codigo + "...", "");
-  conectarWsTermo(codigo);
+    conectarWsTermo(codigo, espectador);
 }
 
 function prepararTelaTermoOnline(sala) {
@@ -503,7 +507,7 @@ function prepararTelaTermoOnline(sala) {
   carregarRankingTermo();
 }
 
-function conectarWsTermo(sala) {
+function conectarWsTermo(sala, espectador) {
   termoFecharWs();
   var nome = nomeUsuario();
   var nick = nomeExibicao();
@@ -512,6 +516,7 @@ function conectarWsTermo(sala) {
   var url = protocolo + "//" + location.host + "/ws/termo/" + encodeURIComponent(sala) +
     "?nome=" + encodeURIComponent(nome) +
     "&nick=" + encodeURIComponent(nick) +
+    (espectador ? "&espectador=true" : "") +
     "&avatar=" + encodeURIComponent(avatar);
   termoWs = new WebSocket(url);
   var ws = termoWs;
@@ -540,7 +545,7 @@ function conectarWsTermo(sala) {
     termoMsg("Conexão perdida. Reconectando...", "erro");
     clearTimeout(termoReconectarTimer);
     termoReconectarTimer = setTimeout(function () {
-      conectarWsTermo(sala);
+      conectarWsTermo(sala, espectador);
     }, 2000);
   };
   ws.onerror = function () {};
@@ -704,6 +709,10 @@ document.querySelectorAll("#tela-modo-termo .botao-modo").forEach(function (bota
     if (modo === "termo-solo") {
       mostrarTela(document.querySelector("#tela-dificuldade-termo"));
     } else if (modo === "termo-multiplayer") {
+      mostrarTela(document.querySelector("#tela-lobby-termo"));
+      carregarSalasTermo();
+      conectarLobbyWs();
+    } else if (modo === "termo-espectar") {
       mostrarTela(document.querySelector("#tela-lobby-termo"));
       carregarSalasTermo();
       conectarLobbyWs();

@@ -251,6 +251,9 @@ document.querySelector("#jogo-sudoku").addEventListener("click", function () {
   mostrarTela(telaDificuldade);
   carregarSalasSudoku();
 });
+document.querySelector("#sudoku-espectar").addEventListener("click", function () {
+  mostrarTela(telaDificuldade); carregarSalasSudoku(); conectarLobbyWs();
+});
 
 document.querySelectorAll("#tela-dificuldade .botao-dificuldade").forEach(function (botao) {
   botao.addEventListener("click", function () {
@@ -354,7 +357,7 @@ function fecharSudokuOnline(motivo) {
   if (motivo) mostrarMensagem(motivo, "erro");
 }
 
-function conectarWsSudoku(sala) {
+function conectarWsSudoku(sala, espectador) {
   if (sudokuWs) {
     try { sudokuWs.close(); } catch (e) { /* ignore */ }
   }
@@ -365,6 +368,7 @@ function conectarWsSudoku(sala) {
   var url = protocolo + "//" + location.host + "/ws/sudoku/" + encodeURIComponent(sala) +
     "?nome=" + encodeURIComponent(nome) +
     "&nick=" + encodeURIComponent(nick) +
+    (espectador ? "&espectador=true" : "") +
     (avatar ? "&avatar=" + encodeURIComponent(avatar) : "");
 
   var ws = new WebSocket(url);
@@ -402,7 +406,7 @@ function conectarWsSudoku(sala) {
       sudokuStatus("Conexão perdida. Reconectando...");
       clearTimeout(sudokuReconectarTimer);
       sudokuReconectarTimer = setTimeout(function () {
-        conectarWsSudoku(sala);
+        conectarWsSudoku(sala, espectador);
       }, 2000);
     }
   };
@@ -641,7 +645,7 @@ async function criarSalaSudoku() {
   }
 }
 
-async function entrarSalaSudoku(codigo) {
+async function entrarSalaSudoku(codigo, espectador) {
   codigo = (codigo || "").trim().toLowerCase();
   if (!codigo) {
     mostrarMensagem("Digite o código da sala.", "erro");
@@ -663,7 +667,7 @@ async function entrarSalaSudoku(codigo) {
     mostrarTela(telaJogo);
     mostrarMensagem("Entrando na sala " + codigo + "...", "");
     sudokuStatus("Entrando...");
-    conectarWsSudoku(codigo);
+    conectarWsSudoku(codigo, espectador);
   } catch (erro) {
     fecharSudokuOnline(erro.message);
   }
@@ -691,6 +695,10 @@ async function carregarSalasSudoku() {
         "<small>" + escapeHtml(s.sala) + " · " + (nomesDificuldade[s.dificuldade] || s.dificuldade) +
         " · " + (s.fase === "esperando" ? "Aguardando" : "Em jogo") + "</small></span></div>" +
         '<span class="sala-item-jogadores">' + s.jogadores + "/2</span>";
+    item.innerHTML += '<button type="button" class="botao-copiar sala-espectar">👁 Espectar</button>';
+    item.querySelector(".sala-espectar").addEventListener("click", function (ev) {
+      ev.stopPropagation(); entrarSalaSudoku(s.sala, true);
+    });
       item.addEventListener("click", function () {
         entrarSalaSudoku(s.sala);
       });
