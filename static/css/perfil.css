@@ -19,5 +19,13 @@
 .perfil-missao { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #20293f; }
 .perfil-missao:last-child { border-bottom: 0; }
 .perfil-missao small { color: #ffd36a; }
-.perfil-doacoes-lista { max-height: 180px; overflow-y: auto; font-size: 13px; color: #c9ccda; }
+.perfil-doacoes-lista { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.perfil-doacao-item { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 10px; border-radius: 9px; background: #1a2135; color: #c9ccda; }
+.perfil-doacao-avatar { position: relative; width: 44px; height: 44px; flex: 0 0 44px; }
+.perfil-doacao-foto { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; display: block; background: #1c2c4a; }
+.perfil-doacao-inicial { display: grid; place-items: center; color: #9dc2ff; font-size: 20px; font-weight: 700; }
+.perfil-doacao-decoracao { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain; pointer-events: none; }
+.perfil-doacao-info { display: flex; min-width: 0; flex-direction: column; gap: 5px; font-size: 15px; }
+.perfil-doacao-info strong { overflow-wrap: anywhere; color: #f4f6ff; }
+.perfil-doacao-info small { color: #ffd36a; font-size: 13px; }
 #perfil-historico .registro { display: flex; justify-content: space-between; }

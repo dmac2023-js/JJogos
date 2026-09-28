@@ -25,9 +25,24 @@ async function renderPerfilEconomia() {
       var pct = Math.min(100, Math.round(m.progresso / m.alvo * 100));
       return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + '</small></span><button type="button" class="botao-copiar" data-trocar-missao data-indice="' + i + '">Trocar (500)</button></div>';
     }).join("");
-    var enviados = (d.historico_doacoes || []).map(function (x) { return "Enviou " + x.quantidade.toLocaleString("pt-BR") + " para " + escapeHtml(x.para); });
-    var recebidos = (d.historico_recebidos || []).map(function (x) { return "Recebeu " + x.quantidade.toLocaleString("pt-BR") + " de " + escapeHtml(x.de); });
-    var hist = enviados.concat(recebidos).join("<br>") || "Nenhuma movimentação de doação ainda.";
+    var agora = Date.now() / 1000;
+    function tempoDoacao(ts) {
+      var n = Math.max(0, Math.floor(agora - Number(ts || agora)));
+      if (n < 60) return "agora";
+      if (n < 3600) return Math.floor(n / 60) + " min atrás";
+      if (n < 86400) return Math.floor(n / 3600) + " h atrás";
+      return Math.floor(n / 86400) + " dias atrás";
+    }
+    function doacaoLinha(x, enviou) {
+      var nome = x.nick || (enviou ? x.para : x.de) || "Usuário";
+      var avatar = x.avatar ? '<img class="perfil-doacao-foto" src="' + escapeHtml(x.avatar) + '" alt="" />' : '<span class="perfil-doacao-foto perfil-doacao-inicial">' + escapeHtml(nome.charAt(0).toUpperCase()) + '</span>';
+      var deco = x.decoracao_imagem ? '<img class="perfil-doacao-decoracao" src="' + escapeHtml(x.decoracao_imagem) + '" alt="" />' : "";
+      var nomeHtml = typeof nickHtml === "function" ? nickHtml(nome, { cor_nick: x.cor_nick, fonte_nick: x.fonte_nick }) : escapeHtml(nome);
+      return '<div class="perfil-doacao-item"><span class="perfil-doacao-avatar">' + avatar + deco + '</span><span class="perfil-doacao-info"><strong>' + (enviou ? "Enviou para " : "Recebeu de ") + nomeHtml + '</strong><small><span class="loja-moeda-icone">🪙</span> ' + Number(x.quantidade || 0).toLocaleString("pt-BR") + ' moedas · ' + tempoDoacao(x.em) + '</small></span></div>';
+    }
+    var enviados = (d.historico_doacoes || []).map(function (x) { return doacaoLinha(x, true); });
+    var recebidos = (d.historico_recebidos || []).map(function (x) { return doacaoLinha(x, false); });
+    var hist = enviados.concat(recebidos).join("") || '<p class="perfil-vazio">Nenhuma movimentação de doação ainda.</p>';
     doacoes.innerHTML = "<h3>Histórico de doações</h3><div class=\"perfil-doacoes-lista\">" + hist + "</div>";
     missoes.querySelectorAll("[data-trocar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
       var r = await fetch("./economia/missoes/trocar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });

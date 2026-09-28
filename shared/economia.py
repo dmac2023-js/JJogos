@@ -716,6 +716,14 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         if destinatario not in carteiras:
             raise ValueError("Usuário destinatário não encontrado.")
         carteira_dest = obter_carteira(dados, destinatario)
+        eq_rem = carteira_rem.get("equipado") or {}
+        eq_dest = carteira_dest.get("equipado") or {}
+        visual_rem = {"nick": carteira_rem.get("nick") or remetente, "avatar": carteira_rem.get("avatar"),
+                      "cor_nick": eq_rem.get("cor_nick"), "fonte_nick": eq_rem.get("fonte_nick"),
+                      "decoracao_imagem": _imagem_decoracao(eq_rem.get("decoracao"), animada=True)}
+        visual_dest = {"nick": carteira_dest.get("nick") or destinatario, "avatar": carteira_dest.get("avatar"),
+                       "cor_nick": eq_dest.get("cor_nick"), "fonte_nick": eq_dest.get("fonte_nick"),
+                       "decoracao_imagem": _imagem_decoracao(eq_dest.get("decoracao"), animada=True)}
         taxa = quantidade // 10
         taxa_dono = quantidade // 100
         recebido = quantidade - taxa
@@ -725,7 +733,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         dono["saldo"] = dono.get("saldo", 0) + taxa_dono
         # Registra histórico de doações
         historico_rem = carteira_rem.setdefault("historico_envios", [])
-        historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": int(time.time())})
+        historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": agora, **visual_dest})
         del historico_rem[50:]
         transferencias.append({"quantidade": quantidade, "em": agora})
         del transferencias[:-100]
@@ -736,7 +744,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         total_doado = carteira_rem.get("total_doado", 0) + (quantidade if conta_insignia else 0)
         carteira_rem["total_doado"] = total_doado
         historico_dest = carteira_dest.setdefault("historico_recebidos", [])
-        historico_dest.insert(0, {"de": remetente, "quantidade": recebido, "em": agora, "taxa": taxa})
+        historico_dest.insert(0, {"de": remetente, "quantidade": recebido, "em": agora, "taxa": taxa, **visual_rem})
         del historico_dest[50:]
         salvar_economia(dados)
         return {
