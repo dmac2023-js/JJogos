@@ -29,6 +29,7 @@ HUMANOS_PARA_COMECAR = 1          # com 1 humano pronto já dá pra jogar (19 bo
 PARTICIPANTES_MINIMO = 20         # a arena sempre enche até aqui com bots
 PARTICIPANTES_MAXIMO = 20
 SEGUNDOS_CONTAGEM = 5
+SEGUNDOS_INATIVIDADE_ESPERA = 3 * 60
 SEGUNDOS_PLACAR_FINAL = 10
 # Sem limite de tempo a partida só acaba quando sobra um - então, se ninguém
 # estiver conectado, damos um tempo pra reconectar antes de encerrar (senão a
@@ -79,6 +80,35 @@ def _humanos_conectados(sala: dict) -> list:
 
 def _humanos_prontos(sala: dict) -> list:
     return [n for n in _humanos_conectados(sala) if n in sala["prontos"]]
+
+
+def _marcar_inicio_votacao(sala: dict, agora: float = None) -> None:
+    agora = time.time() if agora is None else agora
+    for conexao in sala["conexoes"].values():
+        conexao["espera_desde"] = agora
+
+
+async def _remover_inativos_espera(sala: dict, agora: float) -> None:
+    removidos = []
+    for nome, conexao in list(sala["conexoes"].items()):
+        if nome in sala["prontos"]:
+            continue
+        if agora - float(conexao.get("espera_desde", agora)) < SEGUNDOS_INATIVIDADE_ESPERA:
+            continue
+        removidos.append((nome, conexao["ws"]))
+        sala["conexoes"].pop(nome, None)
+        sala["prontos"].discard(nome)
+        sala["jogo"]["jogadores"].pop(nome, None)
+        sala["pids"].pop(nome, None)
+    if not removidos:
+        return
+    for nome, ws in removidos:
+        try:
+            await ws.send_json({"tipo": "erro_fatal", "mensagem": "Você foi removido por ficar 3 minutos sem marcar pronto."})
+            await ws.close()
+        except Exception:
+            pass
+    await _mandar_sala(sala)
 
 
 def _todos_prontos(sala: dict) -> bool:
@@ -313,6 +343,7 @@ def _reiniciar_para_espera(sala: dict) -> None:
     sala["resultado"] = None
     sala["prontos"].clear()
     sala["contagem_forcada"] = False
+    _marcar_inicio_votacao(sala)
 
 
 # ---------------------------------------------------------------------------
@@ -422,12 +453,16 @@ async def _tick(sala: dict) -> None:
     jogo = sala["jogo"]
     sala["tick"] += 1
 
+    if jogo["fase"] == "espera":
+        await _remover_inativos_espera(sala, agora)
+
     if jogo["fase"] == "contagem":
         pronto_valido = _maioria_pronta(sala) if sala.get("contagem_forcada") else _todos_prontos(sala)
         if len(_humanos_conectados(sala)) < HUMANOS_PARA_COMECAR or not pronto_valido:
             # Alguém desistiu/entrou no meio da contagem: volta pra votação.
             jogo["fase"] = "espera"
             sala["contagem_forcada"] = False
+            _marcar_inicio_votacao(sala, agora)
             await _mandar_sala(sala)
         elif agora >= sala["contagem_ate"]:
             _comecar_partida(sala, agora)
@@ -577,10 +612,12 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
             sala["prontos"].add(nome)
         else:
             sala["prontos"].discard(nome)
+            sala["conexoes"].get(nome, {})["espera_desde"] = time.time()
             # Desistiu no meio da contagem: volta pra votação.
             if sala["jogo"]["fase"] == "contagem":
                 sala["jogo"]["fase"] = "espera"
                 sala["contagem_forcada"] = False
+                _marcar_inicio_votacao(sala)
         fase = sala["jogo"]["fase"]
         await _talvez_comecar(sala)          # só transmite se começar de fato
         if sala["jogo"]["fase"] == fase:
@@ -644,7 +681,8 @@ async def ws_splano(websocket: WebSocket):
 
     sala["conexoes"][nome] = {"ws": websocket, "nick": nick, "avatar": avatar,
                               "cosmeticos": cosmeticos, "skin": skin,
-                              "assistindo": None, "foto": True}
+                              "assistindo": None, "foto": True,
+                              "espera_desde": time.time()}
 
     jogo = sala["jogo"]
     if nome in jogo["jogadores"]:
@@ -662,6 +700,8 @@ async def ws_splano(websocket: WebSocket):
     # volta atrás pra todo mundo decidir de novo.
     if jogo["fase"] == "contagem" and nome not in sala["prontos"]:
         jogo["fase"] = "espera"
+        sala["contagem_forcada"] = False
+        _marcar_inicio_votacao(sala)
 
     _pid(sala, nome)
     _garantir_loop(sala)
