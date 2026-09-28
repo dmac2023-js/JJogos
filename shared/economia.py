@@ -225,6 +225,12 @@ TAXA_DOACAO = 0.10
 DONO_DOACAO = "jovem7l"
 INTERVALO_INSIGNIA_MESMO_DESTINATARIO = 7 * 24 * 60 * 60
 LIMITE_TRANSFERENCIA_DIARIA = 1_000_000
+INTERVALO_MISSOES = 4 * 60 * 60
+MISSOES_MODELOS = [
+    {"tipo": "tempo", "alvo": 3600, "recompensa": 1500, "texto": "Jogue por 1 hora"},
+    {"tipo": "partidas", "alvo": 3, "recompensa": 1000, "texto": "Jogue 3 partidas"},
+    {"tipo": "vitorias", "alvo": 2, "recompensa": 2000, "texto": "Consiga 2 vitórias"},
+]
 
 
 def progresso_doacao(total: int) -> dict:
@@ -240,6 +246,29 @@ def progresso_doacao(total: int) -> dict:
         progresso, falta = 100, 0
     return {"total": total, "insignias": ganhas, "proxima": proxima,
             "anterior": anterior, "falta": falta, "progresso": progresso}
+
+
+def _missoes(carteira: dict, agora: int = None) -> dict:
+    agora = int(agora or time.time())
+    estado = carteira.get("missoes")
+    if not estado or agora - int(estado.get("inicio", 0)) >= INTERVALO_MISSOES:
+        estado = {"inicio": agora, "itens": [dict(m, progresso=0, concluida=False) for m in MISSOES_MODELOS], "bonus_pago": False}
+        carteira["missoes"] = estado
+    return estado
+
+
+def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, agora: int) -> None:
+    estado = _missoes(carteira, agora)
+    for m in estado["itens"]:
+        if m["tipo"] == "tempo": m["progresso"] += max(0, segundos)
+        elif m["tipo"] == "partidas" and jogo in PARTIDAS_JOGOS: m["progresso"] += 1
+        elif m["tipo"] == "vitorias" and venceu: m["progresso"] += 1
+        if m["progresso"] >= m["alvo"] and not m.get("concluida"):
+            m["progresso"], m["concluida"] = m["alvo"], True
+            carteira["saldo"] = carteira.get("saldo", 0) + m["recompensa"]
+    if all(m.get("concluida") for m in estado["itens"]) and not estado.get("bonus_pago"):
+        carteira["saldo"] = carteira.get("saldo", 0) + 1000
+        estado["bonus_pago"] = True
 
 # Roleta da sorte — 19 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 6 de
 # 0.75x, 4 de 0.5x e 1 de presente. Todos têm peso igual, então é sorte pura:
@@ -578,6 +607,7 @@ def registrar_fim_partida(nome: str, nick: str, segundos: int,
             historico = carteira.setdefault("historico", [])
             historico.insert(0, {"jogo": jogo, "resultado": resultado, "em": int(time.time())})
             del historico[HISTORICO_MAXIMO:]
+        _atualizar_missoes(carteira, segundos, jogo, venceu, int(time.time()))
         salvar_economia(dados)
 
 
@@ -600,6 +630,9 @@ def _entrada_publica(nome: str, carteira: dict) -> dict:
         "total_partidas": sum(partidas.values()),
         "total_doado": total_doado,
         "doacao": progresso_doacao(total_doado),
+        "missoes": _missoes(carteira),
+        "historico_doacoes": carteira.get("historico_envios", [])[:20],
+        "historico_recebidos": carteira.get("historico_recebidos", [])[:20],
     }
 
 
@@ -665,11 +698,12 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
             raise ValueError("Usuário destinatário não encontrado.")
         carteira_dest = obter_carteira(dados, destinatario)
         taxa = quantidade // 10
+        taxa_dono = quantidade // 100
         recebido = quantidade - taxa
         carteira_rem["saldo"] = carteira_rem.get("saldo", 0) - quantidade
         carteira_dest["saldo"] = carteira_dest.get("saldo", 0) + recebido
         dono = obter_carteira(dados, DONO_DOACAO)
-        dono["saldo"] = dono.get("saldo", 0) + taxa
+        dono["saldo"] = dono.get("saldo", 0) + taxa_dono
         # Registra histórico de doações
         historico_rem = carteira_rem.setdefault("historico_envios", [])
         historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": int(time.time())})
@@ -693,6 +727,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
             "doacao": progresso_doacao(total_doado),
             "recebido": recebido,
             "taxa": taxa,
+            "taxa_dono": taxa_dono,
             "contou_insignia": conta_insignia,
         }
 

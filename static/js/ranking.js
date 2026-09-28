@@ -240,7 +240,7 @@ function abrirFormularioDoacao(card, jogador) {
       var resp = await fetch("./economia/transferir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ remetente: remetente, destinatario: jogador.nome, quantidade: quantidade }) });
       var dados = await resp.json();
       if (!resp.ok) { alert(dados.detail || "Falha na transferência."); return; }
-      var aviso = "Doação enviada! O destinatário recebeu " + (dados.recebido || 0).toLocaleString("pt-BR") + " moedas (taxa de 10%: " + (dados.taxa || 0).toLocaleString("pt-BR") + ").";
+      var aviso = "Doação enviada! O destinatário recebeu " + (dados.recebido || 0).toLocaleString("pt-BR") + " moedas (10% retidos; 1% deles, " + (dados.taxa_dono || 0).toLocaleString("pt-BR") + ", vai para o dono).";
       if (!dados.contou_insignia) aviso += " Esta doação não contou para a insignia deste destinatário porque o prazo de 7 dias ainda não passou.";
       alert(aviso);
       form.remove();

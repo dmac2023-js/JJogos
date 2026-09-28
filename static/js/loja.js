@@ -1374,6 +1374,7 @@ async function adminLimparItens() {
 document.querySelector("#loja-btn-admin-doar").addEventListener("click", abrirModalAdminDoar);
 
 document.querySelector("#btn-abrir-loja").addEventListener("click", abrirLoja);
+document.querySelector("#btn-roleta-principal").addEventListener("click", function () { abrirLoja().then(lojaMostrarSecaoRoleta); });
 document.querySelector("#loja-btn-nametags").addEventListener("click", lojaMostrarSecaoCores);
 document.querySelector("#loja-btn-decoracoes").addEventListener("click", lojaMostrarSecaoDecoracoes);
 document.querySelector("#loja-decoracoes-busca").addEventListener("input", function (ev) {

@@ -45,6 +45,10 @@ from shared.economia import (
     top_ranking,
     transferir_moedas,
     top_doadores,
+    _missoes,
+    MISSOES_MODELOS,
+    carregar_economia,
+    salvar_economia,
 )
 from shared.recordes import eh_anonimo
 
@@ -472,6 +476,11 @@ class TransferirMoedas(BaseModel):
     quantidade: int
 
 
+class TrocarMissao(BaseModel):
+    nome: str
+    indice: int
+
+
 @router.post("/economia/transferir")
 def rota_transferir_moedas(dados: TransferirMoedas):
     """Transfere moedas de um jogador para outro."""
@@ -482,6 +491,22 @@ def rota_transferir_moedas(dados: TransferirMoedas):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return resultado
+
+
+@router.post("/economia/missoes/trocar")
+def trocar_missao(dados: TrocarMissao):
+    if eh_anonimo(dados.nome) or dados.indice not in (0, 1, 2):
+        raise HTTPException(status_code=400, detail="Missão inválida.")
+    with LOCK_ECONOMIA:
+        economia = carregar_economia()
+        carteira = obter_carteira(economia, dados.nome)
+        if carteira.get("saldo", 0) < 500:
+            raise HTTPException(status_code=400, detail="Você precisa de 500 moedas para trocar a missão.")
+        estado = _missoes(carteira)
+        estado["itens"][dados.indice] = dict(MISSOES_MODELOS[dados.indice], progresso=0, concluida=False)
+        carteira["saldo"] -= 500
+        salvar_economia(economia)
+        return {"ok": True, "missoes": estado, "saldo": carteira["saldo"]}
 
 
 @router.get("/economia/top-doadores")

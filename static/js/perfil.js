@@ -7,8 +7,30 @@ async function abrirPerfil() {
   await garantirIdentidade();
   if (typeof atualizarMoedasHeader === "function") await atualizarMoedasHeader();
   renderPerfilIdentidade();
+  await renderPerfilEconomia();
   renderPerfilHistorico();
   await renderPerfilRecordes();
+}
+
+async function renderPerfilEconomia() {
+  var missoes = document.querySelector("#perfil-missoes");
+  var doacoes = document.querySelector("#perfil-doacoes");
+  if (!usuarioDiscord || !missoes || !doacoes) return;
+  try {
+    var resp = await fetch("./economia/jogador?nome=" + encodeURIComponent(nomeUsuario()));
+    var d = await resp.json();
+    var estado = d.missoes || { itens: [] };
+    missoes.innerHTML = "<h3>Missões atuais</h3>" + (estado.itens || []).map(function (m, i) {
+      var pct = Math.min(100, Math.round(m.progresso / m.alvo * 100));
+      return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + '</small></span><button type="button" class="botao-copiar" data-trocar-missao data-indice="' + i + '">Trocar (500)</button></div>';
+    }).join("");
+    var hist = (d.historico_doacoes || []).map(function (x) { return "Enviou " + x.quantidade.toLocaleString("pt-BR") + " para " + escapeHtml(x.para); }).join("<br>") || "Nenhuma doação enviada ainda.";
+    doacoes.innerHTML = "<h3>Histórico de doações</h3><div class=\"perfil-doacoes-lista\">" + hist + "</div>";
+    missoes.querySelectorAll("[data-trocar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
+      var r = await fetch("./economia/missoes/trocar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
+      var j = await r.json(); if (!r.ok) { alert(j.detail || "Não foi possível trocar."); return; } renderPerfilEconomia();
+    }); });
+  } catch (e) { missoes.innerHTML = ""; doacoes.innerHTML = ""; }
 }
 
 function renderPerfilIdentidade() {
