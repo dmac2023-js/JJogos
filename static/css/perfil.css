@@ -13,6 +13,9 @@
 .perfil-linha strong { color: #85e0ae; font-variant-numeric: tabular-nums; }
 .perfil-vazio { color: #aeb2c7; font-size: 13px; }
 .perfil-missoes, .perfil-doacoes { margin: 14px 0; padding: 14px; border: 1px solid #20293f; border-radius: 12px; background: #111a2e; }
+.missoes-painel-principal { margin: 14px 0 18px; padding: 14px; border: 1px solid #26314f; border-radius: 12px; background: #111a2e; }
+.missoes-painel-principal:empty { display: none; }
+.missoes-painel-principal h3 { margin: 0 0 8px; color: #ffd36a; font-size: 16px; }
 .perfil-missao { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #20293f; }
 .perfil-missao:last-child { border-bottom: 0; }
 .perfil-missao small { color: #ffd36a; }

@@ -20,11 +20,14 @@ async function renderPerfilEconomia() {
     var resp = await fetch("./economia/jogador?nome=" + encodeURIComponent(nomeUsuario()));
     var d = await resp.json();
     var estado = d.missoes || { itens: [] };
+    renderMissoesPainel(estado);
     missoes.innerHTML = "<h3>Missões atuais</h3>" + (estado.itens || []).map(function (m, i) {
       var pct = Math.min(100, Math.round(m.progresso / m.alvo * 100));
       return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + '</small></span><button type="button" class="botao-copiar" data-trocar-missao data-indice="' + i + '">Trocar (500)</button></div>';
     }).join("");
-    var hist = (d.historico_doacoes || []).map(function (x) { return "Enviou " + x.quantidade.toLocaleString("pt-BR") + " para " + escapeHtml(x.para); }).join("<br>") || "Nenhuma doação enviada ainda.";
+    var enviados = (d.historico_doacoes || []).map(function (x) { return "Enviou " + x.quantidade.toLocaleString("pt-BR") + " para " + escapeHtml(x.para); });
+    var recebidos = (d.historico_recebidos || []).map(function (x) { return "Recebeu " + x.quantidade.toLocaleString("pt-BR") + " de " + escapeHtml(x.de); });
+    var hist = enviados.concat(recebidos).join("<br>") || "Nenhuma movimentação de doação ainda.";
     doacoes.innerHTML = "<h3>Histórico de doações</h3><div class=\"perfil-doacoes-lista\">" + hist + "</div>";
     missoes.querySelectorAll("[data-trocar-missao]").forEach(function (b) { b.addEventListener("click", async function () {
       var r = await fetch("./economia/missoes/trocar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nomeUsuario(), indice: Number(b.dataset.indice) }) });
@@ -32,6 +35,37 @@ async function renderPerfilEconomia() {
     }); });
   } catch (e) { missoes.innerHTML = ""; doacoes.innerHTML = ""; }
 }
+
+function renderMissoesPainel(estado) {
+  var painel = document.querySelector("#missoes-painel-principal");
+  if (!painel || !usuarioDiscord) return;
+  painel.innerHTML = "<h3>🎯 Missões atuais</h3>" + (estado.itens || []).map(function (m) {
+    return '<div class="perfil-missao"><span>' + escapeHtml(m.texto) + '<br><small>🪙 ' + m.recompensa.toLocaleString("pt-BR") + " · " + m.progresso + "/" + m.alvo + "</small></span></div>";
+  }).join("") + (estado.bonus_pago ? '<small>✅ Bônus de 1000 moedas já recebido.</small>' : '<small>Conclua as três e receba mais 1000 moedas.</small>');
+}
+
+async function atualizarPainelMissoes() {
+  if (!usuarioDiscord) return;
+  try {
+    var resp = await fetch("./economia/jogador?nome=" + encodeURIComponent(nomeUsuario()));
+    if (resp.ok) renderMissoesPainel((await resp.json()).missoes || { itens: [] });
+  } catch (e) {}
+}
+
+function criarJogoRoletaPrincipal() {
+  var jogos = document.querySelector("#tela-jogos");
+  if (!jogos || document.querySelector("#jogo-roleta")) return;
+  var botao = document.createElement("button");
+  botao.id = "jogo-roleta"; botao.className = "cartao-jogo"; botao.style.marginTop = "12px";
+  botao.innerHTML = '<span class="icone-jogo">🎡</span><span><strong>Roleta da Sorte</strong><small>Aposte moedas e tente multiplicar seu prêmio.</small></span><span class="seta">&rarr;</span>';
+  botao.addEventListener("click", function () { abrirLoja().then(lojaMostrarSecaoRoleta); });
+  jogos.appendChild(botao);
+  ["jogo-splano", "jogo-clickj", "jogo-tela", "jogo-termo", "jogo-ludo", "jogo-velha", "jogo-sudoku", "jogo-campo", "jogo-roleta"].forEach(function (id) {
+    var el = document.getElementById(id); if (el) jogos.appendChild(el);
+  });
+}
+
+setTimeout(function () { criarJogoRoletaPrincipal(); atualizarPainelMissoes(); }, 500);
 
 function renderPerfilIdentidade() {
   var alvo = document.querySelector("#perfil-identidade");
