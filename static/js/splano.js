@@ -261,6 +261,7 @@ function spMostrarFim(d) {
     ultimo: "Sobrou sozinho na arena!",
     ninguem: "Todo mundo se foi...",
     vazio: "Ninguém na sala — partida encerrada.",
+    humanos_mortos: "Todos os jogadores morreram. Nova rodada em breve.",
   };
   var campeao = (d.placar || []).find(function (p) { return p.venceu; });
   document.querySelector("#sp-fim-titulo").textContent =

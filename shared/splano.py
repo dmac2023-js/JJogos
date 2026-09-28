@@ -522,8 +522,15 @@ def passo(jogo: dict, dt: float, agora: float) -> dict:
 # ---------------------------------------------------------------------------
 
 def checar_fim(jogo: dict, agora: float) -> Optional[dict]:
-    """Acaba a partida quando sobra um único jogador/bot (ou ninguém)."""
+    """Acaba quando sobra um único jogador ou quando todos os humanos morrem.
+
+    Os bots existem para preencher a arena, mas nunca devem prolongar a
+    partida depois que não há mais ninguém real para jogar ou assistir.
+    """
     restantes = vivos(jogo)
+    humanos = [j for j in jogo["jogadores"].values() if not j["bot"]]
+    if humanos and not any(j["vivo"] for j in humanos):
+        return {"vencedor": None, "motivo": "humanos_mortos"}
     if len(restantes) == 1:
         return {"vencedor": restantes[0]["nome"], "motivo": "ultimo"}
     if not restantes:
