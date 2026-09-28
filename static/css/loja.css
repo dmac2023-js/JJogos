@@ -87,7 +87,7 @@
 .loja-paginacao button:disabled { opacity: 0.4; cursor: default; }
 
 /* Roleta da sorte. */
-.loja-roleta-area { position: relative; width: 260px; height: 260px; margin: 12px auto 20px; }
+.loja-roleta-area { position: relative; width: 320px; height: 320px; margin: 12px auto 20px; }
 .loja-roleta-ponteiro {
   position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
   width: 0; height: 0; z-index: 2;
@@ -95,7 +95,7 @@
   border-top: 20px solid #f4f6ff; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
 }
 .loja-roleta-roda {
-  width: 260px; height: 260px; border-radius: 50%;
+  width: 320px; height: 320px; border-radius: 50%;
   border: 4px solid #2d4470; box-shadow: 0 0 0 2px #0d1526 inset, 0 8px 24px rgba(0,0,0,0.4);
   position: relative;
   /* As fatias são pintadas em JS a partir dos setores que o servidor manda
@@ -113,7 +113,7 @@
   /* o JS posiciona o PONTO do meio da fatia em left/top — sem isto o texto
      ficava com o canto superior-esquerdo nesse ponto, torto pra fora. */
   transform: translate(-50%, -50%);
-  font-size: 11px; font-weight: bold; color: #111a2e;
+  font-size: 12px; font-weight: bold; color: #111a2e;
   text-shadow: 0 1px 0 rgba(255,255,255,0.35);
   pointer-events: none; white-space: nowrap;
 }

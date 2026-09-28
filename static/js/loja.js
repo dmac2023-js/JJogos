@@ -954,7 +954,8 @@ function lojaRoletaPintarRoda() {
 function lojaRoletaRenderLabels() {
   var roda = document.querySelector("#loja-roleta-roda");
   roda.querySelectorAll(".loja-roleta-label").forEach(function (el) { el.remove(); });
-  var raio = 96;
+  // Mantém os rótulos no centro geométrico de cada setor da roda de 320px.
+  var raio = 119;
   lojaRoletaFatias.forEach(function (fatia, indice) {
     var meio = lojaRoletaAngulos[indice].meio;
     var rad = (meio * Math.PI) / 180;

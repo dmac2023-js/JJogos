@@ -847,7 +847,7 @@ function spLigarControles() {
 // Opções da tela de espera: tela cheia e exibir foto de perfil
 // ---------------------------------------------------------------------------
 
-var spOpTelacheia = false;     // lembradas entre partidas (localStorage)
+var spOpTelacheia = true;      // lembradas entre partidas (localStorage)
 var spOpFoto = true;
 var spTelaCheiaNativa = false; // entrou pelo Fullscreen do navegador
 var spTelaCheiaCss = false;    // overlay fixo (iframe do Discord / iOS)
@@ -855,7 +855,7 @@ var spTelaCheiaPedido = 0;     // cancela a entrada se o jogador desmarcou
 
 function spOpcoesCarregar() {
   try {
-    spOpTelacheia = localStorage.getItem("splano:telaCheia") === "1";
+    spOpTelacheia = localStorage.getItem("splano:telaCheia") !== "0";
     spOpFoto = localStorage.getItem("splano:foto") !== "0";
   } catch (e) { /* sem localStorage: fica no padrão */ }
   spOpcoesSincronizar();
