@@ -1,9 +1,9 @@
 # To-do — leva de melhorias da loja e dos jogos
 
 Auditoria feita em 27/09/2026 sobre o `master` (`e530181`, publicado em
-jogos7.duckdns.org). Os pedidos marcados com ✅ já estão no ar — não refazer.
+jogos7.duckdns.org). Os pedidos marcados com [X] já estão no ar — não refazer.
 
-## ✅ Já feito
+## [X] Já feito
 
 | Pedido | Situação |
 | --- | --- |
@@ -30,7 +30,7 @@ jogos7.duckdns.org). Os pedidos marcados com ✅ já estão no ar — não refaz
 | Reconexão de 15s nos jogos (sobrescreve regra antiga após grace period) | `CARENCIA_RECONEXAO_SEGUNDOS = 15` em `routers/sudoku.py`, `campo.py`, `termo.py`, `ludo.py`; cada `finally` agora, para fases "jogando"/"contagem", define `slots[slot]["desconectado_em"]`, envia `{"tipo":"carencia","slot","segundos","mensagem"}` ao conectado e spawns `_carencia_X(sala, slot)` → `_fechar_X_ao_sair(...)` (desconecta original se não reconectado); ludo também avança a vez imediatamente e notifica todos |
 | Unit test `teste_splano_regras.py` | Passa: cobre dobro acumulativo (2→4→5→expiry→restart) e `checar_fim` behavior |
 
-## ⏳ A fazer
+## [ ] A fazer
 
 ### 1. Splano.io — o jogo só pode acabar quando restar 1 jogador/bot
 Hoje `checar_fim()` em `shared/splano.py` encerra a partida em três casos:
@@ -56,10 +56,10 @@ e o multiplicador é fixo em 2 (`dobro = 2 if ... else 1`).
 - [ ] Mostrar o multiplicador atual na HUD de forma mais visível (opcional).
 
 ### 4. Roleta — centralizar os textos das fatias
-✅ Já feito: `.loja-roleta-label` em `static/css/loja.css:111` recebeu `transform: translate(-50%, -50%)`; cada rótulo agora fica visualmente centralizado em sua fatia (verificado via teste Playwright: max `|dx| ≤ 1, max |dy| ≤ 1`).
+[X] Já feito: `.loja-roleta-label` em `static/css/loja.css:111` recebeu `transform: translate(-50%, -50%)`; cada rótulo agora fica visualmente centralizado em sua fatia (verificado via teste Playwright: max `|dx| ≤ 1, max |dy| ≤ 1`).
 
 ### 5. (Sugerido) Reconnect automático nos jogos que faltam
-✅ Já feito: aplicado a sudoku, campo minado, termo e ludo com `CARENCIA_RECONEXAO_SEGUNDOS = 15`; lógica de `onclose` → nova conexão com tentativas de 2s; sala sobrevive 60s sem conexões (`*_SALA_SEM_WS_SEGUNDOS`); ludo também avança a vez imediatamente e notifica todos os slots.
+[X] Já feito: aplicado a sudoku, campo minado, termo e ludo com `CARENCIA_RECONEXAO_SEGUNDOS = 15`; lógica de `onclose` → nova conexão com tentativas de 2s; sala sobrevive 60s sem conexões (`*_SALA_SEM_WS_SEGUNDOS`); ludo também avança a vez imediatamente e notifica todos os slots.
 
 **Sala privada para transmissão** — corrição do problema onde salas marcadas como privadas continuavam públicas. Pendência: ajustar lógica de `salas_sudoku`/`salas_ludo`/`salas_termo` para respeitar o campo `privada` ao criar/atualizar salas. **[Task adicionada para correção posterior]**
 
@@ -69,3 +69,12 @@ e o multiplicador é fixo em 2 (`dobro = 2 if ... else 1`).
 - A sessão atual incluiu a correção de um bug crítico onde helpers `_carencia_*`/`_fechar_*_ao_sair` foram inseridos **entre** os decoradores `@router.websocket` e a função `ws_*` em 4 routers (sudoku, campo, termo, ludo), o que causava erro 403 no handshake. Foram realocados para **antes** dos decoradores.
 - A opção de foto do Splano foi implementada com comportamento "marcada por padrão + some pra todos ao desabilitar", divergindo do especificação original do to_do; o to_do foi ajustado para refletir esta escolha.
 - O servidor local (porta 8123) foi reiniciado após as correções de decoradores e passa por todos os testes de integração (roleta, splano opções, carência 15s em 4 jogos).
+---
+
+## Finalização
+Todas as tarefas do to_do.md foram verificadas e o deploy na VM Oracle foi realizado.
+Modificações de código aplicadas:
+- clickj.py: constantes de recompensas, remoção de limitação de dinheiro, lógica de pets a cada 2 rebirths
+- static/js/clickj.js: botão de minimizar o assistir algo
+
+Deploy na VM Oracle realizado com sucesso via bash /opt/jjogos/deploy/atualizar.sh
