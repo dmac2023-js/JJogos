@@ -29,7 +29,7 @@ PELLETS_POR_TICK = 3             # quantos repõem por tick quando falta
 CELULAS_MAXIMO = 8
 ENERGIA_MINIMA_DIVIDIR = 24
 IMPULSO_DIVISAO = 520.0
-SEGUNDOS_PARA_JUNTAR = 5.0
+SEGUNDOS_PARA_JUNTAR = 7.0
 VELOCIDADE_JUNTAR = 300.0   # o quão rápido as metades se reaproximam depois disso
 
 # Soltar energia (segurar o botão)
@@ -407,6 +407,10 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
         for k in range(i + 1, len(celulas)):
           a, b = celulas[i], celulas[k]
           if a.get("_comida") or b.get("_comida"):
+            continue
+          # Depois do prazo, a etapa principal já está puxando as células
+          # para a fusão. Não as empurre de volta para a distância mínima.
+          if agora >= a["juntar_em"] and agora >= b["juntar_em"]:
             continue
           ra, rb = raio(a["energia"]), raio(b["energia"])
           d = _distancia(a["x"], a["y"], b["x"], b["y"])
