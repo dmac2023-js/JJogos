@@ -1419,20 +1419,6 @@ function cjSair() {
       }
     }
   });
-    document.querySelector('#cj-minimizar') && document.querySelector('#cj-minimizar').addEventListener('click', function () {
-    var jogo = document.querySelector('#tela-jogo');
-    var assistir = document.querySelector('#cj-online-lista');
-    if (jogo) {
-      if (jogo.classList.contains('maximizado')) {
-        jogo.classList.remove('maximizado');
-        if (assistir) assistir.style.display = 'block';
-      } else {
-        jogo.classList.add('maximizado');
-        if (assistir) assistir.style.display = 'none';
-      }
-    }
-  });
-    document.querySelector("#cj-minimizar") && document.querySelector("#cj-minimizer").addEventListener("click", function () {    var jogo = document.querySelector("#tela-jogo");    var assistir = document.querySelector("#cj-online-lista");    if (jogo) {    if (jogo.classList.contains("maximizado")) {        jogo.classList.remove("maximizado");        if (assistir) assistir.style.display = "block";    } else {        jogo.classList.add("maximizado");        if (assistir) assistir.style.display = "none";    }  });
   document.querySelector("#cj-desistir").addEventListener("click", function () {
     cjPopup("Desistir da luta?", "<p>Quem desiste perde a luta.</p>", [
       { texto: "Desistir", principal: true, acao: function () { cjEnviar({ tipo: "desistir" }); cjFecharPopup(); } },
