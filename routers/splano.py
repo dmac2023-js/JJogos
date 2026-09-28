@@ -269,7 +269,8 @@ def _comecar_partida(sala: dict, agora: float) -> None:
     regras.encher_pellets(jogo)
     jogo["fase"] = "jogando"
     jogo["comecou_em"] = agora
-    jogo["proximo_powerup"] = agora + 12.0
+    jogo["proximo_powerup"] = agora + random.uniform(
+        regras.POWERUP_INTERVALO_MIN, regras.POWERUP_INTERVALO_MAX)
     jogo["vencedor"] = None
 
 

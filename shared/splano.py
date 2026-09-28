@@ -47,9 +47,10 @@ SOBREPOSICAO_PARA_COMER = 0.35
 # Itens especiais — nascem em leva, espalhados pelo mapa, e somem sozinhos
 # se ninguém comer a tempo.
 POWERUPS_MAXIMO = 24
-POWERUPS_POR_LEVA = 6       # quantos nascem de uma vez
+POWERUPS_POR_LEVA = 2       # poucas unidades por leva para manter o mapa legível
 POWERUP_RAIO = 34.0         # bem maior que o pellet, pra dá pra ver de longe
-POWERUP_INTERVALO = 30.0    # segundos entre uma leva e outra
+POWERUP_INTERVALO_MIN = 10.0
+POWERUP_INTERVALO_MAX = 20.0
 POWERUP_VIDA = 10.0         # segundos até sumir se ninguém comer
 DOBRO_ENERGIA_SEGUNDOS = 30.0
 # Acumula se pegar outro "energia2x" com o efeito ainda ativo:
@@ -184,16 +185,36 @@ def encher_pellets(jogo: dict) -> None:
     repor_pellets(jogo, pellets_alvo())
 
 
+def _ponto_powerup_livre(jogo: dict) -> Optional[tuple]:
+    """Escolhe um ponto longe das células para o item não nascer sob um player."""
+    for _ in range(24):
+        x, y = _ponto_livre(220.0)
+        ocupado = False
+        for jogador in vivos(jogo):
+            for celula in jogador["celulas"]:
+                distancia_minima = raio(celula["energia"]) + POWERUP_RAIO + 90.0
+                if _distancia(x, y, celula["x"], celula["y"]) < distancia_minima:
+                    ocupado = True
+                    break
+            if ocupado:
+                break
+        if not ocupado:
+            return x, y
+    return None
+
+
 def _nascer_powerups(jogo: dict, agora: float) -> None:
-    """Nasce uma leva inteira de itens espalhados pelo mapa (a cada
-    POWERUP_INTERVALO segundos)."""
+    """Cria poucas unidades em posições aleatórias a cada 10-20 segundos."""
     if agora < jogo["proximo_powerup"]:
         return
-    jogo["proximo_powerup"] = agora + POWERUP_INTERVALO
+    jogo["proximo_powerup"] = agora + random.uniform(POWERUP_INTERVALO_MIN, POWERUP_INTERVALO_MAX)
     for _ in range(POWERUPS_POR_LEVA):
         if len(jogo["powerups"]) >= POWERUPS_MAXIMO:
             break
-        x, y = _ponto_livre(220.0)
+        ponto = _ponto_powerup_livre(jogo)
+        if ponto is None:
+            continue
+        x, y = ponto
         jogo["powerups"][_novo_id(jogo)] = {
             "x": x, "y": y, "tipo": random.choice(TIPOS_POWERUP), "nasceu": agora,
         }
@@ -231,8 +252,9 @@ def dividir(jogo: dict, jogador: dict, agora: float) -> bool:
         celula["energia"] = metade
         celula["juntar_em"] = agora + SEGUNDOS_PARA_JUNTAR
         filha = nova_celula(jogo, celula["x"], celula["y"], metade)
-        filha["vx"] = dx * IMPULSO_DIVISAO
-        filha["vy"] = dy * IMPULSO_DIVISAO
+        distancia = raio(metade) * 2.0 + 2.0
+        filha["x"] = min(max(celula["x"] + dx * distancia, raio(metade)), ARENA - raio(metade))
+        filha["y"] = min(max(celula["y"] + dy * distancia, raio(metade)), ARENA - raio(metade))
         filha["juntar_em"] = agora + SEGUNDOS_PARA_JUNTAR
         novas.append(filha)
     if not novas:
@@ -271,10 +293,12 @@ def soltar_energia(jogo: dict, jogador: dict, agora: float) -> bool:
 
 def _mover_celulas(jogador: dict, dt: float) -> None:
     dx, dy = jogador["dir_x"], jogador["dir_y"]
+    # Todas as partes usam a mesma velocidade do conjunto. Isso evita que a
+    # metade menor fique para trás e faz a divisão se comportar como um corpo.
+    vel_grupo = velocidade(energia_total(jogador))
     for celula in jogador["celulas"]:
-        vel = velocidade(celula["energia"])
-        celula["x"] += (dx * vel + celula["vx"]) * dt
-        celula["y"] += (dy * vel + celula["vy"]) * dt
+        celula["x"] += (dx * vel_grupo + celula["vx"]) * dt
+        celula["y"] += (dy * vel_grupo + celula["vy"]) * dt
         # o impulso da divisão/solta some rápido
         amortecimento = math.exp(-dt * 4.0)
         celula["vx"] *= amortecimento
@@ -336,14 +360,17 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
                 b["y"] += ny * passo
                 continue
 
-            if d >= ra + rb or d < 0.01:
+            # Durante a divisão não há repulsão: as partes se aproximam até
+            # encostar e seguem como um conjunto, sem ficarem travadas longe.
+            distancia_alvo = ra + rb + 2.0
+            if d <= distancia_alvo or d < 0.01:
                 continue
-            empurrao = (ra + rb - d) / 2.0
+            aproximacao = min(VELOCIDADE_JUNTAR * dt, (d - distancia_alvo) / 2.0)
             nx, ny = (a["x"] - b["x"]) / d, (a["y"] - b["y"]) / d
-            a["x"] += nx * empurrao
-            a["y"] += ny * empurrao
-            b["x"] -= nx * empurrao
-            b["y"] -= ny * empurrao
+            a["x"] -= nx * aproximacao
+            a["y"] -= ny * aproximacao
+            b["x"] += nx * aproximacao
+            b["y"] += ny * aproximacao
     jogador["celulas"] = [c for c in celulas if not c.get("_comida")]
 
 
