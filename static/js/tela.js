@@ -1407,11 +1407,16 @@ async function capturarMidiaTransmissao(querAudio) {
     try {
       var opcoes = {
         video: video,
-        // A captura de tela não solicita áudio do sistema: a API não filtra
-        // por aplicativo, então isso evita vazamento de Discord/PTB/Canary.
-        systemAudio: "exclude",
+        // O Chrome usa o áudio da janela quando ela é selecionada; em tela
+        // inteira, o seletor oferece o áudio do sistema.
+        systemAudio: "include",
+        windowAudio: "window",
       };
-      opcoes.audio = false;
+      opcoes.audio = querAudio ? {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      } : false;
       telaFonte = "tela";
       var streamDisplay = await navigator.mediaDevices.getDisplayMedia(opcoes);
       try {
@@ -1448,7 +1453,11 @@ async function capturarMidiaTransmissao(querAudio) {
       telaFonte = "tela_legado";
       return await gumLegado({
         video: Object.assign({ mediaSource: "screen" }, video),
-      audio: false,
+      audio: querAudio ? {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      } : false,
       });
     } catch (e) {
       if (e && e.name === "NotAllowedError" && !ehMobile()) throw e;
@@ -1464,7 +1473,11 @@ async function capturarMidiaTransmissao(querAudio) {
   try {
     return await gumLegado({
       video: Object.assign({ facingMode: { ideal: cameraFacing } }, video),
-    audio: false,
+    audio: querAudio ? {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    } : false,
     });
   } catch (e) {
     if (e && e.message === "SEU_NAVEGADOR_SEM_CAPTURE") throw e;
@@ -1533,7 +1546,7 @@ async function iniciarTransmissaoTela() {
   }
   var codigoCustom = valCod.codigo;
 
-  var querAudio = false;
+  var querAudio = true;
   var chkAudio = document.querySelector("#capturar-audio-tela");
   if (chkAudio) querAudio = !!chkAudio.checked;
 
