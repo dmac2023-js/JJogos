@@ -1407,16 +1407,11 @@ async function capturarMidiaTransmissao(querAudio) {
     try {
       var opcoes = {
         video: video,
-        // Tela inteira: permite "Share system audio" (usuário pode marcar).
-        systemAudio: "include",
-        // NÃO usar windowAudio:"window" — no Chrome 143+ vira "exclude" e
-        // MATA o áudio ao compartilhar janela. Default oferece áudio normal.
+        // A captura de tela não solicita áudio do sistema: a API não filtra
+        // por aplicativo, então isso evita vazamento de Discord/PTB/Canary.
+        systemAudio: "exclude",
       };
-      opcoes.audio = querAudio ? {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      } : false;
+      opcoes.audio = false;
       telaFonte = "tela";
       var streamDisplay = await navigator.mediaDevices.getDisplayMedia(opcoes);
       try {
@@ -1453,11 +1448,7 @@ async function capturarMidiaTransmissao(querAudio) {
       telaFonte = "tela_legado";
       return await gumLegado({
         video: Object.assign({ mediaSource: "screen" }, video),
-        audio: querAudio ? {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        } : false,
+      audio: false,
       });
     } catch (e) {
       if (e && e.name === "NotAllowedError" && !ehMobile()) throw e;
@@ -1473,11 +1464,7 @@ async function capturarMidiaTransmissao(querAudio) {
   try {
     return await gumLegado({
       video: Object.assign({ facingMode: { ideal: cameraFacing } }, video),
-      audio: querAudio ? {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      } : false,
+    audio: false,
     });
   } catch (e) {
     if (e && e.message === "SEU_NAVEGADOR_SEM_CAPTURE") throw e;
@@ -1546,7 +1533,7 @@ async function iniciarTransmissaoTela() {
   }
   var codigoCustom = valCod.codigo;
 
-  var querAudio = true;
+  var querAudio = false;
   var chkAudio = document.querySelector("#capturar-audio-tela");
   if (chkAudio) querAudio = !!chkAudio.checked;
 
