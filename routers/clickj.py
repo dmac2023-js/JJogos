@@ -19,8 +19,6 @@ from shared import clickj as regras
 from shared.config import PASTA_BASE
 from shared.db import redis_get, redis_set, usando_redis
 from shared.economia import (
-MOEDAS_POR_SUBIDA MOEDAS_POR_REBIRTH_ADEMAIS = 100
-= 2000
     creditar_moedas,
     cosmeticos_equipados,
     eh_admin_discord_id,
@@ -650,8 +648,9 @@ async def _tratar(nome: str, dados: dict) -> None:
             else:
                 ok, msg = regras.fazer_rebirth(j)
                 if ok and j["rebirths"] <= regras.REBIRTHS_QUE_PAGAM:
-                    await asyncio.to_thread(creditar_moedas, nome, regras.MOEDAS_POR_REBIRTH)
-                    msg += " +%d moedas!" % regras.MOEDAS_POR_REBIRTH
+                    moedas_rebirth = regras.MOEDAS_POR_REBIRTH + (j["rebirths"] - 1) * regras.MOEDAS_POR_REBIRTH_ADEMAIS
+                    await asyncio.to_thread(creditar_moedas, nome, moedas_rebirth)
+                    msg += " +%d moedas!" % moedas_rebirth
                 elif ok:
                     msg += " (sem moedas: os %d primeiros rebirths são os que pagam.)" % regras.REBIRTHS_QUE_PAGAM
         if not ok:

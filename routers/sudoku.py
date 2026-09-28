@@ -139,6 +139,11 @@ async def broadcast_sudoku(sala: str, msg: dict):
                 await p["ws"].send_json(msg)
             except Exception:
                 pass
+    for ws in list(s.get("espectadores") or []):
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            pass
 
 
 async def encerrar_sala_sudoku(sala: str, motivo: str):
@@ -148,13 +153,20 @@ async def encerrar_sala_sudoku(sala: str, motivo: str):
     jid = s.get("jogo_id")
     if jid:
         jogos.pop(jid, None)
+    msg_enc = {"tipo": "sala_sudoku_encerrada", "motivo": motivo}
     for p in list(s.get("slots", {}).values()):
         if p and p.get("ws"):
             try:
-                await p["ws"].send_json({"tipo": "sala_sudoku_encerrada", "motivo": motivo})
+                await p["ws"].send_json(msg_enc)
                 await p["ws"].close()
             except Exception:
                 pass
+    for ws in list(s.get("espectadores") or []):
+        try:
+            await ws.send_json(msg_enc)
+            await ws.close()
+        except Exception:
+            pass
     if s.get("countdown_task"):
         try:
             s["countdown_task"].cancel()
@@ -481,6 +493,7 @@ async def criar_sala_sudoku(dados: NovaSalaSudoku):
         "tempos_rodada": {},
         "revanche_de": None,
         "countdown_task": None,
+        "espectadores": [],
         "criado_em": time.time(),
     }
     log_tela("sudoku sala criada codigo=%s publica=%s dif=%s" % (
@@ -635,16 +648,17 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                 slot = cand
                 break
 
-    if slot is None:
+    eh_espectador = query.get("espectador", "false") == "true"
+
+    if slot is None and not eh_espectador:
         p1 = s["slots"].get("p1")
         p2 = s["slots"].get("p2")
         p1_live = bool(p1 and p1.get("ws"))
         p2_live = bool(p2 and p2.get("ws"))
         if p1_live and p2_live:
-            await websocket.send_json({"tipo": "erro", "mensagem": "Sala cheia."})
-            await websocket.close()
-            return
-        if not p1_live:
+            # Sala cheia → torna espectador automaticamente
+            eh_espectador = True
+        elif not p1_live:
             slot = "p1"
             if p1 is None:
                 s["slots"]["p1"] = {
@@ -658,6 +672,23 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
                     "ws": None, "nome": nome, "nick": nick, "avatar": avatar,
                     "completou": False, "tempo_fim": None,
                 }
+
+    if eh_espectador:
+        esp = list(s.get("espectadores") or [])
+        if websocket not in esp:
+            esp.append(websocket)
+        s["espectadores"] = esp
+        await websocket.send_json(estado_sudoku_para(s, None))
+        try:
+            while True:
+                await websocket.receive_text()
+        except Exception:
+            pass
+        finally:
+            s2 = salas_sudoku.get(sala)
+            if s2:
+                s2["espectadores"] = [w for w in (s2.get("espectadores") or []) if w is not websocket]
+        return
 
     if s["slots"][slot]:
         s["slots"][slot].update({

@@ -223,6 +223,9 @@ def purgar_transmissoes_obsoletas() -> None:
 async def criar_transmissao(dados: NovaTransmissao):
     resolucao = dados.resolucao.lower()
     multi = (dados.multi or "").strip().lower() or None
+    codigo_informado = (dados.codigo or "").strip().lower()
+    if not dados.publica and not multi and not codigo_informado:
+        raise HTTPException(status_code=400, detail="Sala privada exige um código de acesso.")
     if multi:
         if multi not in salas_multi:
             raise HTTPException(status_code=404, detail="Sala multi-tela não encontrada.")
@@ -240,7 +243,7 @@ async def criar_transmissao(dados: NovaTransmissao):
     if dados.fps not in FPS_VALIDOS:
         raise HTTPException(status_code=400, detail="FPS inválido.")
 
-    sala = (dados.codigo or "").strip().lower()
+    sala = codigo_informado
     if sala:
         if not re.fullmatch(r"[a-z0-9_-]{3,16}", sala):
             raise HTTPException(
@@ -275,16 +278,15 @@ async def criar_transmissao(dados: NovaTransmissao):
 
 @router.get("/tela/transmissoes")
 def listar_transmissoes(instancia: str = ""):
-    """Lista transmissões públicas + as da instância da call (se houver)."""
+    """Lista apenas transmissões marcadas como públicas."""
     purgar_transmissoes_obsoletas()
-    instancia = instancia.strip()[:64] or None
     return {
         "transmissoes": [
             info_transmissao(sala, t)
             for sala, t in salas_tela.items()
             if t["host_ws"] is not None
             and not t.get("multi")
-            and (t.get("publica") or (instancia and t["instancia"] == instancia))
+            and t.get("publica")
         ]
     }
 

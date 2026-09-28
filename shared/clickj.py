@@ -55,13 +55,14 @@ NIVEL_MAX = len(NIVEIS)
 
 # Moedas do site pagas a cada rebirth feito. Depois de REBIRTHS_QUE_PAGAM
 # rebirths o jogo para de pagar — o rebirth continua valendo pelas skills.
-MOEDAS_POR_REBIRTH = 100
+MOEDAS_POR_REBIRTH = 300
+MOEDAS_POR_REBIRTH_ADEMAIS = 100
 REBIRTHS_QUE_PAGAM = 20
 
 # Ascensão: a partir do 10º rebirth dá pra zerar TUDO (inclusive os rebirths e
 # o personagem) em troca de 500 moedas do site e de um símbolo permanente.
 REBIRTHS_PARA_ASCENDER = 10
-MOEDAS_POR_ASCENSAO = 500
+MOEDAS_POR_ASCENSAO = 2000
 
 NIVEL_AUTOCLICKER = 5  # nível do personagem em que o autoclicker libera de graça (nível 1 dele)
 AUTO_CPS = {
