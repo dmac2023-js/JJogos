@@ -285,6 +285,7 @@ var sudokuUltimosJogadores = [];
 var sudokuMeuTempo = 0;
 var sudokuTerminou = false;
 var sudokuPingTimer = null;
+var sudokuReconectarTimer = null;
 
 function sudokuOnlineBar(visivel) {
   var bar = document.querySelector("#sudoku-online-bar");
@@ -332,6 +333,8 @@ function mostrarBotao(sel, on) {
 
 function fecharSudokuOnline(motivo) {
   sudokuOnlineAtivo = false;
+  clearTimeout(sudokuReconectarTimer);
+  sudokuReconectarTimer = null;
   clearInterval(sudokuPingTimer);
   sudokuPingTimer = null;
   if (sudokuWs) {
@@ -384,10 +387,23 @@ function conectarWsSudoku(sala) {
     } catch (e) { console.warn(e); }
   };
   ws.onclose = function () {
+    if (ws !== sudokuWs) return;   // socket velho (trocou de sala): ignora
+    sudokuWs = null;
+    clearInterval(sudokuPingTimer);
     // 403/erro de rota: nunca chegou estado — não deixa "Entrando..." eterno.
     if (!recebeuEstado && sudokuOnlineAtivo && sudokuSala === sala) {
       fecharSudokuOnline("Não consegui entrar na sala " + sala + ". Recarregue (Ctrl+F5) e tente de novo.");
       mostrarTela(telaDificuldade);
+      return;
+    }
+    // Caiu no meio do jogo: volta pra mesma sala. O servidor guarda a vaga
+    // por 15s (carencia) antes de dar a vitória ao oponente.
+    if (sudokuOnlineAtivo && sudokuSala === sala) {
+      sudokuStatus("Conexão perdida. Reconectando...");
+      clearTimeout(sudokuReconectarTimer);
+      sudokuReconectarTimer = setTimeout(function () {
+        conectarWsSudoku(sala);
+      }, 2000);
     }
   };
   ws.onerror = function () {};
@@ -397,6 +413,10 @@ var sudokuDerrotaRegistrada = false;
 
 function processarMensagemSudoku(d) {
   switch (d.tipo) {
+    case "carencia":
+      // O outro caiu: o servidor segura a vaga dele por 15s.
+      sudokuStatus(d.mensagem || "Aguardando a reconexão do oponente...");
+      break;
     case "erro":
       fecharSudokuOnline(d.mensagem || "Erro na sala.");
       mostrarTela(telaDificuldade);

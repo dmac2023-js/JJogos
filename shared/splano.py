@@ -52,13 +52,15 @@ POWERUP_RAIO = 34.0         # bem maior que o pellet, pra dá pra ver de longe
 POWERUP_INTERVALO = 30.0    # segundos entre uma leva e outra
 POWERUP_VIDA = 10.0         # segundos até sumir se ninguém comer
 DOBRO_ENERGIA_SEGUNDOS = 30.0
+# Acumula se pegar outro "energia2x" com o efeito ainda ativo:
+# 2x -> 4x -> teto de 5x (e o contador de 30s zera a cada pegada).
+DOBRO_MULTIPLICADORES = (2, 4, 5)
 TIPOS_POWERUP = ("energia2x", "tamanho2x")
 
-# Fim de partida
-FRACAO_ARENA_VITORIA = 0.34   # raio >= 34% da metade da arena = tomou conta
-DURACAO_MAXIMA = 6 * 60.0     # empate técnico: ganha quem tiver mais energia
-MOEDAS_VITORIA = 100
-MOEDAS_KILL = 20
+# Fim de partida: só quando sobra um jogador/bot. Nem "tomou conta da
+# arena" nem tempo máximo encerram mais a partida.
+MOEDAS_VITORIA = 200
+MOEDAS_KILL = 50
 
 NIVEIS_BOT = ("iniciante", "competente")
 NOMES_BOTS = [
@@ -138,7 +140,7 @@ def entrar(jogo: dict, nome: str, nick: str, avatar: Optional[str],
         "cosmeticos": cosmeticos or {}, "skin": skin or {},
         "bot": bot, "nivel_bot": nivel_bot,
         "celulas": [nova_celula(jogo, x, y, ENERGIA_INICIAL)],
-        "vivo": True, "kills": 0, "dobro_ate": 0.0,
+        "vivo": True, "kills": 0, "dobro_ate": 0.0, "dobro_nivel": 0,
         "dir_x": 0.0, "dir_y": 0.0, "soltando": False, "ultimo_soltar": 0.0,
         "energia_maxima": float(ENERGIA_INICIAL),
         "morto_por": None, "protegido_ate": 0.0,
@@ -149,6 +151,14 @@ def entrar(jogo: dict, nome: str, nick: str, avatar: Optional[str],
 
 def energia_total(jogador: dict) -> float:
     return sum(c["energia"] for c in jogador["celulas"])
+
+
+def multiplicador_dobro(jogador: dict, agora: float) -> int:
+    """2/4/5 enquanto o efeito "energia2x" estiver ativo, 1 quando expira."""
+    nivel = jogador.get("dobro_nivel", 0)
+    if nivel <= 0 or agora >= jogador.get("dobro_ate", 0.0):
+        return 1
+    return DOBRO_MULTIPLICADORES[min(nivel, len(DOBRO_MULTIPLICADORES)) - 1]
 
 
 def vivos(jogo: dict) -> list:
@@ -338,7 +348,7 @@ def _separar_ou_juntar(jogador: dict, dt: float, agora: float) -> None:
 
 
 def _comer_pellets(jogo: dict, jogador: dict, agora: float) -> None:
-    dobro = 2 if agora < jogador["dobro_ate"] else 1
+    dobro = multiplicador_dobro(jogador, agora)
     for celula in jogador["celulas"]:
         r = raio(celula["energia"])
         comidos = [pid for pid, p in jogo["pellets"].items()
@@ -355,6 +365,11 @@ def _pegar_powerups(jogo: dict, jogador: dict, agora: float) -> list:
                     if _distancia(celula["x"], celula["y"], item["x"], item["y"]) < r + POWERUP_RAIO]:
             item = jogo["powerups"].pop(pid)
             if item["tipo"] == "energia2x":
+                # Com o efeito ainda ativo ele acumula (2x -> 4x -> teto 5x)
+                # e os 30s recomeçam do zero a cada pegada.
+                acumulado = jogador.get("dobro_nivel", 0) + 1 if \
+                    agora < jogador.get("dobro_ate", 0.0) else 1
+                jogador["dobro_nivel"] = min(acumulado, len(DOBRO_MULTIPLICADORES))
                 jogador["dobro_ate"] = agora + DOBRO_ENERGIA_SEGUNDOS
             else:
                 celula["energia"] *= 2
@@ -367,7 +382,7 @@ def _comer_jogadores(jogo: dict, agora: float) -> list:
     mortes = []
     lista = vivos(jogo)
     for atacante in lista:
-        dobro = 2 if agora < atacante["dobro_ate"] else 1
+        dobro = multiplicador_dobro(atacante, agora)
         for alvo in lista:
             if alvo is atacante or not alvo["vivo"]:
                 continue
@@ -421,18 +436,12 @@ def passo(jogo: dict, dt: float, agora: float) -> dict:
 # ---------------------------------------------------------------------------
 
 def checar_fim(jogo: dict, agora: float) -> Optional[dict]:
+    """Acaba a partida quando sobra um único jogador/bot (ou ninguém)."""
     restantes = vivos(jogo)
     if len(restantes) == 1:
         return {"vencedor": restantes[0]["nome"], "motivo": "ultimo"}
     if not restantes:
         return {"vencedor": None, "motivo": "ninguem"}
-    limite = ARENA / 2.0 * FRACAO_ARENA_VITORIA
-    for jogador in restantes:
-        if any(raio(c["energia"]) >= limite for c in jogador["celulas"]):
-            return {"vencedor": jogador["nome"], "motivo": "arena"}
-    if agora - jogo["comecou_em"] >= DURACAO_MAXIMA:
-        melhor = max(restantes, key=energia_total)
-        return {"vencedor": melhor["nome"], "motivo": "tempo"}
     return None
 
 

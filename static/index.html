@@ -259,6 +259,10 @@
             <input type="checkbox" id="ludo-sala-publica" checked style="width:16px; height:16px; accent-color:#2f6fe0;" />
             Sala pública (aparece na lista)
           </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9ccda; margin-top:4px;">
+            <input type="checkbox" id="ludo-com-bots" style="width:16px; height:16px; accent-color:#2f6fe0;" />
+            Jogar solo contra bots 🤖
+          </label>
         </div>
         <div id="mensagem-ludo-lobby" class="mensagem" style="margin-top:12px;"></div>
         <div class="sala-lista" id="lista-salas-ludo">
@@ -323,6 +327,8 @@
               <div id="ludo-dado" class="ludo-dado" aria-hidden="true">?</div>
               <button id="ludo-rolar" class="botao principal" style="display:none; width:100%;">Rolar dado</button>
               <button id="ludo-iniciar" class="botao principal" style="display:none; width:100%;">Iniciar</button>
+              <button id="ludo-pronto" class="botao" style="display:none; width:100%;">✅ Pronto</button>
+              <button id="ludo-forcar" class="botao" style="display:none; width:100%;">⚡ Forçar início</button>
               <p id="ludo-dica" class="ludo-dica">Escolha uma peça destacada.</p>
             </div>
             <aside class="painel-recordes">
@@ -1135,7 +1141,7 @@
             <li><span class="loja-roleta-cor" style="background:#7ddea3;"></span> 1.5x moedas — 4 setores</li>
             <li><span class="loja-roleta-cor" style="background:#ffa94d;"></span> 0.75x moedas (perde 25% da aposta) — 6 setores</li>
             <li><span class="loja-roleta-cor" style="background:#ff8a8a;"></span> Metade da aposta — 4 setores</li>
-            <li><span class="loja-roleta-cor" style="background:#c9a6ff;"></span> 🎁 Presente: decoração, cor de nick, fonte de nick ou skin do Splano.io grátis — 1 setor</li>
+            <li><span class="loja-roleta-cor" style="background:#c9a6ff;"></span> 🎁 Presente: decoração, moldura, cor de nick, fonte de nick ou skin do Splano.io grátis — 1 setor</li>
             <li class="loja-roleta-nota">19 setores do mesmo tamanho: cada um tem a mesma chance. Em 10 deles você recebe menos do que apostou.</li>
           </ul>
 
@@ -1168,6 +1174,7 @@
         <div class="ranking-tabs">
           <button class="ranking-tab ativa" data-tab="moedas">🪙 Top Moedas</button>
           <button class="ranking-tab" data-tab="partidas">🎮 Top Partidas</button>
+          <button class="ranking-tab" data-tab="doadores">💝 Top Doadores</button>
         </div>
 
         <div id="ranking-lista"><p class="vazio">Carregando...</p></div>
@@ -1343,12 +1350,18 @@
             </div>
           </div>
 
+          <button id="sp-sair-tela-cheia" type="button" class="sp-sair-tela-cheia" style="display:none;">✕ Sair da tela cheia</button>
+
           <div id="sp-espera" class="sp-painel" style="display:none;">
             <div class="sp-painel-caixa">
               <h3 id="sp-espera-titulo">Votação pra começar</h3>
               <p id="sp-espera-texto"></p>
               <div id="sp-espera-lista"></div>
               <button id="sp-pronto" type="button" class="botao principal sp-pronto">✅ Estou pronto</button>
+              <div class="sp-opcoes">
+                <label class="sp-opcao"><input type="checkbox" id="sp-op-telacheia"> Jogar em tela cheia</label>
+                <label class="sp-opcao"><input type="checkbox" id="sp-op-foto" checked> Exibir foto de perfil</label>
+              </div>
             </div>
           </div>
 
@@ -1369,7 +1382,7 @@
           No celular: arraste pra andar, toque duas vezes pra dividir e segure o dedo pra soltar energia.
           A partida <strong>não começa sozinha</strong>: todo mundo precisa votar <strong>pronto</strong> (mínimo de 1 jogador real,
           o resto é bot — até 20 jogadores). Morreu? Use as setinhas ‹ › pra escolher quem assistir.
-          Vence quem sobrar sozinho ou tomar conta da arena — <strong>100 moedas</strong> pra quem vencer
+          Vence quem <strong>sobrar sozinho</strong> na arena — <strong>100 moedas</strong> pra quem vencer
           e <strong>20</strong> por cada jogador engolido.
         </p>
       </section>

@@ -19,6 +19,8 @@ from shared import clickj as regras
 from shared.config import PASTA_BASE
 from shared.db import redis_get, redis_set, usando_redis
 from shared.economia import (
+MOEDAS_POR_SUBIDA MOEDAS_POR_REBIRTH_ADEMAIS = 100
+= 2000
     creditar_moedas,
     cosmeticos_equipados,
     eh_admin_discord_id,
@@ -356,7 +358,22 @@ async def _finalizar_luta(luta: dict, vencedor: Optional[str], motivo: str = "")
             j = _jogador(nome)
             recompensas[nome] = regras.recompensa_pvp(j, venceu)
             j["pvp_vitorias" if venceu else "pvp_derrotas"] += 1
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         segundos = max(1, int(time.time() - luta["inicio"]))
         registros = [(n, luta["lutadores"][n]["nick"], segundos, luta["lutadores"][n]["avatar"], n == vencedor)
                      for n in luta["ordem"]]
@@ -411,7 +428,22 @@ async def _tick(ciclo: int) -> None:
         mudou = regras.limpar_efeitos(j, agora)
         if j["auto_nivel"] > 0:
             subiu = regras.aplicar_cliques(j, regras.AUTO_CPS[j["auto_nivel"]], agora)
-            _marcar_sujo()
+            _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
             mudou = True
             if subiu:
                 await _enviar(nome, {"tipo": "aviso", "mensagem": "Subiu para o nível %d!" % j["nivel"]})
@@ -499,7 +531,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         novo = regras.novo_jogador(nome, c["nick"], c["avatar"], classe, genero, agora)
         novo["ascensoes"] = _dados.setdefault("ascensoes", {}).get(nome, 0)
         _dados["jogadores"][nome] = novo
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome)
         await _transmitir_online()
         return
@@ -523,7 +570,22 @@ async def _tratar(nome: str, dados: dict) -> None:
             pass
         subiu = regras.aplicar_cliques(j, permitidos, agora)
         if permitidos:
-            _marcar_sujo()
+            _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         extra = {"aviso": "Subiu para o nível %d!" % j["nivel"]} if subiu else None
         await _enviar_estado(nome, extra)
         return
@@ -540,7 +602,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         contador = _dados.setdefault("ascensoes", {})
         contador[nome] = j.get("ascensoes", 0) + 1
         _dados["jogadores"].pop(nome, None)
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await asyncio.to_thread(creditar_moedas, nome, regras.MOEDAS_POR_ASCENSAO)
         await _salvar_se_sujo()
         await _enviar(nome, {"tipo": "bem_vindo", "catalogo": regras.catalogo(),
@@ -580,7 +657,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         if tipo == "rebirth":
             await _salvar_se_sujo()
@@ -593,7 +685,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         return
 
@@ -603,7 +710,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         return
 
@@ -614,7 +736,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         return
 
@@ -624,7 +761,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         return
 
@@ -637,7 +789,22 @@ async def _tratar(nome: str, dados: dict) -> None:
         if not ok:
             await _enviar(nome, {"tipo": "erro", "mensagem": msg})
             return
-        _marcar_sujo()
+        _marcar_sujo()    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+    # A cada 2 rebirths, aumenta o estoque de pets na mochila
+    if j["rebirths"] % 2 == 0 and j["rebirths"] > 0:
+        novo_pet_max = 10 + (j["rebirths"] // 2)
+        if j.get("pets_equipados", 0) < novo_pet_max:
+            j["pets_equipados"] = novo_pet_max
+
         await _enviar_estado(nome, {"aviso": msg})
         await _transmitir_luta(luta)
         return

@@ -48,6 +48,7 @@ const LUDO_BASES = {
 const LUDO_CORES = ["vermelho", "verde", "amarelo", "azul"];
 
 var ludoWs = null;
+var ludoReconectarTimer = null;
 var ludoSala = null;
 var ludoSlot = null;
 var ludoEstado = null;
@@ -78,6 +79,8 @@ function ludoMsgLobby(texto, tipo) {
 
 function ludoFechar(motivo) {
   ludoAtivo = false;
+  clearTimeout(ludoReconectarTimer);
+  ludoReconectarTimer = null;
   clearInterval(ludoPingTimer);
   ludoPingTimer = null;
   ludoAnimToken++;
@@ -474,6 +477,8 @@ function ludoAtualizarUI() {
       btn.disabled = true;
     }
   }
+  var btnPronto = document.querySelector("#ludo-pronto");
+  var btnForcar = document.querySelector("#ludo-forcar");
   if (btnIni) {
     if (ludoEstado.pode_iniciar) {
       btnIni.style.display = "";
@@ -484,11 +489,37 @@ function ludoAtualizarUI() {
       btnIni.disabled = true;
     }
   }
+  // Botão Pronto: visível na fase esperando/fim para humanos (não bots, não com_bots).
+  if (btnPronto) {
+    var mostrarPronto = ludoEstado.fase === "esperando" && !ludoEstado.com_bots && ludoSlot;
+    btnPronto.style.display = mostrarPronto ? "" : "none";
+    if (mostrarPronto) {
+      btnPronto.textContent = ludoEstado.meu_pronto ? "✅ Pronto (cancelar)" : "✅ Pronto";
+      btnPronto.classList.toggle("ativo", !!ludoEstado.meu_pronto);
+    }
+  }
+  // Botão Forçar: visível quando maioria pronta.
+  if (btnForcar) {
+    var mostrarForcar = ludoEstado.fase === "esperando" && ludoEstado.pode_forcar && !ludoEstado.com_bots;
+    btnForcar.style.display = mostrarForcar ? "" : "none";
+    if (mostrarForcar) {
+      var nProntos = ludoEstado.prontos || 0;
+      var nTotal = ludoEstado.total_humanos || 0;
+      btnForcar.textContent = "⚡ Forçar início (" + nProntos + "/" + nTotal + " prontos)";
+    }
+  }
   if (dica) {
     if (ludoEstado.fase === "esperando") {
-      dica.textContent = ludoEstado.pode_iniciar
-        ? "Toque em Iniciar para começar."
-        : "Aguardando jogadores (mín. 2)…";
+      if (ludoEstado.com_bots) {
+        dica.textContent = "Partida solo contra bots. Conectando…";
+      } else if (ludoEstado.pode_iniciar) {
+        dica.textContent = "Toque em Iniciar para começar.";
+      } else {
+        var pr = ludoEstado.prontos || 0, tot = ludoEstado.total_humanos || 0;
+        dica.textContent = tot > 0
+          ? ("Prontos: " + pr + "/" + tot + " — clique em Pronto para começar.")
+          : "Aguardando jogadores (mín. 2)…";
+      }
     } else if (ludoEstado.fase === "contagem") dica.textContent = "Começando…";
     else if (ludoEstado.fase === "fim") {
       dica.textContent = ludoEstado.pode_iniciar ? "Toque em Jogar de novo." : "Fim de jogo.";
@@ -523,6 +554,10 @@ function ludoAtualizarUI() {
 
 function processarMensagemLudo(d) {
   switch (d.tipo) {
+    case "carencia":
+      // Um jogador caiu: o servidor segura a vaga dele por 15s.
+      ludoMsg(d.mensagem || "Aguardando a reconexão de um jogador...", "erro");
+      break;
     case "erro":
       ludoFechar(d.mensagem || "Erro na sala.");
       mostrarTela(telaLobbyLudo);
@@ -556,6 +591,9 @@ function processarMensagemLudo(d) {
     case "contagem":
       if (d.n > 0) ludoMsg("Começa em " + d.n + "...", "");
       else ludoMsg("Vai!", "sucesso");
+      break;
+    case "forcar_contagem":
+      ludoMsg("⚡ Forçando início em " + d.n + "s...", "");
       break;
     case "erro_jogada":
       ludoMsg(d.mensagem || "Jogada inválida.", "erro");
@@ -601,15 +639,29 @@ function conectarLudoWs(sala) {
   ws.onmessage = function (ev) {
     if (typeof ev.data !== "string") return;
     try {
-      recebeu = true;
+      // Voltou da reconexão: limpa o "Reconectando..." da tela.
+      if (!recebeu) { recebeu = true; ludoMsg(""); }
       processarMensagemLudo(JSON.parse(ev.data));
     } catch (e) { console.warn(e); }
   };
   ws.onclose = function () {
+    if (ws !== ludoWs) return;   // socket velho (trocou de sala): ignora
+    ludoWs = null;
+    clearInterval(ludoPingTimer);
     if (!recebeu && ludoAtivo && ludoSala === sala) {
       ludoFechar("Não consegui entrar na sala " + sala + ". Recarregue (Ctrl+F5).");
       mostrarTela(telaLobbyLudo);
       carregarSalasLudo();
+      return;
+    }
+    // Caiu no meio do jogo: volta pra mesma sala. O servidor guarda a vaga
+    // por 15s (carencia) antes de dar o W.O.
+    if (ludoAtivo && ludoSala === sala) {
+      ludoMsg("Conexão perdida. Reconectando...", "erro");
+      clearTimeout(ludoReconectarTimer);
+      ludoReconectarTimer = setTimeout(function () {
+        conectarLudoWs(sala);
+      }, 2000);
     }
   };
   ws.onerror = function () {};
@@ -630,6 +682,7 @@ async function criarSalaLudo() {
       body: JSON.stringify({
         codigo: codigo || null,
         publica: publica,
+        com_bots: !!document.querySelector("#ludo-com-bots")?.checked,
         nome: nomeUsuario(),
         nick: nomeExibicao(),
         avatar: avatarAtual(),
@@ -719,6 +772,16 @@ document.querySelector("#ludo-rolar").addEventListener("click", function () {
 document.querySelector("#ludo-iniciar").addEventListener("click", function () {
   if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
     ludoWs.send(JSON.stringify({ tipo: "iniciar" }));
+  }
+});
+document.querySelector("#ludo-pronto").addEventListener("click", function () {
+  if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
+    ludoWs.send(JSON.stringify({ tipo: "pronto" }));
+  }
+});
+document.querySelector("#ludo-forcar").addEventListener("click", function () {
+  if (ludoWs && ludoWs.readyState === WebSocket.OPEN) {
+    ludoWs.send(JSON.stringify({ tipo: "forcar_inicio" }));
   }
 });
 document.querySelector("#copiar-codigo-ludo").addEventListener("click", function () {

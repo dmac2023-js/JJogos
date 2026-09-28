@@ -30,6 +30,10 @@ PARTICIPANTES_MINIMO = 20         # a arena sempre enche até aqui com bots
 PARTICIPANTES_MAXIMO = 20
 SEGUNDOS_CONTAGEM = 5
 SEGUNDOS_PLACAR_FINAL = 10
+# Sem limite de tempo a partida só acaba quando sobra um - então, se ninguém
+# estiver conectado, damos um tempo pra reconectar antes de encerrar (senão a
+# sala de bots continuaria rodando pra sempre).
+SEM_CONEXAO_PARA_TERMINAR = 15.0
 SALA_PADRAO = "publica"
 
 salas: Dict[str, dict] = {}
@@ -53,6 +57,7 @@ def _nova_sala(codigo: str) -> dict:
         "resultado": None,
         "tarefa": None,
         "tick": 0,
+        "vazio_desde": None,   # quando ninguém está conectado durante a partida
     }
 
 
@@ -127,6 +132,10 @@ def _info_jogadores(sala: dict) -> list:
         "cosmeticos": j["cosmeticos"],
         "skin": j["skin"],
         "bot": j["bot"],
+        # "Exibir foto de perfil" de CADA jogador: sai aqui porque vale pra
+        # sala inteira — quem desligou some da foto de todo mundo, não só do
+        # próprio visor.
+        "foto": bool(j.get("foto", True)),
         "pronto": (not j["bot"]) and nome in sala["prontos"],
     } for nome, j in sala["jogo"]["jogadores"].items()]
 
@@ -194,6 +203,7 @@ def _comecar_partida(sala: dict, agora: float) -> None:
         jogador["vivo"] = True
         jogador["kills"] = 0
         jogador["dobro_ate"] = 0.0
+        jogador["dobro_nivel"] = 0
         jogador["energia_maxima"] = float(regras.ENERGIA_INICIAL)
         jogador["morto_por"] = None
         jogador["protegido_ate"] = agora + regras.SEGUNDOS_PROTEGIDO
@@ -370,7 +380,8 @@ def _estado_para(sala: dict, nome: str, agora: float) -> dict:
         "energia": round(regras.energia_total(eu)) if eu else 0,
         "kills": eu["kills"] if eu else 0,
         "dobro": max(0, round(eu["dobro_ate"] - agora)) if eu else 0,
-        "restante": max(0, round(regras.DURACAO_MAXIMA - (agora - jogo["comecou_em"]))),
+        "dobro_x": regras.multiplicador_dobro(eu, agora) if eu else 1,
+        "tempo": max(0, round(agora - jogo["comecou_em"])),
         "vivos": len(regras.vivos(jogo)),
     }
 
@@ -405,6 +416,15 @@ async def _tick(sala: dict) -> None:
 
     if jogo["fase"] != "jogando":
         return
+
+    if sala["conexoes"]:
+        sala["vazio_desde"] = None
+    else:
+        if sala["vazio_desde"] is None:
+            sala["vazio_desde"] = agora
+        elif agora - sala["vazio_desde"] >= SEM_CONEXAO_PARA_TERMINAR:
+            await _terminar(sala, {"vencedor": None, "motivo": "vazio"}, agora)
+            return
 
     if sala["tick"] % TICKS_POR_PENSAMENTO_BOT == 0:
         for jogador in regras.vivos(jogo):
@@ -451,6 +471,20 @@ def _garantir_loop(sala: dict) -> None:
 # Mensagens do cliente
 # ---------------------------------------------------------------------------
 
+def _definir_foto(sala: dict, nome: str, foto: bool) -> None:
+    """Guarda a opção "Exibir foto de perfil" de um jogador.
+
+    Ela vale pra sala inteira (por isso fica também no `jogador`, que é o que
+    vai no payload de `jogadores`), então quem desligou some da foto pra
+    todo mundo na arena — e não muda o visual de ninguém que não mexeu."""
+    conexao = sala["conexoes"].get(nome)
+    if conexao is not None:
+        conexao["foto"] = foto
+    jogador = sala["jogo"]["jogadores"].get(nome)
+    if jogador is not None:
+        jogador["foto"] = foto
+
+
 async def _tratar(sala: dict, nome: str, dados: dict) -> None:
     jogador = sala["jogo"]["jogadores"].get(nome)
     tipo = dados.get("tipo")
@@ -487,6 +521,13 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
             jogador["cosmeticos"], jogador["skin"] = novos, nova_skin
         await _mandar_sala(sala)
         return
+    if tipo == "opcao":
+        # Mudou a opção na tela de espera (ou no meio da partida): repassa
+        # pra sala inteira desenhar a bolinha dele do jeito novo.
+        if "foto" in dados:
+            _definir_foto(sala, nome, bool(dados.get("foto")))
+            await _mandar_sala(sala)
+        return
     if not jogador:
         return
     if tipo == "dir":
@@ -499,6 +540,10 @@ async def _tratar(sala: dict, nome: str, dados: dict) -> None:
     elif tipo == "soltar":
         jogador["soltando"] = bool(dados.get("ativo"))
     elif tipo == "pronto":
+        # A preferência de foto viaja junto do voto, pra valer mesmo se o
+        # cliente não mandar "opcao" antes (página nova, reconexão etc.).
+        if "foto" in dados:
+            _definir_foto(sala, nome, bool(dados.get("foto")))
         if bool(dados.get("ativo", True)):
             sala["prontos"].add(nome)
         else:
@@ -562,13 +607,16 @@ async def ws_splano(websocket: WebSocket):
 
     sala["conexoes"][nome] = {"ws": websocket, "nick": nick, "avatar": avatar,
                               "cosmeticos": cosmeticos, "skin": skin,
-                              "assistindo": None}
+                              "assistindo": None, "foto": True}
 
     jogo = sala["jogo"]
     if nome in jogo["jogadores"]:
         jogador = jogo["jogadores"][nome]
         jogador["nick"], jogador["avatar"] = nick, avatar
         jogador["cosmeticos"], jogador["skin"] = cosmeticos, skin
+        # Reconexão: mantém a escolha de foto dele (o cliente reenvia na
+        # abertura, mas já nascemos com o valor certo pro espectador).
+        sala["conexoes"][nome]["foto"] = bool(jogador.get("foto", True))
     elif jogo["fase"] in ("espera", "contagem"):
         regras.entrar(jogo, nome, nick, avatar, cosmeticos, skin)
     # Partida em andamento: fica só assistindo até a próxima.

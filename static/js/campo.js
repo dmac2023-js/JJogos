@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 var campoOnlineAtivo = false;
 var campoWs = null;
+var campoReconectarTimer = null;
 var campoSala = null;
 var campoSlot = null;
 var campoFase = null;
@@ -350,6 +351,8 @@ function iniciarCampoSolo(dificuldade) {
 
 function campoFecharWs() {
   campoPararTimer();
+  clearTimeout(campoReconectarTimer);
+  campoReconectarTimer = null;
   clearInterval(campoPingTimer);
   campoPingTimer = null;
   if (campoWs) {
@@ -533,23 +536,36 @@ function conectarWsCampo(sala) {
     "&nick=" + encodeURIComponent(nick) +
     "&avatar=" + encodeURIComponent(avatar);
   campoWs = new WebSocket(url);
+  var ws = campoWs;
+  var recebeuEstado = false;
   campoPingTimer = setInterval(function () {
     if (campoWs && campoWs.readyState === WebSocket.OPEN) {
       campoWs.send(JSON.stringify({ tipo: "ping" }));
     }
   }, 20000);
-  campoWs.onmessage = function (evento) {
+  ws.onmessage = function (evento) {
     try {
+      // Voltou da reconexão: limpa o "Reconectando..." da tela.
+      if (!recebeuEstado) { recebeuEstado = true; campoMsg(""); }
       processarMensagemCampo(JSON.parse(evento.data));
     } catch (e) {
       console.error("campo ws:", e);
     }
   };
-  campoWs.onclose = function () {
+  ws.onclose = function () {
+    if (ws !== campoWs) return;   // socket velho (trocou de sala): ignora
+    campoWs = null;
     clearInterval(campoPingTimer);
-    if (campoOnlineAtivo) campoMsg("Conexão perdida.", "erro");
+    if (!campoOnlineAtivo) return;
+    // Caiu no meio do jogo: volta pra mesma sala. O servidor guarda a vaga
+    // por 15s (carencia) antes de dar a vitória ao oponente.
+    campoMsg("Conexão perdida. Reconectando...", "erro");
+    clearTimeout(campoReconectarTimer);
+    campoReconectarTimer = setTimeout(function () {
+      conectarWsCampo(sala);
+    }, 2000);
   };
-  campoWs.onerror = function () {};
+  ws.onerror = function () {};
 }
 
 function campoRenderPlacar(jogadores, placar) {
@@ -570,6 +586,10 @@ function campoRenderPlacar(jogadores, placar) {
 
 function processarMensagemCampo(dados) {
   switch (dados.tipo) {
+    case "carencia":
+      // O outro caiu: o servidor segura a vaga dele por 15s.
+      campoMsg(dados.mensagem || "Aguardando a reconexão do oponente...", "erro");
+      break;
     case "erro":
       campoMsg(dados.mensagem || "Erro.", "erro");
       if (dados.mensagem === "Sala cheia." || dados.mensagem === "Sala não encontrada.") {

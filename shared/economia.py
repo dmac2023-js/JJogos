@@ -71,23 +71,25 @@ FONTES_NICK = {
 # Moedas por vitória — cada jogo tem sua própria tabela (por dificuldade,
 # quando aplicável). Online paga o mesmo que o solo na mesma dificuldade —
 # exceto a Velha online, que não tem dificuldade e paga um valor fixo.
-MOEDAS_SUDOKU_SOLO = {"facil": 50, "medio": 150, "dificil": 300}
-MOEDAS_SUDOKU_ONLINE = {"facil": 50, "medio": 150, "dificil": 300}
+MOEDAS_SUDOKU_SOLO = {"facil": 100, "medio": 300, "dificil": 400}
+MOEDAS_SUDOKU_ONLINE = {"facil": 100, "medio": 300, "dificil": 400}
 
-MOEDAS_VELHA_SOLO = {"facil": 10, "medio": 20, "dificil": 100}
-MOEDAS_VELHA_ONLINE = 50
+MOEDAS_VELHA_SOLO = {"facil": 50, "medio": 100, "dificil": 200}
+MOEDAS_VELHA_ONLINE = 300
 
-MOEDAS_TERMO_SOLO = {"facil": 30, "medio": 100, "dificil": 250}
-MOEDAS_TERMO_ONLINE = {"facil": 30, "medio": 100, "dificil": 250}
+MOEDAS_TERMO_SOLO = {"facil": 150, "medio": 300, "dificil": 450}
+MOEDAS_TERMO_ONLINE = {"facil": 150, "medio": 300, "dificil": 450}
 
-MOEDAS_CAMPO_SOLO = {"facil": 40, "medio": 80, "dificil": 200}
-MOEDAS_CAMPO_ONLINE = {"facil": 40, "medio": 80, "dificil": 200}
+MOEDAS_CAMPO_SOLO = {"facil": 100, "medio": 250, "dificil": 350}
+MOEDAS_CAMPO_ONLINE = {"facil": 100, "medio": 250, "dificil": 350}
 
-# Ludo não tem modo solo nem dificuldade — todo mundo que participa até o
-# fim da partida ganha a moeda de participação; quem vence some MAIS a
-# moeda de vitória por cima.
-MOEDAS_LUDO_VITORIA = 20
-MOEDAS_LUDO_PARTICIPACAO = 5
+# Ludo: vencedor recebe participação + vitória (total 2000); demais recebem só participação (500).
+MOEDAS_LUDO_VITORIA = 1500
+MOEDAS_LUDO_PARTICIPACAO = 500
+
+# Splano.io: kill e vitória.
+MOEDAS_SPLANO_KILL = 50
+MOEDAS_SPLANO_VITORIA = 200
 
 # label em português -> valor CSS (usado pelo front pra colorir o nick).
 CORES_NICK = {
@@ -579,13 +581,14 @@ def perfil_publico(nome: str) -> Optional[dict]:
 
 
 def top_ranking(limit: int = 10) -> dict:
-    """Retorna os top jogadores por moedas e por partidas jogadas."""
+    """Retorna os top jogadores por moedas, por partidas jogadas e por doações."""
     entradas = [_entrada_publica(nome, c) for nome, c in carregar_economia().get("carteiras", {}).items()]
     top_moedas = sorted(entradas, key=lambda x: x["saldo"], reverse=True)
     top_partidas = sorted(entradas, key=lambda x: x["total_partidas"], reverse=True)
     return {
         "top_moedas": top_moedas[:limit],
         "top_horas": top_partidas[:limit],
+        "top_doadores": top_doadores(limit),
     }
 
 
@@ -600,6 +603,67 @@ def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:
         carteira["saldo"] = carteira.get("saldo", 0) + quantidade
         salvar_economia(dados)
         return carteira["saldo"]
+
+
+def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dict:
+    """Transfere moedas de remetente para destinatário. Retorna dict com
+    novo_saldo_remetente, novo_saldo_destinatario. Levanta ValueError em erro."""
+    if eh_anonimo(remetente) or not remetente:
+        raise ValueError("Você precisa estar logado para enviar moedas.")
+    if eh_anonimo(destinatario) or not destinatario:
+        raise ValueError("Destinatário inválido.")
+    if remetente == destinatario:
+        raise ValueError("Não é possível enviar moedas para si mesmo.")
+    if quantidade <= 0:
+        raise ValueError("Quantidade deve ser maior que zero.")
+
+    with LOCK_ECONOMIA:
+        dados = carregar_economia()
+        carteira_rem = obter_carteira(dados, remetente)
+        if carteira_rem.get("saldo", 0) < quantidade:
+            raise ValueError("Moedas insuficientes.")
+        carteiras = dados.get("carteiras", {})
+        if destinatario not in carteiras:
+            raise ValueError("Usuário destinatário não encontrado.")
+        carteira_dest = obter_carteira(dados, destinatario)
+        carteira_rem["saldo"] = carteira_rem.get("saldo", 0) - quantidade
+        carteira_dest["saldo"] = carteira_dest.get("saldo", 0) + quantidade
+        # Registra histórico de doações
+        historico_rem = carteira_rem.setdefault("historico_envios", [])
+        historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": int(time.time())})
+        del historico_rem[50:]
+        total_doado = carteira_rem.get("total_doado", 0) + quantidade
+        carteira_rem["total_doado"] = total_doado
+        historico_dest = carteira_dest.setdefault("historico_recebidos", [])
+        historico_dest.insert(0, {"de": remetente, "quantidade": quantidade, "em": int(time.time())})
+        del historico_dest[50:]
+        salvar_economia(dados)
+        return {
+            "novo_saldo_remetente": carteira_rem["saldo"],
+            "novo_saldo_destinatario": carteira_dest["saldo"],
+        }
+
+
+def top_doadores(limit: int = 10) -> list:
+    """Retorna os top doadores ordenados por total_doado."""
+    carteiras = carregar_economia().get("carteiras", {})
+    entradas = []
+    for nome, c in carteiras.items():
+        total = c.get("total_doado", 0)
+        if total <= 0:
+            continue
+        equipado = c.get("equipado") or {}
+        entradas.append({
+            "nome": nome,
+            "nick": c.get("nick") or nome,
+            "cor_nick": equipado.get("cor_nick"),
+            "fonte_nick": equipado.get("fonte_nick"),
+            "avatar": c.get("avatar"),
+            "decoracao_imagem": _imagem_decoracao(equipado.get("decoracao"), animada=True),
+            "moldura_perfil": moldura_publica(equipado.get("moldura")),
+            "total_doado": total,
+        })
+    return sorted(entradas, key=lambda x: x["total_doado"], reverse=True)[:limit]
 
 
 def debitar_moedas(nome: str, quantidade: int) -> Optional[int]:
@@ -709,16 +773,19 @@ def sortear_fatia_roleta() -> dict:
 
 
 def sortear_presente(carteira: dict) -> Optional[dict]:
-    """Presente da roleta: sorteia primeiro a categoria (decoração, cor do
-    nick, fonte do nick ou skin do Splano.io) entre as que ainda têm item não
-    possuído, depois o item."""
+    """Presente da roleta: sorteia primeiro a categoria (decoração, moldura,
+    cor do nick, fonte do nick ou skin do Splano.io) entre as que ainda têm
+    item não possuído, depois o item."""
     aleatorio = secrets.SystemRandom()
     decoracoes = [d for d in CATALOGO_DECORACOES if d["sku_id"] not in carteira.get("decoracoes", [])]
+    molduras = [m for m in CATALOGO_MOLDURAS if m["sku_id"] not in carteira.get("molduras", [])]
     cores = [c for c in CORES_NICK if c not in carteira.get("cores_nick", [])]
     fontes = [f for f in FONTES_NICK if f not in carteira.get("fontes_nick", [])]
     skins = [s for s in SKINS_SPLANO if s not in carteira.get("skins_splano", [])]
-    categorias = [nome for nome, itens in (("decoracao", decoracoes), ("cor_nick", cores),
-                                           ("fonte_nick", fontes), ("skin_splano", skins)) if itens]
+    categorias = [nome for nome, itens in (
+        ("decoracao", decoracoes), ("moldura", molduras), ("cor_nick", cores),
+        ("fonte_nick", fontes), ("skin_splano", skins),
+    ) if itens]
     if not categorias:
         return None
     categoria = aleatorio.choice(categorias)
@@ -726,6 +793,10 @@ def sortear_presente(carteira: dict) -> Optional[dict]:
         item = aleatorio.choice(decoracoes)
         carteira["decoracoes"].append(item["sku_id"])
         return {"tipo": "decoracao", "id": item["sku_id"], "nome": item["nome"], "imagem": item["imagem"]}
+    if categoria == "moldura":
+        item = aleatorio.choice(molduras)
+        carteira.setdefault("molduras", []).append(item["sku_id"])
+        return {"tipo": "moldura", "id": item["sku_id"], "nome": item["nome"], "imagem": item.get("imagem", "")}
     if categoria == "cor_nick":
         cor = aleatorio.choice(cores)
         carteira["cores_nick"].append(cor)

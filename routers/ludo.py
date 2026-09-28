@@ -28,12 +28,16 @@ class NovaSalaLudo(BaseModel):
     nome: str = "Anônimo"
     nick: str = "Anônimo"
     avatar: Optional[str] = None
+    com_bots: bool = False  # True = modo solo contra bots
 
 
 # Ludo online: código -> sala (até 4 jogadores + espectadores).
 salas_ludo: Dict[str, dict] = {}
 MAX_LUDO = 4
 LUDO_SALA_SEM_WS_SEGUNDOS = 60
+# Queda no meio da partida: a vaga fica guardada por esse tempo pra dar
+# chance de reconectar. Passou, vale a regra antiga (W.O. pra quem ficou).
+CARENCIA_RECONEXAO_SEGUNDOS = 15
 LUDO_CORES = ["vermelho", "verde", "amarelo", "azul"]
 LUDO_OFFSETS = {"vermelho": 0, "verde": 13, "amarelo": 26, "azul": 39}
 LUDO_SEGURAS = {0, 8, 13, 21, 26, 34, 39, 47}
@@ -129,6 +133,8 @@ def _codigo_ludo_valido(codigo: str) -> bool:
     return bool(re.fullmatch(r"[a-z0-9_-]{3,16}", codigo or ""))
 
 
+NOMES_BOT_LUDO = ["Robô", "Bit", "Pixel", "Cybot"]
+
 def info_jogador_ludo(s: dict, slot: str) -> dict:
     p = s.get("slots", {}).get(slot) or {}
     cor = s.get("cores", {}).get(slot)
@@ -140,9 +146,11 @@ def info_jogador_ludo(s: dict, slot: str) -> dict:
         "nome": p.get("nome", ""),
         "avatar": p.get("avatar"),
         "conectado": bool(p.get("ws")),
+        "bot": bool(p.get("bot")),
         "pecas": pecas,
         "venceu": bool(p.get("venceu")),
         "cosmeticos": cosmeticos_equipados(p.get("nome", "")),
+        "pronto": bool(p.get("pronto")),
     }
 
 
@@ -158,22 +166,43 @@ def _resumo_sala_ludo(codigo: str, s: dict) -> dict:
     }
 
 
+def _humanos_ludo(s: dict) -> list:
+    return [sl for sl, p in s.get("slots", {}).items()
+            if p and not p.get("bot") and p.get("ws")]
+
+def _todos_prontos_ludo(s: dict) -> bool:
+    humanos = _humanos_ludo(s)
+    return bool(humanos) and all(
+        s["slots"][sl].get("pronto") for sl in humanos
+    )
+
+def _maioria_pronta_ludo(s: dict) -> bool:
+    """Retorna True se a maioria dos humanos conectados está pronta."""
+    humanos = _humanos_ludo(s)
+    if len(humanos) < 2:
+        return False
+    prontos = sum(1 for sl in humanos if s["slots"][sl].get("pronto"))
+    return prontos >= max(2, len(humanos) - 1)
+
 def estado_ludo_para(s: dict, slot: Optional[str] = None) -> dict:
     jogadores = [info_jogador_ludo(s, sl) for sl in ("p1", "p2", "p3", "p4")
                  if s.get("slots", {}).get(sl)]
-    conectados = sum(1 for p in s.get("slots", {}).values() if p and p.get("ws"))
+    conectados = sum(1 for p in s.get("slots", {}).values() if p and (p.get("ws") or p.get("bot")))
+    humanos_ws = _humanos_ludo(s)
     fase = s.get("fase", "esperando")
-    pode_iniciar = (
-        slot is not None
-        and slot == s.get("lider")
-        and fase in ("esperando", "fim")
-        and conectados >= 2
+    pode_iniciar = False  # agora o início é via "pronto"
+    pode_forcar = (
+        fase in ("esperando", "fim")
         and not s.get("countdown_task")
+        and _maioria_pronta_ludo(s)
+        and not _todos_prontos_ludo(s)
     )
+    meu_pronto = bool(s["slots"].get(slot, {}).get("pronto")) if slot else False
     return {
         "tipo": "estado_ludo",
         "sala": s["codigo"],
         "publica": s.get("publica", False),
+        "com_bots": bool(s.get("com_bots")),
         "fase": fase,
         "meu_slot": slot,
         "lider": s.get("lider"),
@@ -187,6 +216,10 @@ def estado_ludo_para(s: dict, slot: Optional[str] = None) -> dict:
         "ultimo_evento": s.get("ultimo_evento"),
         "conectados": conectados,
         "pode_iniciar": pode_iniciar,
+        "pode_forcar": pode_forcar,
+        "meu_pronto": meu_pronto,
+        "prontos": sum(1 for sl in humanos_ws if s["slots"][sl].get("pronto")),
+        "total_humanos": len(humanos_ws),
         "placar": s.get("placar", {"p1": 0, "p2": 0, "p3": 0, "p4": 0}),
     }
 
@@ -328,11 +361,11 @@ def _ludo_passar_vez(s: dict) -> None:
 
 
 def _ludo_avancar_vez(s: dict) -> None:
-    """Pula desconectados sem vencer."""
+    """Pula desconectados sem vencer. Bots (sem ws) são considerados conectados."""
     for _ in range(8):
         _ludo_passar_vez(s)
         p = s.get("slots", {}).get(s.get("vez"))
-        if p and p.get("ws"):
+        if p and (p.get("ws") or p.get("bot")):
             return
     # todos os vivos desconectados — mantém o líder
 
@@ -394,9 +427,27 @@ async def criar_sala_ludo(dados: NovaSalaLudo):
     for i, sl in enumerate(("p1", "p2", "p3", "p4")):
         cores_slot[sl] = LUDO_CORES[i]
 
+    # Em modo bots, preenche os outros 3 slots com bots imediatamente.
+    nomes_bot = list(NOMES_BOT_LUDO)
+    slots_init = {
+        "p1": {
+            "ws": None, "nome": dados.nome, "nick": dados.nick,
+            "avatar": dados.avatar, "venceu": False, "bot": False, "pronto": False,
+        },
+        "p2": None, "p3": None, "p4": None,
+    }
+    if dados.com_bots:
+        for i, sl in enumerate(("p2", "p3", "p4")):
+            nome_b = nomes_bot[i] if i < len(nomes_bot) else ("Bot" + str(i + 2))
+            slots_init[sl] = {
+                "ws": None, "nome": "bot:" + sl, "nick": nome_b,
+                "avatar": None, "venceu": False, "bot": True, "pronto": True,
+            }
+
     salas_ludo[codigo] = {
         "codigo": codigo,
         "publica": bool(dados.publica),
+        "com_bots": bool(dados.com_bots),
         "fase": "esperando",
         "lider": "p1",
         "vez": None,
@@ -407,23 +458,19 @@ async def criar_sala_ludo(dados: NovaSalaLudo):
         "vencedor": None,
         "ultimo_evento": None,
         "cores": cores_slot,
-        "slots": {
-            "p1": {
-                "ws": None, "nome": dados.nome, "nick": dados.nick,
-                "avatar": dados.avatar, "venceu": False,
-            },
-            "p2": None, "p3": None, "p4": None,
-        },
+        "slots": slots_init,
         "pecas": {"p1": [-1, -1, -1, -1], "p2": [-1, -1, -1, -1],
                   "p3": [-1, -1, -1, -1], "p4": [-1, -1, -1, -1]},
         "placar": {"p1": 0, "p2": 0, "p3": 0, "p4": 0},
         "espectadores": [],
         "countdown_task": None,
+        "forcar_inicio_task": None,
         "criado_em": time.time(),
     }
-    log_tela("ludo sala criada codigo=%s publica=%s" % (codigo, bool(dados.publica)))
+    log_tela("ludo sala criada codigo=%s publica=%s bots=%s" % (
+        codigo, bool(dados.publica), bool(dados.com_bots)))
     await _notificar_salas_ludo_lobby()
-    return {"sala": codigo, "publica": bool(dados.publica)}
+    return {"sala": codigo, "publica": bool(dados.publica), "com_bots": bool(dados.com_bots)}
 
 
 # ---------------------------------------------------------------------------
@@ -459,15 +506,162 @@ async def _iniciar_contagem_ludo(sala: str):
                 s["pecas"][sl] = [-1, -1, -1, -1]
                 s["slots"][sl]["venceu"] = False
         primeiro = next((sl for sl in ("p1", "p2", "p3", "p4")
-                         if s["slots"].get(sl) and s["slots"][sl].get("ws")), "p1")
+                         if s["slots"].get(sl) and
+                         (s["slots"][sl].get("ws") or s["slots"][sl].get("bot"))), "p1")
         s["vez"] = primeiro
         s["ultimo_evento"] = {"texto": "Jogo iniciado! Vez de " +
                               ((s["slots"].get(primeiro) or {}).get("nick") or "—")}
         await broadcast_estado_ludo(sala)
+        if s["slots"].get(primeiro, {}).get("bot"):
+            asyncio.create_task(_bot_turno_ludo(sala, primeiro))
     finally:
         s2 = salas_ludo.get(sala)
         if s2:
             s2["countdown_task"] = None
+
+
+async def _carencia_ludo(sala: str, slot: str) -> None:
+    """Espera a reconexão de quem caiu no meio da partida. Não voltou,
+    vale a regra antiga do W.O. (quem ficou vivo vence)."""
+    await asyncio.sleep(CARENCIA_RECONEXAO_SEGUNDOS)
+    try:
+        await _fechar_ludo_ao_sair(sala, slot)
+    except Exception as erro:
+        log_tela("ludo: carencia da sala %s: %r" % (sala, erro))
+
+
+async def _fechar_ludo_ao_sair(sala: str, slot: str) -> None:
+    """W.O. de quem desconectou. Se a pessoa reconectou nesse meio-tempo,
+    não faz nada."""
+    s = salas_ludo.get(sala)
+    if not s:
+        return
+    p = s.get("slots", {}).get(slot)
+    if not p or p.get("ws"):
+        return                      # reconectou a tempo
+    if s.get("fase") not in ("jogando", "contagem"):
+        return
+    vivos_ws = sum(
+        1 for sl in ("p1", "p2", "p3", "p4")
+        if s["slots"].get(sl) and s["slots"][sl].get("ws")
+        and not s["slots"][sl].get("venceu")
+    )
+    if vivos_ws <= 1 and s.get("fase") == "jogando":
+        # W.O.: quem ficou vence se era 2+.
+        ficou = next(
+            (sl for sl in ("p1", "p2", "p3", "p4")
+             if s["slots"].get(sl) and s["slots"][sl].get("ws")
+             and not s["slots"][sl].get("venceu")), None)
+        if ficou and sum(1 for p in s["slots"].values() if p) >= 2:
+            s["fase"] = "fim"
+            s["vencedor"] = ficou
+            s["slots"][ficou]["venceu"] = True
+            s.setdefault("placar",
+                         {"p1": 0, "p2": 0, "p3": 0, "p4": 0})
+            s["placar"][ficou] = s["placar"].get(ficou, 0) + 1
+            p_ficou = s["slots"][ficou] or {}
+            await asyncio.to_thread(
+                registrar_vitoria_ludo,
+                p_ficou.get("nick", "Anônimo"),
+                p_ficou.get("nome", ""),
+                p_ficou.get("avatar"))
+            await asyncio.to_thread(_pagar_moedas_fim_ludo, s, ficou)
+            s["ultimo_evento"] = {
+                "texto": "Desistências. " +
+                ((s["slots"][ficou] or {}).get("nick") or "—") + " venceu!",
+            }
+    if not salas_ludo.get(sala):
+        return
+    await broadcast_estado_ludo(sala)
+    await _notificar_salas_ludo_lobby()
+
+
+async def _bot_turno_ludo(sala: str, bot_slot: str):
+    """Executa o turno de um bot: rola o dado e move uma peça aleatória válida."""
+    await asyncio.sleep(0.8)
+    s = salas_ludo.get(sala)
+    if not s or s.get("fase") != "jogando" or s.get("vez") != bot_slot:
+        return
+    # Rolar dado
+    dado = secrets.randbelow(6) + 1
+    s["dado"] = dado
+    s["dado_ja_rolado"] = True
+    s["seis_seguidos"] = (s.get("seis_seguidos") or 0) + 1 if dado == 6 else 0
+    if dado == 6 and s.get("seis_seguidos", 0) >= 3:
+        s["ultimo_evento"] = {"texto": "Três seis seguidos! Turno passou."}
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["seis_seguidos"] = 0
+        s["opcoes"] = []
+        _ludo_avancar_vez(s)
+        await broadcast_estado_ludo(sala)
+        prox = s.get("vez")
+        if prox and s["slots"].get(prox, {}).get("bot") and s.get("fase") == "jogando":
+            asyncio.create_task(_bot_turno_ludo(sala, prox))
+        return
+    opcoes = _ludo_tem_opcao(s, bot_slot, dado)
+    s["opcoes"] = opcoes
+    nick_b = (s["slots"].get(bot_slot) or {}).get("nick", "Bot")
+    s["ultimo_evento"] = {"texto": nick_b + " tirou " + str(dado) + "."}
+    if not opcoes:
+        s["ultimo_evento"]["texto"] += " Sem movimento."
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["seis_seguidos"] = 0
+        s["opcoes"] = []
+        _ludo_avancar_vez(s)
+        await broadcast_estado_ludo(sala)
+        prox = s.get("vez")
+        if prox and s["slots"].get(prox, {}).get("bot") and s.get("fase") == "jogando":
+            asyncio.create_task(_bot_turno_ludo(sala, prox))
+        return
+    await broadcast_estado_ludo(sala)
+    await asyncio.sleep(0.6)
+    s = salas_ludo.get(sala)
+    if not s or s.get("fase") != "jogando" or s.get("vez") != bot_slot:
+        return
+    # Mover peça aleatória
+    idx = secrets.choice(opcoes)
+    dado = s["dado"]
+    pos = s["pecas"][bot_slot][idx]
+    nova = 0 if pos == -1 else pos + dado
+    if nova > 57:
+        _ludo_avancar_vez(s)
+        await broadcast_estado_ludo(sala)
+        return
+    s["pecas"][bot_slot][idx] = nova
+    capturas = _ludo_aplicar_capturas(s, bot_slot, idx, nova)
+    chegou_centro = nova == 57
+    extra = (dado == 6) or bool(capturas) or chegou_centro
+    if chegou_centro:
+        txt = nick_b + " levou um peão ao centro!"
+    elif capturas:
+        txt = nick_b + " capturou " + (capturas[0].get("nick") or "um peão") + "!"
+    else:
+        txt = nick_b + " moveu o peão " + str(idx + 1) + "."
+    s["ultimo_evento"] = {"texto": txt, "capturas": capturas}
+    venceu = await asyncio.to_thread(_ludo_check_vitoria, s)
+    if venceu:
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["opcoes"] = []
+        await broadcast_estado_ludo(sala)
+        return
+    if extra:
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["opcoes"] = []
+        s["ultimo_evento"]["texto"] += " Joga de novo!"
+    else:
+        s["dado"] = None
+        s["dado_ja_rolado"] = False
+        s["opcoes"] = []
+        s["seis_seguidos"] = 0
+        _ludo_avancar_vez(s)
+    await broadcast_estado_ludo(sala)
+    prox = s.get("vez")
+    if prox and s["slots"].get(prox, {}).get("bot") and s.get("fase") == "jogando":
+        asyncio.create_task(_bot_turno_ludo(sala, prox))
 
 
 # Activity do Discord às vezes corta o prefixo /ws — alias igual à velha/sudoku.
@@ -503,7 +697,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                 slot = cand
                 s["slots"][cand] = {
                     "ws": None, "nome": nome, "nick": nick,
-                    "avatar": avatar, "venceu": False,
+                    "avatar": avatar, "venceu": False, "bot": False, "pronto": False,
                 }
                 break
 
@@ -525,11 +719,13 @@ async def ws_ludo(websocket: WebSocket, sala: str):
     await broadcast_estado_ludo(sala)
     await _notificar_salas_ludo_lobby()
 
-    # Auto-inicia só com 4 jogadores; 2–3 esperam botão do líder.
-    if (slot is not None and s.get("fase") == "esperando"
-            and sum(1 for p in s["slots"].values() if p and p.get("ws")) >= 4
+    # Modo com bots: assim que o humano conectar, marca pronto e inicia.
+    if (slot is not None and s.get("com_bots") and s.get("fase") == "esperando"
             and not s.get("countdown_task")):
-        s["countdown_task"] = asyncio.create_task(_iniciar_contagem_ludo(sala))
+        if s["slots"].get(slot):
+            s["slots"][slot]["pronto"] = True
+        if _todos_prontos_ludo(s):
+            s["countdown_task"] = asyncio.create_task(_iniciar_contagem_ludo(sala))
 
     try:
         while True:
@@ -558,6 +754,7 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                 continue
 
             if tipo == "iniciar":
+                # Compatibilidade legada: líder pode forçar início direto.
                 if s.get("fase") not in ("esperando", "fim"):
                     continue
                 if slot != s.get("lider"):
@@ -578,6 +775,50 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     continue
                 s["countdown_task"] = asyncio.create_task(
                     _iniciar_contagem_ludo(sala))
+                continue
+
+            if tipo == "pronto":
+                if s.get("fase") not in ("esperando", "fim"):
+                    continue
+                p = s["slots"].get(slot)
+                if not p or p.get("bot"):
+                    continue
+                p["pronto"] = not p.get("pronto", False)
+                await broadcast_estado_ludo(sala)
+                if _todos_prontos_ludo(s) and not s.get("countdown_task"):
+                    s["countdown_task"] = asyncio.create_task(
+                        _iniciar_contagem_ludo(sala))
+                continue
+
+            if tipo == "forcar_inicio":
+                if s.get("fase") not in ("esperando", "fim"):
+                    continue
+                if not _maioria_pronta_ludo(s):
+                    await websocket.send_json({
+                        "tipo": "erro_jogada",
+                        "mensagem": "Maioria ainda não está pronta.",
+                    })
+                    continue
+                if s.get("countdown_task") or s.get("forcar_inicio_task"):
+                    continue
+                async def _forcar_task(sala_=sala):
+                    s_ = salas_ludo.get(sala_)
+                    if not s_:
+                        return
+                    for n in (5, 4, 3, 2, 1):
+                        s_ = salas_ludo.get(sala_)
+                        if not s_ or s_.get("fase") not in ("esperando", "fim"):
+                            return
+                        await broadcast_ludo(sala_, {"tipo": "forcar_contagem", "n": n})
+                        await asyncio.sleep(1)
+                    s_ = salas_ludo.get(sala_)
+                    if not s_ or s_.get("fase") not in ("esperando", "fim"):
+                        return
+                    if not s_.get("countdown_task"):
+                        s_["countdown_task"] = asyncio.create_task(
+                            _iniciar_contagem_ludo(sala_))
+                    s_["forcar_inicio_task"] = None
+                s["forcar_inicio_task"] = asyncio.create_task(_forcar_task())
                 continue
 
             if tipo == "rolar":
@@ -683,6 +924,10 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                     s["seis_seguidos"] = 0
                     _ludo_avancar_vez(s)
                 await broadcast_estado_ludo(sala)
+                # Se próxima vez é de um bot, executa turno automaticamente.
+                prox = s.get("vez")
+                if prox and s["slots"].get(prox, {}).get("bot") and s.get("fase") == "jogando":
+                    asyncio.create_task(_bot_turno_ludo(sala, prox))
                 continue
 
             if tipo == "sair":
@@ -723,37 +968,26 @@ async def ws_ludo(websocket: WebSocket, sala: str):
                             await encerrar_sala_ludo(sala, "lider_desconectou")
                             return
                 if s.get("fase") in ("jogando", "contagem"):
+                    # Queda no meio da partida: guarda a vaga e dá um tempo
+                    # pra reconectar (o W.O. só vale depois disso). O turno
+                    # passa adiante pra não travar a partida esperando ele.
+                    s["slots"][slot]["desconectado_em"] = time.time()
                     if s.get("vez") == slot:
                         _ludo_avancar_vez(s)
-                    vivos_ws = sum(
-                        1 for sl in ("p1", "p2", "p3", "p4")
-                        if s["slots"].get(sl) and s["slots"][sl].get("ws")
-                        and not s["slots"][sl].get("venceu")
-                    )
-                    if vivos_ws <= 1 and s.get("fase") == "jogando":
-                        # W.O.: quem ficou vence se era 2+.
-                        ficou = next(
-                            (sl for sl in ("p1", "p2", "p3", "p4")
-                             if s["slots"].get(sl) and s["slots"][sl].get("ws")
-                             and not s["slots"][sl].get("venceu")), None)
-                        if ficou and sum(1 for p in s["slots"].values() if p) >= 2:
-                            s["fase"] = "fim"
-                            s["vencedor"] = ficou
-                            s["slots"][ficou]["venceu"] = True
-                            s.setdefault("placar",
-                                         {"p1": 0, "p2": 0, "p3": 0, "p4": 0})
-                            s["placar"][ficou] = s["placar"].get(ficou, 0) + 1
-                            p_ficou = s["slots"][ficou] or {}
-                            await asyncio.to_thread(
-                                registrar_vitoria_ludo,
-                                p_ficou.get("nick", "Anônimo"),
-                                p_ficou.get("nome", ""),
-                                p_ficou.get("avatar"))
-                            await asyncio.to_thread(_pagar_moedas_fim_ludo, s, ficou)
-                            s["ultimo_evento"] = {
-                                "texto": "Desistências. " +
-                                ((s["slots"][ficou] or {}).get("nick") or "—") + " venceu!",
-                            }
+                    for outro in ("p1", "p2", "p3", "p4"):
+                        p_outro = s["slots"].get(outro)
+                        if p_outro and p_outro.get("ws") and outro != slot:
+                            try:
+                                await p_outro["ws"].send_json({
+                                    "tipo": "carencia",
+                                    "slot": slot,
+                                    "segundos": CARENCIA_RECONEXAO_SEGUNDOS,
+                                    "mensagem": "Um jogador caiu. Aguardando a reconexão dele (" +
+                                                str(CARENCIA_RECONEXAO_SEGUNDOS) + "s)...",
+                                })
+                            except Exception:
+                                pass
+                    asyncio.create_task(_carencia_ludo(sala, slot))
                 if not salas_ludo.get(sala):
                     return
                 await broadcast_estado_ludo(sala)

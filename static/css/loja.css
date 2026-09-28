@@ -110,6 +110,9 @@
 }
 .loja-roleta-label {
   position: absolute; top: 50%; left: 50%;
+  /* o JS posiciona o PONTO do meio da fatia em left/top — sem isto o texto
+     ficava com o canto superior-esquerdo nesse ponto, torto pra fora. */
+  transform: translate(-50%, -50%);
   font-size: 11px; font-weight: bold; color: #111a2e;
   text-shadow: 0 1px 0 rgba(255,255,255,0.35);
   pointer-events: none; white-space: nowrap;

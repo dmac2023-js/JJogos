@@ -12,7 +12,7 @@ var spCelulas = {};       // cid -> {pid, x, y, r, alvoX, alvoY, alvoR, visto}
 var spPellets = [];
 var spPowerups = [];
 var spPlacar = [];
-var spEu = { vivo: false, energia: 0, kills: 0, dobro: 0, restante: 0, vivos: 0 };
+var spEu = { vivo: false, energia: 0, kills: 0, dobro: 0, dobro_x: 1, tempo: 0, vivos: 0 };
 var spCamera = { x: 1100, y: 1100, alcance: 700, alvoAlcance: 700, prontoX: false };
 var spCameraPidAtual = 0;  // de quem é a câmera agora (0 = eu mesmo)
 var spDir = { x: 0, y: 0 };
@@ -81,6 +81,11 @@ function spConectar() {
     }
   };
   ws.onerror = function () {};
+  // Já nasce com a escolha de foto certa (inclusive reconexão no meio da
+  // partida, onde a tela de espera não aparece mais).
+  ws.onopen = function () {
+    spEnviar({ tipo: "opcao", foto: spOpFoto });
+  };
 
   clearInterval(spPingTimer);
   spPingTimer = setInterval(function () { spEnviar({ tipo: "ping" }); }, 20000);
@@ -142,7 +147,8 @@ function spReceberEstado(d) {
   spPlacar = d.placar || [];
   spVivosPids = d.vivos_pids || [];
   spEu = { vivo: d.vivo, energia: d.energia, kills: d.kills, dobro: d.dobro,
-           restante: d.restante, vivos: d.vivos, protegido: d.protegido || 0 };
+           dobro_x: d.dobro_x || 1, tempo: d.tempo, vivos: d.vivos,
+           protegido: d.protegido || 0 };
 
   if (!spEu.vivo) {
     // Sem escolha válida (mortei agora, ou quem eu seguia morreu): manda
@@ -240,11 +246,13 @@ function spMostrarFim(d) {
   var el = document.querySelector("#sp-fim");
   el.style.display = "";
   spEspectadorMostrar(false);
+  // Acabou a partida: volta pra janela normal (a opção continua marcada
+  // e a tela cheia volta quando ele votar "pronto" de novo).
+  spTelaCheiaSair(true);
   var motivos = {
     ultimo: "Sobrou sozinho na arena!",
-    arena: "Tomou conta da arena inteira!",
-    tempo: "Acabou o tempo — venceu quem tinha mais energia.",
     ninguem: "Todo mundo se foi...",
+    vazio: "Ninguém na sala — partida encerrada.",
   };
   var campeao = (d.placar || []).find(function (p) { return p.venceu; });
   document.querySelector("#sp-fim-titulo").textContent =
@@ -310,8 +318,15 @@ function spRenderEspectro() {
   if (!info) {
     caixa.innerHTML = "<span class='sp-espectro-vazio'>Ninguém vivo pra assistir</span>";
   } else {
+    // Mesma regra da bolinha: quem desligou a foto não aparece com ela
+    // nem no cartão de quem está sendo assistido.
+    var verFoto = info.foto !== false;
+    var cosmeticosCard = info.cosmeticos || {};
+    if (!verFoto) {
+      cosmeticosCard = Object.assign({}, cosmeticosCard, { decoracao: null });
+    }
     caixa.innerHTML =
-      avatarSalaHtml(info.avatar, info.nick, info.cosmeticos, info.nome) +
+      avatarSalaHtml(verFoto ? info.avatar : "", info.nick, cosmeticosCard, info.nome) +
       "<span>" + nickHtml(info.nick, info.cosmeticos, info.nome) + "</span>" +
       (info.bot ? ' <small class="sp-tag-bot">bot</small>' : "");
   }
@@ -342,15 +357,15 @@ function spAtualizarHud() {
   document.querySelector("#sp-energia").textContent = spEu.energia;
   document.querySelector("#sp-kills").textContent = spEu.kills;
   document.querySelector("#sp-vivos").textContent = spEu.vivos;
-  var minutos = Math.floor(spEu.restante / 60);
-  var segundos = spEu.restante % 60;
+  var minutos = Math.floor(spEu.tempo / 60);
+  var segundos = spEu.tempo % 60;
   document.querySelector("#sp-tempo").textContent = minutos + ":" + (segundos < 10 ? "0" : "") + segundos;
   var escudo = document.querySelector("#sp-protegido");
   escudo.style.display = spEu.protegido > 0 && spEu.vivo ? "" : "none";
   escudo.textContent = "🛡️ Protegido (" + Math.ceil(spEu.protegido) + "s)";
   var dobro = document.querySelector("#sp-dobro");
   dobro.style.display = spEu.dobro > 0 ? "" : "none";
-  dobro.textContent = "2x energia (" + spEu.dobro + "s)";
+  dobro.textContent = (spEu.dobro_x || 1) + "x energia (" + spEu.dobro + "s)";
   spAtualizarEspectador();
 
   document.querySelector("#sp-placar-lista").innerHTML = spPlacar.map(function (p, i) {
@@ -490,7 +505,11 @@ function spDesenharCelula(ctx, celula, tempo) {
   var arteDeFundo = !!(info.skin && info.skin.padrao === "imagem" &&
     spImagemPronta(spImagem(urlImagemExterna(info.skin.imagem))));
   var raioFoto = r * (arteDeFundo ? 0.44 : 0.62);
-  if (raioFoto >= 11) {
+  // "Exibir foto de perfil" é decisão de CADA jogador (vem do servidor no
+  // payload de jogadores, pra valer pra sala inteira): quem desligou mostra
+  // só a arte/cor do círculo, o nick e a cor do nick — sem foto e sem a
+  // moldura dela. Bots e quem não mexeu continuam vindo com foto.
+  if (raioFoto >= 11 && info.foto !== false) {
     var foto = spImagem(info.avatar);
     ctx.save();
     ctx.beginPath();
@@ -825,6 +844,100 @@ function spLigarControles() {
 }
 
 // ---------------------------------------------------------------------------
+// Opções da tela de espera: tela cheia e exibir foto de perfil
+// ---------------------------------------------------------------------------
+
+var spOpTelacheia = false;     // lembradas entre partidas (localStorage)
+var spOpFoto = true;
+var spTelaCheiaNativa = false; // entrou pelo Fullscreen do navegador
+var spTelaCheiaCss = false;    // overlay fixo (iframe do Discord / iOS)
+var spTelaCheiaPedido = 0;     // cancela a entrada se o jogador desmarcou
+
+function spOpcoesCarregar() {
+  try {
+    spOpTelacheia = localStorage.getItem("splano:telaCheia") === "1";
+    spOpFoto = localStorage.getItem("splano:foto") !== "0";
+  } catch (e) { /* sem localStorage: fica no padrão */ }
+  spOpcoesSincronizar();
+}
+
+function spOpcoesSalvar() {
+  try {
+    localStorage.setItem("splano:telaCheia", spOpTelacheia ? "1" : "0");
+    localStorage.setItem("splano:foto", spOpFoto ? "1" : "0");
+  } catch (e) { /* sem localStorage: vale só nesta sessão */ }
+}
+
+function spOpcoesSincronizar() {
+  var telacheia = document.querySelector("#sp-op-telacheia");
+  var foto = document.querySelector("#sp-op-foto");
+  if (telacheia) telacheia.checked = spOpTelacheia;
+  if (foto) foto.checked = spOpFoto;
+}
+
+function spTelaCheiaAtiva() { return spTelaCheiaNativa || spTelaCheiaCss; }
+
+function spTelaCheiaBotao() {
+  var botao = document.querySelector("#sp-sair-tela-cheia");
+  if (botao) botao.style.display = spTelaCheiaAtiva() ? "" : "none";
+}
+
+function spTelaCheiaEntrar() {
+  var arena = document.querySelector("#tela-splano .sp-arena");
+  if (!arena) return;
+  spOpTelacheia = true;
+  spOpcoesSalvar();
+  if (spTelaCheiaAtiva()) { spTelaCheiaBotao(); return; }
+  var pedido = ++spTelaCheiaPedido;
+  try {
+    if (typeof arena.requestFullscreen === "function") {
+      var promessa = arena.requestFullscreen({ navigationUI: "hide" });
+      if (promessa && typeof promessa.catch === "function") promessa.catch(function () {});
+    } else if (typeof arena.webkitRequestFullscreen === "function") {
+      arena.webkitRequestFullscreen();
+    }
+  } catch (e) { /* sem API de tela cheia: cai no overlay */ }
+  // O navegador/Iframe pode negar (ou nem existir a API, como no iOS):
+  // se em 350ms não entrou de verdade, a arena vira overlay fixo.
+  setTimeout(function () {
+    if (pedido !== spTelaCheiaPedido || !spOpTelacheia || spTelaCheiaAtiva()) return;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      spTelaCheiaNativa = true;
+      setTimeout(spAjustarCanvas, 80);
+    } else {
+      arena.classList.add("sp-tela-cheia");
+      spTelaCheiaCss = true;
+      spAjustarCanvas();
+    }
+    spTelaCheiaBotao();
+  }, 350);
+}
+
+function spTelaCheiaSair(manterOpcao) {
+  spTelaCheiaPedido++;   // desiste de entrar, se a entrada estava pendente
+  if (!manterOpcao) {
+    spOpTelacheia = false;
+    spOpcoesSalvar();
+    spOpcoesSincronizar();
+  }
+  var arena = document.querySelector("#tela-splano .sp-arena");
+  if (spTelaCheiaCss) {
+    if (arena) arena.classList.remove("sp-tela-cheia");
+    spTelaCheiaCss = false;
+    setTimeout(spAjustarCanvas, 30);
+  }
+  if (spTelaCheiaNativa) {
+    spTelaCheiaNativa = false;
+    try {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (e) { /* ignore */ }
+    setTimeout(spAjustarCanvas, 80);
+  }
+  spTelaCheiaBotao();
+}
+
+// ---------------------------------------------------------------------------
 // Abrir / sair
 // ---------------------------------------------------------------------------
 
@@ -860,6 +973,7 @@ async function abrirSplano() {
 
 function spSair() {
   spAtivo = false;
+  spTelaCheiaSair(true);   // sai da tela cheia mas guarda a preferência
   cancelAnimationFrame(spQuadro);
   clearInterval(spPingTimer);
   clearTimeout(spReconectar);
@@ -890,7 +1004,42 @@ function spSair() {
   });
   document.querySelector("#sp-pronto").addEventListener("click", function () {
     spPronto = !spPronto;
-    spEnviar({ tipo: "pronto", ativo: spPronto });
+    spEnviar({ tipo: "pronto", ativo: spPronto, foto: spOpFoto });
+    // O clique é gesto do usuário: é o momento certo pra pedir tela cheia.
+    if (spPronto && spOpTelacheia && !spTelaCheiaAtiva()) spTelaCheiaEntrar();
+  });
+  // Preferências da tela de espera (tela cheia e foto de perfil).
+  spOpcoesCarregar();
+  var chkTelacheia = document.querySelector("#sp-op-telacheia");
+  if (chkTelacheia) {
+    chkTelacheia.addEventListener("change", function () {
+      if (chkTelacheia.checked) spTelaCheiaEntrar();
+      else spTelaCheiaSair(false);
+    });
+  }
+  var chkFoto = document.querySelector("#sp-op-foto");
+  if (chkFoto) {
+    chkFoto.addEventListener("change", function () {
+      spOpFoto = chkFoto.checked;
+      spOpcoesSalvar();
+      // Vale pra sala inteira: manda agora, sem esperar o voto "pronto".
+      spEnviar({ tipo: "opcao", foto: spOpFoto });
+    });
+  }
+  var botaoSairTelaCheia = document.querySelector("#sp-sair-tela-cheia");
+  if (botaoSairTelaCheia) {
+    botaoSairTelaCheia.addEventListener("click", function () { spTelaCheiaSair(false); });
+  }
+  // Apertou Esc (ou o navegador saiu sozinho): desmarca a opção também.
+  document.addEventListener("fullscreenchange", function () {
+    if (spTelaCheiaNativa && !document.fullscreenElement) {
+      spTelaCheiaNativa = false;
+      spOpTelacheia = false;
+      spOpcoesSalvar();
+      spOpcoesSincronizar();
+      spTelaCheiaBotao();
+      setTimeout(spAjustarCanvas, 80);
+    }
   });
   document.querySelector("#sp-espectro-anterior").addEventListener("click", function () {
     spEspectroMover(-1);

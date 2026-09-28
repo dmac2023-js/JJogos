@@ -66,6 +66,9 @@ class NovaSalaSudoku(BaseModel):
 # Sudoku online: código -> estado da sala (2 jogadores, mesmo puzzle)
 salas_sudoku: Dict[str, dict] = {}
 SUDOKU_SALA_SEM_WS_SEGUNDOS = 60
+# Queda no meio da partida: a vaga fica guardada por esse tempo pra dar
+# chance de reconectar. Passou, vale a regra antiga (quem ficou vence).
+CARENCIA_RECONEXAO_SEGUNDOS = 15
 
 def purgar_salas_sudoku_obsoletas() -> None:
     """Remove salas de sudoku criadas mas sem WS conectado há muito tempo."""
@@ -532,6 +535,80 @@ async def _iniciar_contagem_sudoku(sala: str):
 
 
 # Activity do Discord às vezes corta o prefixo /ws no WS — alias igual à velha/lobby.
+async def _carencia_sudoku(sala: str, slot: str) -> None:
+    """Espera a reconexão de quem caiu no meio da partida. Não voltou,
+    vale a regra antiga da queda (quem ficou vence e a sala é encerrada)."""
+    await asyncio.sleep(CARENCIA_RECONEXAO_SEGUNDOS)
+    try:
+        await _fechar_sudoku_ao_sair(sala, slot)
+    except Exception as erro:
+        log_tela("sudoku: carencia da sala %s: %r" % (sala, erro))
+
+
+async def _fechar_sudoku_ao_sair(sala: str, slot: str) -> None:
+    """Consequências da desconexão de `slot`. Se a pessoa reconectou nesse
+    meio-tempo, não faz nada."""
+    s = salas_sudoku.get(sala)
+    if not s:
+        return
+    p = s.get("slots", {}).get(slot)
+    if not p or p.get("ws"):
+        return                      # reconectou a tempo
+    outro = "p2" if slot == "p1" else "p1"
+    p_outro = s.get("slots", {}).get(outro)
+    # Rodada em andamento e ainda tem alguém: quem ficou vence, sala desfaz.
+    if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws") is not None:
+        s["vencedor_rodada"] = outro
+        s["placar"][outro] = s["placar"].get(outro, 0) + 1
+        s["fase"] = "parcial"
+        try:
+            await p_outro["ws"].send_json({
+                "tipo": "vencedor_rodada",
+                "slot": outro,
+                "nick": p_outro.get("nick", "—"),
+                "tempo": 0,
+                "desistencia": True,
+                "placar": s["placar"],
+                "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+                "mensagem": "Oponente saiu. Você venceu!",
+            })
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+        await encerrar_sala_sudoku(sala, "oponente_desistiu")
+    elif s.get("lider") == slot:
+        # Líder desconectou sem oponente ativo → encerra.
+        if s.get("fase") == "jogando" and p_outro and p_outro.get("ws"):
+            # Oponente ficou sozinho jogando: vitória dele.
+            s["vencedor_rodada"] = outro
+            s["placar"][outro] = s["placar"].get(outro, 0) + 1
+            s["fase"] = "parcial"
+            try:
+                await p_outro["ws"].send_json({
+                    "tipo": "vencedor_rodada",
+                    "slot": outro,
+                    "nick": p_outro.get("nick", "—"),
+                    "tempo": 0,
+                    "desistencia": True,
+                    "placar": s["placar"],
+                    "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
+                    "mensagem": "O líder saiu. Você venceu!",
+                })
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+            await encerrar_sala_sudoku(sala, "lider_desconectou")
+        else:
+            await encerrar_sala_sudoku(sala, "lider_desconectou")
+    else:
+        await broadcast_sudoku(sala, estado_sudoku_para(s, slot))
+        if s.get("fase") == "jogando":
+            await encerrar_sala_sudoku(sala, "oponente_desconectou")
+        elif s.get("fase") == "esperando":
+            pass
+        await _notificar_salas_sudoku_lobby()
+
+
 @router.websocket("/ws/sudoku/{sala}")
 @router.websocket("/sudoku/{sala}")
 async def ws_sudoku(websocket: WebSocket, sala: str):
@@ -748,59 +825,27 @@ async def ws_sudoku(websocket: WebSocket, sala: str):
         if s and s.get("slots", {}).get(slot, {}) is not None and \
                 s["slots"][slot] and s["slots"][slot].get("ws") is websocket:
             s["slots"][slot]["ws"] = None
-            outro = "p2" if slot == "p1" else "p1"
-            p_outro = s.get("slots", {}).get(outro)
-            # Rodada em andamento e ainda tem alguém: quem ficou vence, sala desfaz.
-            if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws") is not None:
-                s["vencedor_rodada"] = outro
-                s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                s["fase"] = "parcial"
-                try:
-                    await p_outro["ws"].send_json({
-                        "tipo": "vencedor_rodada",
-                        "slot": outro,
-                        "nick": p_outro.get("nick", "—"),
-                        "tempo": 0,
-                        "desistencia": True,
-                        "placar": s["placar"],
-                        "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
-                        "mensagem": "Oponente saiu. Você venceu!",
-                    })
-                except Exception:
-                    pass
-                await asyncio.sleep(2)
-                await encerrar_sala_sudoku(sala, "oponente_desistiu")
-            elif s.get("lider") == slot:
-                # Líder desconectou sem oponente ativo → encerra.
-                if s.get("fase") == "jogando" and p_outro and p_outro.get("ws"):
-                    # Oponente ficou sozinho jogando: vitória dele.
-                    s["vencedor_rodada"] = outro
-                    s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                    s["fase"] = "parcial"
+            if s.get("fase") in ("jogando", "contagem"):
+                # Queda no meio da partida: guarda a vaga e dá um tempo pra
+                # reconectar. Só depois disso vale a regra antiga da queda.
+                s["slots"][slot]["desconectado_em"] = time.time()
+                outro = "p2" if slot == "p1" else "p1"
+                p_outro = s.get("slots", {}).get(outro)
+                if p_outro and p_outro.get("ws"):
                     try:
                         await p_outro["ws"].send_json({
-                            "tipo": "vencedor_rodada",
-                            "slot": outro,
-                            "nick": p_outro.get("nick", "—"),
-                            "tempo": 0,
-                            "desistencia": True,
-                            "placar": s["placar"],
-                            "jogadores": [info_jogador_sudoku(s, "p1"), info_jogador_sudoku(s, "p2")],
-                            "mensagem": "O líder saiu. Você venceu!",
+                            "tipo": "carencia",
+                            "slot": slot,
+                            "segundos": CARENCIA_RECONEXAO_SEGUNDOS,
+                            "mensagem": "Oponente caiu. Aguardando a reconexão dele (" +
+                                        str(CARENCIA_RECONEXAO_SEGUNDOS) + "s)...",
                         })
                     except Exception:
                         pass
-                    await asyncio.sleep(2)
-                    await encerrar_sala_sudoku(sala, "lider_desconectou")
-                else:
-                    await encerrar_sala_sudoku(sala, "lider_desconectou")
-            else:
-                await broadcast_sudoku(sala, estado_sudoku_para(s, slot))
-                if s.get("fase") == "jogando":
-                    await encerrar_sala_sudoku(sala, "oponente_desconectou")
-                elif s.get("fase") == "esperando":
-                    pass
+                asyncio.create_task(_carencia_sudoku(sala, slot))
                 await _notificar_salas_sudoku_lobby()
+            else:
+                await _fechar_sudoku_ao_sair(sala, slot)
 
 
 # ---------------------------------------------------------------------------

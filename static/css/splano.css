@@ -7,6 +7,20 @@
 }
 #sp-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 
+/* Tela cheia em si: ou o navegador entra em Fullscreen de verdade, ou
+   (iframe do Discord / iOS) a arena vira um overlay fixo cobrindo a tela. */
+.sp-arena.sp-tela-cheia {
+  position: fixed; inset: 0; z-index: 9999;
+  width: 100%; height: 100%; border: none; border-radius: 0;
+}
+.sp-sair-tela-cheia {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 6; padding: 8px 13px; border: 1px solid #2d4470; border-radius: 10px;
+  background: rgba(20, 28, 48, .94); color: #9dc2ff;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.sp-sair-tela-cheia:active { background: #2f6fe0; color: #fff; }
+
 /* --- HUD --- */
 .sp-hud {
   position: absolute; top: 10px; left: 10px; display: flex; flex-wrap: wrap;
@@ -69,6 +83,17 @@
 
 #sp-pronto { display: block; width: 100%; margin-top: 14px; }
 #sp-pronto.sp-pronto-marcado { background: #2f7d4a; border-color: #4bbf76; }
+
+/* Opções da tela de espera (fica entre o botão pronto e a borda da caixa) */
+.sp-opcoes {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid #26314f;
+}
+.sp-opcao {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: #aeb2c7; cursor: pointer; user-select: none;
+}
+.sp-opcao input { width: 15px; height: 15px; accent-color: #3f8f57; cursor: pointer; }
 
 .sp-fim-linha {
   display: grid; grid-template-columns: 26px 1fr auto auto auto;

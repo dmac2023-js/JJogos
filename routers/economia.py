@@ -43,6 +43,8 @@ from shared.economia import (
     salvar_economia,
     tentar_reclamar_bonus,
     top_ranking,
+    transferir_moedas,
+    top_doadores,
 )
 from shared.recordes import eh_anonimo
 
@@ -462,3 +464,27 @@ def admin_limpar_itens(dados: AdminAlvo):
     continuam na conta)."""
     nome_alvo = _alvo_admin(dados.admin_id, dados.alvo_id)
     return limpar_itens_admin(nome_alvo)
+
+
+class TransferirMoedas(BaseModel):
+    remetente: str
+    destinatario: str
+    quantidade: int
+
+
+@router.post("/economia/transferir")
+def rota_transferir_moedas(dados: TransferirMoedas):
+    """Transfere moedas de um jogador para outro."""
+    if dados.quantidade <= 0 or dados.quantidade > 10_000_000:
+        raise HTTPException(status_code=400, detail="Quantidade inválida.")
+    try:
+        resultado = transferir_moedas(dados.remetente, dados.destinatario, dados.quantidade)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return resultado
+
+
+@router.get("/economia/top-doadores")
+def obter_top_doadores(limit: int = 10):
+    limit = max(1, min(limit, 50))
+    return {"top_doadores": top_doadores(limit)}

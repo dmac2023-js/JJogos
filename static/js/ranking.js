@@ -2,6 +2,7 @@
 
 var rankingDados = null;
 var rankingTabAtiva = "moedas";
+var rankingDoadoresCache = null;
 
 var RANKING_JOGO_LABELS = {
   sudoku_solo: "Sudoku Solo",
@@ -79,6 +80,12 @@ function renderizarRanking(dados) {
   rankingDados = dados;
   var lista = document.querySelector("#ranking-lista");
   if (!lista) return;
+
+  if (rankingTabAtiva === "doadores") {
+    renderizarRankingDoadores(lista);
+    return;
+  }
+
   var itens = rankingTabAtiva === "moedas" ? dados.top_moedas : dados.top_horas;
   if (!itens || itens.length === 0) {
     lista.innerHTML = '<p class="vazio">Nenhum jogador registrado ainda.</p>';
@@ -114,6 +121,39 @@ function renderizarRanking(dados) {
     tabela.appendChild(btn);
   });
   lista.appendChild(tabela);
+}
+
+async function renderizarRankingDoadores(lista) {
+  lista.innerHTML = '<p class="vazio">Carregando...</p>';
+  try {
+    var resp = await fetch("./economia/top-doadores?limit=10");
+    if (!resp.ok) throw new Error("status " + resp.status);
+    var dados = await resp.json();
+    var itens = dados.top_doadores || [];
+    if (!itens.length) {
+      lista.innerHTML = '<p class="vazio">Nenhum doador ainda.</p>';
+      return;
+    }
+    lista.innerHTML = "";
+    var tabela = document.createElement("div");
+    tabela.className = "ranking-tabela";
+    var medalhas = ["🥇", "🥈", "🥉"];
+    itens.forEach(function (jogador, i) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ranking-linha" + (i < 3 ? " ranking-top" + (i + 1) : "");
+      var posHtml = '<span class="ranking-pos">' + (medalhas[i] || "#" + (i + 1)) + "</span>";
+      var avatarHtml = rankingAvatarHtml(jogador, 38);
+      var nickLinha = '<span class="ranking-nick">' + rankingNickHtml(jogador) + "</span>";
+      var valorHtml = '<span class="ranking-valor">💝 ' + (jogador.total_doado || 0).toLocaleString("pt-BR") + "</span>";
+      btn.innerHTML = posHtml + avatarHtml + nickLinha + valorHtml;
+      btn.addEventListener("click", function () { abrirPerfilRanking(jogador); });
+      tabela.appendChild(btn);
+    });
+    lista.appendChild(tabela);
+  } catch (e) {
+    lista.innerHTML = '<p class="vazio">Erro ao carregar doadores.</p>';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +216,29 @@ function _renderizarConteudoModal(container, jogador, perfil) {
   container.innerHTML = html;
 }
 
+async function enviarDinheiro(destinatario, nickDest) {
+  var remetente = (typeof nomeUsuario === "function") ? nomeUsuario() : null;
+  if (!remetente) { alert("Você precisa estar logado para enviar moedas."); return; }
+  var quantidadeStr = prompt("Quantas moedas enviar para " + nickDest + "?");
+  if (!quantidadeStr) return;
+  var quantidade = parseInt(quantidadeStr, 10);
+  if (!quantidade || quantidade <= 0) { alert("Quantidade inválida."); return; }
+  try {
+    var resp = await fetch("./economia/transferir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remetente: remetente, destinatario: destinatario, quantidade: quantidade }),
+    });
+    var dados = await resp.json();
+    if (!resp.ok) { alert("Erro: " + (dados.detail || "Falha na transferência.")); return; }
+    mostrarMensagem
+      ? mostrarMensagem("Enviado! Seu novo saldo: " + dados.novo_saldo_remetente.toLocaleString("pt-BR") + " 🪙", "sucesso")
+      : alert("Transferência realizada! Novo saldo: " + dados.novo_saldo_remetente.toLocaleString("pt-BR"));
+  } catch (e) {
+    alert("Erro ao enviar moedas: " + e.message);
+  }
+}
+
 async function abrirPerfilRanking(jogador) {
   fecharModalRanking();
 
@@ -195,14 +258,27 @@ async function abrirPerfilRanking(jogador) {
     : "";
   var cabecalhoNick = '<span class="rmodal-nick">' + rankingNickHtml(jogador) + "</span>" + usernameExtra;
 
+  var meuNome = (typeof nomeUsuario === "function") ? nomeUsuario() : null;
+  var btnEnviarHtml = (jogador.nome && meuNome && jogador.nome !== meuNome)
+    ? '<button class="botao rmodal-btn-enviar" type="button" style="margin-top:10px;width:100%;">💝 Enviar dinheiro</button>'
+    : "";
+
   card.innerHTML =
     '<button class="rmodal-fechar" type="button" aria-label="Fechar">✕</button>' +
     '<div class="rmodal-cabecalho">' + avatarHtml + cabecalhoNick + "</div>" +
+    btnEnviarHtml +
     '<div id="rmodal-conteudo"><p class="vazio">Carregando...</p></div>';
 
   overlay.appendChild(card);
   document.body.appendChild(overlay);
   card.querySelector(".rmodal-fechar").addEventListener("click", fecharModalRanking);
+
+  var btnEnviar = card.querySelector(".rmodal-btn-enviar");
+  if (btnEnviar) {
+    btnEnviar.addEventListener("click", function () {
+      enviarDinheiro(jogador.nome, jogador.nick || jogador.nome);
+    });
+  }
 
   // Moldura de perfil equipada em volta do card (as camadas vazam pra fora,
   // por isso o host é o overlay e não o card: o card rola com overflow-y).

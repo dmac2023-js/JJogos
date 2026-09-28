@@ -67,6 +67,7 @@ var termoVenceu = false;
 
 var termoOnlineAtivo = false;
 var termoWs = null;
+var termoReconectarTimer = null;
 var termoPingTimer = null;
 var termoSala = null;
 var termoSlot = null;
@@ -402,6 +403,8 @@ async function carregarSalasTermo() {
 }
 
 function termoFecharWs() {
+  clearTimeout(termoReconectarTimer);
+  termoReconectarTimer = null;
   clearInterval(termoPingTimer);
   termoPingTimer = null;
   if (termoWs) {
@@ -511,23 +514,36 @@ function conectarWsTermo(sala) {
     "&nick=" + encodeURIComponent(nick) +
     "&avatar=" + encodeURIComponent(avatar);
   termoWs = new WebSocket(url);
+  var ws = termoWs;
+  var recebeuEstado = false;
   termoPingTimer = setInterval(function () {
     if (termoWs && termoWs.readyState === WebSocket.OPEN) {
       termoWs.send(JSON.stringify({ tipo: "ping" }));
     }
   }, 20000);
-  termoWs.onmessage = function (evento) {
+  ws.onmessage = function (evento) {
     try {
+      // Voltou da reconexão: limpa o "Reconectando..." da tela.
+      if (!recebeuEstado) { recebeuEstado = true; termoMsg(""); }
       processarMensagemTermo(JSON.parse(evento.data));
     } catch (e) {
       console.error("termo ws:", e);
     }
   };
-  termoWs.onclose = function () {
+  ws.onclose = function () {
+    if (ws !== termoWs) return;   // socket velho (trocou de sala): ignora
+    termoWs = null;
     clearInterval(termoPingTimer);
-    if (termoOnlineAtivo) termoMsg("Conexão perdida.", "erro");
+    if (!termoOnlineAtivo) return;
+    // Caiu no meio do jogo: volta pra mesma sala. O servidor guarda a vaga
+    // por 15s (carencia) antes de dar a vitória ao oponente.
+    termoMsg("Conexão perdida. Reconectando...", "erro");
+    clearTimeout(termoReconectarTimer);
+    termoReconectarTimer = setTimeout(function () {
+      conectarWsTermo(sala);
+    }, 2000);
   };
-  termoWs.onerror = function () {};
+  ws.onerror = function () {};
 }
 
 function termoAtualizarStatusOponente() {
@@ -550,6 +566,10 @@ function termoAtualizarStatusOponente() {
 
 function processarMensagemTermo(dados) {
   switch (dados.tipo) {
+    case "carencia":
+      // O outro caiu: o servidor segura a vaga dele por 15s.
+      termoMsg(dados.mensagem || "Aguardando a reconexão do oponente...", "erro");
+      break;
     case "erro":
       termoMsg(dados.mensagem || "Erro.", "erro");
       if (dados.mensagem === "Sala cheia." || dados.mensagem === "Sala não encontrada.") {

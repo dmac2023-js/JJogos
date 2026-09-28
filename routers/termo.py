@@ -61,6 +61,9 @@ class NovaSalaTermo(BaseModel):
 salas_termo: Dict[str, dict] = {}
 termo_jogos: Dict[str, dict] = {}
 TERMO_SALA_SEM_WS_SEGUNDOS = 60
+# Queda no meio da partida: a vaga fica guardada por esse tempo pra dar
+# chance de reconectar. Passou, vale a regra antiga (quem ficou vence).
+CARENCIA_RECONEXAO_SEGUNDOS = 15
 TERMO_TAMANHO = 5
 # facil = Termo (1 palavra), medio = Dueto (2), dificil = Quarteto (4).
 TERMO_TABULEIROS = {"facil": 1, "medio": 2, "dificil": 4}
@@ -447,6 +450,83 @@ async def _iniciar_contagem_termo(sala: str):
             pass
 
 
+async def _carencia_termo(sala: str, slot: str) -> None:
+    """Espera a reconexão de quem caiu no meio da partida. Não voltou,
+    vale a regra antiga da queda (quem ficou vence e a sala é encerrada)."""
+    await asyncio.sleep(CARENCIA_RECONEXAO_SEGUNDOS)
+    try:
+        await _fechar_termo_ao_sair(sala, slot)
+    except Exception as erro:
+        log_tela("termo: carencia da sala %s: %r" % (sala, erro))
+
+
+async def _fechar_termo_ao_sair(sala: str, slot: str) -> None:
+    """Consequências da desconexão de `slot`. Se a pessoa reconectou nesse
+    meio-tempo, não faz nada."""
+    s = salas_termo.get(sala)
+    if not s:
+        return
+    p = s.get("slots", {}).get(slot)
+    if not p or p.get("ws"):
+        return                      # reconectou a tempo
+    outro = "p2" if slot == "p1" else "p1"
+    p_outro = s.get("slots", {}).get(outro)
+    if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws") is not None:
+        p_outro["completou"] = True
+        p_outro["venceu"] = True
+        s["placar"][outro] = s["placar"].get(outro, 0) + 1
+        await asyncio.to_thread(
+            creditar_moedas, p_outro.get("nome", ""),
+            MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+        s["fase"] = "parcial"
+        try:
+            await p_outro["ws"].send_json({
+                "tipo": "adversario_terminou",
+                "slot": slot,
+                "desistencia": True,
+                "venceu": False,
+                "placar": s["placar"],
+                "jogadores": [info_jogador_termo(s, "p1"), info_jogador_termo(s, "p2")],
+                "mensagem": "Oponente saiu. Você venceu!",
+            })
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+        await encerrar_sala_termo(sala, "oponente_desistiu")
+    elif s.get("lider") == slot:
+        if s.get("fase") == "jogando" and p_outro and p_outro.get("ws"):
+            p_outro["completou"] = True
+            p_outro["venceu"] = True
+            s["placar"][outro] = s["placar"].get(outro, 0) + 1
+            await asyncio.to_thread(
+                creditar_moedas, p_outro.get("nome", ""),
+                MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
+            s["fase"] = "parcial"
+            try:
+                await p_outro["ws"].send_json({
+                    "tipo": "adversario_terminou",
+                    "slot": slot,
+                    "desistencia": True,
+                    "venceu": False,
+                    "placar": s["placar"],
+                    "jogadores": [info_jogador_termo(s, "p1"), info_jogador_termo(s, "p2")],
+                    "mensagem": "O líder saiu. Você venceu!",
+                })
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+            await encerrar_sala_termo(sala, "lider_desconectou")
+        else:
+            await encerrar_sala_termo(sala, "lider_desconectou")
+    else:
+        await broadcast_termo(sala, estado_termo_para(s, slot))
+        if s.get("fase") == "jogando":
+            await encerrar_sala_termo(sala, "oponente_desconectou")
+        elif s.get("fase") == "esperando":
+            pass
+        await _notificar_salas_termo_lobby()
+
+
 @router.websocket("/ws/termo/{sala}")
 @router.websocket("/termo/{sala}")
 async def ws_termo(websocket: WebSocket, sala: str):
@@ -705,62 +785,27 @@ async def ws_termo(websocket: WebSocket, sala: str):
         if s and s.get("slots", {}).get(slot, {}) is not None and \
                 s["slots"][slot] and s["slots"][slot].get("ws") is websocket:
             s["slots"][slot]["ws"] = None
-            outro = "p2" if slot == "p1" else "p1"
-            p_outro = s.get("slots", {}).get(outro)
-            if s.get("fase") in ("jogando", "contagem") and p_outro and p_outro.get("ws") is not None:
-                p_outro["completou"] = True
-                p_outro["venceu"] = True
-                s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                await asyncio.to_thread(
-                    creditar_moedas, p_outro.get("nome", ""),
-                    MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
-                s["fase"] = "parcial"
-                try:
-                    await p_outro["ws"].send_json({
-                        "tipo": "adversario_terminou",
-                        "slot": slot,
-                        "desistencia": True,
-                        "venceu": False,
-                        "placar": s["placar"],
-                        "jogadores": [info_jogador_termo(s, "p1"), info_jogador_termo(s, "p2")],
-                        "mensagem": "Oponente saiu. Você venceu!",
-                    })
-                except Exception:
-                    pass
-                await asyncio.sleep(2)
-                await encerrar_sala_termo(sala, "oponente_desistiu")
-            elif s.get("lider") == slot:
-                if s.get("fase") == "jogando" and p_outro and p_outro.get("ws"):
-                    p_outro["completou"] = True
-                    p_outro["venceu"] = True
-                    s["placar"][outro] = s["placar"].get(outro, 0) + 1
-                    await asyncio.to_thread(
-                        creditar_moedas, p_outro.get("nome", ""),
-                        MOEDAS_TERMO_ONLINE.get(s.get("dificuldade", "facil"), MOEDAS_TERMO_ONLINE["facil"]))
-                    s["fase"] = "parcial"
+            if s.get("fase") in ("jogando", "contagem"):
+                # Queda no meio da partida: guarda a vaga e dá um tempo pra
+                # reconectar. Só depois disso vale a regra antiga da queda.
+                s["slots"][slot]["desconectado_em"] = time.time()
+                outro = "p2" if slot == "p1" else "p1"
+                p_outro = s.get("slots", {}).get(outro)
+                if p_outro and p_outro.get("ws"):
                     try:
                         await p_outro["ws"].send_json({
-                            "tipo": "adversario_terminou",
+                            "tipo": "carencia",
                             "slot": slot,
-                            "desistencia": True,
-                            "venceu": False,
-                            "placar": s["placar"],
-                            "jogadores": [info_jogador_termo(s, "p1"), info_jogador_termo(s, "p2")],
-                            "mensagem": "O líder saiu. Você venceu!",
+                            "segundos": CARENCIA_RECONEXAO_SEGUNDOS,
+                            "mensagem": "Oponente caiu. Aguardando a reconexão dele (" +
+                                        str(CARENCIA_RECONEXAO_SEGUNDOS) + "s)...",
                         })
                     except Exception:
                         pass
-                    await asyncio.sleep(2)
-                    await encerrar_sala_termo(sala, "lider_desconectou")
-                else:
-                    await encerrar_sala_termo(sala, "lider_desconectou")
-            else:
-                await broadcast_termo(sala, estado_termo_para(s, slot))
-                if s.get("fase") == "jogando":
-                    await encerrar_sala_termo(sala, "oponente_desconectou")
-                elif s.get("fase") == "esperando":
-                    pass
+                asyncio.create_task(_carencia_termo(sala, slot))
                 await _notificar_salas_termo_lobby()
+            else:
+                await _fechar_termo_ao_sair(sala, slot)
 
 
 # ---------------------------------------------------------------------------
