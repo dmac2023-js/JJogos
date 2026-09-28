@@ -88,7 +88,7 @@
 
 /* Roleta da sorte. */
 .loja-roleta-area { position: relative; width: 320px; height: 320px; margin: 12px auto 20px; }
-.icone-decoracao-loja { width: 34px; height: 34px; object-fit: contain; }
+.icone-decoracao-loja { width: 58px !important; height: 58px !important; object-fit: contain; }
 #loja-btn-roleta { display: none; }
 .loja-roleta-ponteiro {
   position: absolute; top: -6px; left: 50%; transform: translateX(-50%);

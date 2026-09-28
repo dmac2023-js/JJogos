@@ -289,42 +289,29 @@ def _atualizar_missoes(carteira: dict, segundos: int, jogo: str, venceu: bool, a
         carteira["saldo"] = carteira.get("saldo", 0) + 1000
         estado["bonus_pago"] = True
 
-# Roleta da sorte — 19 setores do MESMO tamanho: 4 de 2x, 4 de 1.5x, 6 de
-# 0.75x, 4 de 0.5x e 1 de presente. Todos têm peso igual, então é sorte pura:
-# cada setor tem a mesma chance (1/19) e não há fatia "grande" pra mirar.
-# 10 setores pagam menos do que a aposta (0.75x e 0.5x) contra 9 que pagam
-# mais (2x, 1.5x e presente) — o jogador perde mais vezes do que ganha.
-#
-# A ordem abaixo é embaralhada de propósito e FIXA: uma roleta de verdade não
-# se remonta a cada giro, e com ordem fixa dá pra conferir o resultado olhando
-# onde o ponteiro parou. Não existe padrão — não alterna por categoria nem
-# repete ciclo; o presente fica fora do centro e fora das pontas.
+# Roleta da sorte: setores maiores têm mais chance real, não só visual.
 # A aposta só anda de 1000 em 1000 e começa em 1000 — o front oferece botões
 # de ±1k, ±10k, ±100k e ±1M em cima disso.
 ROLETA_APOSTA_MINIMA = 1000
 ROLETA_APOSTA_MULTIPLO = 1000
 _ROLETA_ORDEM = [
-    "0.75x", "2x", "0.5x", "0.75x", "1.5x", "2x", "0.75x", "presente",
-    "0.5x", "0.75x", "2x", "1.5x", "0.5x", "0.75x", "2x", "0.75x",
-    "1.5x", "0.5x", "1.5x",
+    "1.25x", "0.5x", "0.75x", "1.5x", "presente", "?", "0.5x", "1.25x",
+    "0.75x", "1.5x",
 ]
 _ROLETA_MODELOS = {
-    "2x": {"tipo": "multiplicador", "valor": 2.0, "label": "2x"},
+    "1.25x": {"tipo": "multiplicador", "valor": 1.25, "label": "1.25x"},
     "1.5x": {"tipo": "multiplicador", "valor": 1.5, "label": "1.5x"},
     "0.75x": {"tipo": "multiplicador", "valor": 0.75, "label": "0.75x"},
     "0.5x": {"tipo": "multiplicador", "valor": 0.5, "label": "0.5x"},
     "presente": {"tipo": "presente", "label": "Presente"},
+    "?": {"tipo": "interrogacao", "label": "?"},
 }
-# peso = tamanho do setor em %, e a soma tem que dar 100 (o front desenha a
-# roda a partir disso). Com 19 setores iguais não fecha em número redondo, por
-# isso o resto vai pro último — a diferença é invisível e o sorteio não usa o
-# peso pra nada além do desenho.
-_ROLETA_PESO = round(100 / len(_ROLETA_ORDEM), 4)
+# 1.25x e 0.5x são maiores; 1.5x e 0.75x menores; ? é o menor.
+_ROLETA_PESOS = {"1.25x": 17, "0.5x": 17, "0.75x": 10, "1.5x": 5, "presente": 1.5, "?": 0.5}
 ROLETA_FATIAS = []
 for _i, _chave in enumerate(_ROLETA_ORDEM):
     _fatia = dict(_ROLETA_MODELOS[_chave])
-    _fatia["peso"] = (round(100 - _ROLETA_PESO * (len(_ROLETA_ORDEM) - 1), 4)
-                      if _i == len(_ROLETA_ORDEM) - 1 else _ROLETA_PESO)
+    _fatia["peso"] = _ROLETA_PESOS[_chave]
     ROLETA_FATIAS.append(_fatia)
 
 
@@ -879,10 +866,18 @@ def tentar_reclamar_bonus(nome: str, nick: str = None, avatar: str = None) -> di
         }
 
 
-def sortear_fatia_roleta() -> dict:
-    """Sorteia um setor. Todos têm a mesma chance — o "peso" só existe pro
-    desenho da roda, não pesa no sorteio."""
-    indice = secrets.SystemRandom().randrange(len(ROLETA_FATIAS))
+def sortear_fatia_roleta(aposta: int = 0) -> dict:
+    """Sorteia ponderando pelo tamanho. Abaixo de 10 mil reduz o presente."""
+    pesos = [f["peso"] for f in ROLETA_FATIAS]
+    if aposta < 10_000:
+        pesos = [p * (0.2 if f["tipo"] == "presente" else 1) for p, f in zip(pesos, ROLETA_FATIAS)]
+    alvo = secrets.SystemRandom().random() * sum(pesos)
+    indice = 0
+    for i, peso in enumerate(pesos):
+        alvo -= peso
+        if alvo <= 0:
+            indice = i
+            break
     fatia = dict(ROLETA_FATIAS[indice])
     fatia["indice"] = indice
     return fatia
@@ -944,10 +939,22 @@ def girar_roleta(nome: str, aposta: int) -> dict:
             raise ValueError("Moedas insuficientes.")
 
         carteira["saldo"] -= aposta
-        fatia = sortear_fatia_roleta()
+        fatia = sortear_fatia_roleta(aposta)
         premio_moedas = 0
         presente = None
 
+        if fatia["tipo"] == "interrogacao":
+            chance_item = 0.03 if aposta < 10_000 else 0.12
+            if secrets.SystemRandom().random() < chance_item:
+                presente = sortear_presente(carteira)
+            else:
+                presente = None
+            if presente:
+                fatia["tipo"], fatia["label"] = "presente", "Presente surpresa"
+            else:
+                fatia["tipo"] = "multiplicador"
+                fatia["valor"] = round(secrets.SystemRandom().uniform(1, 3), 2)
+                fatia["label"] = str(fatia["valor"]) + "x"
         if fatia["tipo"] == "multiplicador":
             premio_moedas = int(aposta * fatia["valor"])
             carteira["saldo"] += premio_moedas
