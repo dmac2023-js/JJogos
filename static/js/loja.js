@@ -32,6 +32,17 @@ function jogoRegistrarTempo(jogoNome, venceu, resultado) {
   }).catch(function () {});
 }
 
+function registrarTempoAtividade() {
+  if (!usuarioDiscord || !nomeUsuario() || document.visibilityState === "hidden") return;
+  fetch("./economia/atividade", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome: nomeUsuario(), nick: nomeExibicao(), avatar: avatarAtual() || "", segundos: 60 }),
+  }).catch(function () {});
+}
+
+// A missão de tempo mede a Activity aberta e visível, mesmo sem jogar uma partida.
+setInterval(registrarTempoAtividade, 60000);
+
 let lojaCatalogo = null;
 let minhaCarteira = { saldo: 0, decoracoes: [], cores_nick: [], fontes_nick: [], historico: [], equipado: { decoracao: null, cor_nick: null, fonte_nick: null } };
 let lojaPaginaDecoracoes = 0;

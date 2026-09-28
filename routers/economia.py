@@ -394,6 +394,19 @@ def registrar_tempo(dados: TempoJogo):
     return {"ok": True}
 
 
+@router.post("/economia/atividade")
+def registrar_tempo_atividade(dados: TempoJogo):
+    """Batida curta da atividade aberta; alimenta a missão de tempo sem
+    registrar uma partida fictícia."""
+    if eh_anonimo(dados.nome) or not dados.nome:
+        return {"ok": False}
+    segundos = max(0, min(int(dados.segundos), 90))
+    if not segundos:
+        return {"ok": True}
+    registrar_fim_partida(dados.nome, dados.nick, segundos, avatar=dados.avatar or None)
+    return {"ok": True}
+
+
 @router.get("/economia/ranking")
 def obter_ranking(limit: int = 10):
     limit = max(1, min(limit, 50))
