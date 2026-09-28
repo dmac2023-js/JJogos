@@ -5,6 +5,7 @@ let gradeAtual = [];
 let dificuldadeAtual = "facil";
 let tempoInicial = 0;
 let intervaloCronometro = null;
+let sudokuPartidaRegistrada = false;
 
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,15 @@ function mostrarMensagem(texto, tipo = "") {
 
 function tempoAtual() {
   return Math.floor((Date.now() - tempoInicial) / 1000);
+}
+
+// Cada rodada da sala tem seu próprio registro. Assim a revanche começa um
+// novo cronômetro e uma derrota seguida de outra rodada conta como duas
+// partidas, sem duplicar mensagens repetidas do WebSocket.
+function sudokuRegistrarFimOnline(venceu, resultado) {
+  if (!sudokuOnlineAtivo || sudokuPartidaRegistrada) return;
+  sudokuPartidaRegistrada = true;
+  jogoRegistrarTempo("sudoku_online", venceu === true, resultado || (venceu ? "vitoria" : "derrota"));
 }
 
 
@@ -443,7 +453,7 @@ function processarMensagemSudoku(d) {
       } else if (d.fase === "fim" || d.fase === "parcial") {
         if (d.vencedor_rodada && d.vencedor_rodada !== sudokuSlot && !sudokuDerrotaRegistrada) {
           sudokuDerrotaRegistrada = true;
-          jogoRegistrarTempo("sudoku_online", false);
+          sudokuRegistrarFimOnline(false, "derrota");
         }
         if (d.vencedor_rodada) {
           var nick = "";
@@ -493,6 +503,8 @@ function processarMensagemSudoku(d) {
       sudokuOnlineAtivo = true;
       sudokuFase = "jogando";
       sudokuTerminou = false;
+      sudokuPartidaRegistrada = false;
+      jogoIniciarTimer();
       jogoId = d.jogo_id;
       dificuldadeAtual = d.dificuldade;
       document.querySelector("#dificuldade-atual").textContent = nomesDificuldade[d.dificuldade] || d.dificuldade;
@@ -511,17 +523,20 @@ function processarMensagemSudoku(d) {
       if (d.desistencia) {
         // Oponente saiu: vitória para quem ficou; sala desfaz em seguida.
         if (d.slot === sudokuSlot) {
+          sudokuRegistrarFimOnline(true, "vitoria");
           pararCronometro();
           sudokuTerminou = true;
           mostrarMensagem(d.mensagem || "Oponente saiu. Você venceu!", "sucesso");
           sudokuStatus("Você venceu!");
         } else {
+          sudokuRegistrarFimOnline(false, "derrota");
           mostrarMensagem(d.mensagem || "Oponente saiu.", "");
           sudokuStatus((d.nick || "Oponente") + " venceu");
         }
         break;
       }
       if (d.slot === sudokuSlot) {
+        sudokuRegistrarFimOnline(true, "vitoria");
         pararCronometro();
         sudokuTerminou = true;
         salvarHistorico();
@@ -531,6 +546,7 @@ function processarMensagemSudoku(d) {
         mostrarBotao("#sudoku-pedir-revanche", false);
         mostrarBotao("#sudoku-parar", true);
       } else {
+        sudokuRegistrarFimOnline(false, "derrota");
         mostrarMensagem(d.nick + " venceu e terminou em " + formatarTempo(d.tempo) + ".", "sucesso");
         sudokuStatus(d.nick + " venceu");
         if (!sudokuTerminou) {
