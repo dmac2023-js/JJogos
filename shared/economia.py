@@ -221,6 +221,9 @@ INSIGNIAS_DOACAO = [
     (50_000, "Luminary", "🎁"), (100_000, "Icon", "🎁"),
     (500_000, "Hero", "🎁"), (1_000_000, "Legend", "🎁"),
 ]
+TAXA_DOACAO = 0.10
+DONO_DOACAO = "jovem7l"
+INTERVALO_INSIGNIA_MESMO_DESTINATARIO = 7 * 24 * 60 * 60
 
 
 def progresso_doacao(total: int) -> dict:
@@ -650,22 +653,35 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         if destinatario not in carteiras:
             raise ValueError("Usuário destinatário não encontrado.")
         carteira_dest = obter_carteira(dados, destinatario)
+        taxa = quantidade // 10
+        recebido = quantidade - taxa
         carteira_rem["saldo"] = carteira_rem.get("saldo", 0) - quantidade
-        carteira_dest["saldo"] = carteira_dest.get("saldo", 0) + quantidade
+        carteira_dest["saldo"] = carteira_dest.get("saldo", 0) + recebido
+        dono = obter_carteira(dados, DONO_DOACAO)
+        dono["saldo"] = dono.get("saldo", 0) + taxa
         # Registra histórico de doações
         historico_rem = carteira_rem.setdefault("historico_envios", [])
         historico_rem.insert(0, {"para": destinatario, "quantidade": quantidade, "em": int(time.time())})
         del historico_rem[50:]
-        total_doado = carteira_rem.get("total_doado", 0) + quantidade
+        agora = int(time.time())
+        ultimos = carteira_rem.setdefault("doacoes_por_destinatario", {})
+        ultima = int(ultimos.get(destinatario, 0) or 0)
+        conta_insignia = agora - ultima >= INTERVALO_INSIGNIA_MESMO_DESTINATARIO
+        if conta_insignia:
+            ultimos[destinatario] = agora
+        total_doado = carteira_rem.get("total_doado", 0) + (quantidade if conta_insignia else 0)
         carteira_rem["total_doado"] = total_doado
         historico_dest = carteira_dest.setdefault("historico_recebidos", [])
-        historico_dest.insert(0, {"de": remetente, "quantidade": quantidade, "em": int(time.time())})
+        historico_dest.insert(0, {"de": remetente, "quantidade": recebido, "em": agora, "taxa": taxa})
         del historico_dest[50:]
         salvar_economia(dados)
         return {
             "novo_saldo_remetente": carteira_rem["saldo"],
             "novo_saldo_destinatario": carteira_dest["saldo"],
             "doacao": progresso_doacao(total_doado),
+            "recebido": recebido,
+            "taxa": taxa,
+            "contou_insignia": conta_insignia,
         }
 
 
