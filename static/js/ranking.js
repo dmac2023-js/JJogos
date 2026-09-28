@@ -3,6 +3,7 @@
 var rankingDados = null;
 var rankingTabAtiva = "moedas";
 var rankingDoadoresCache = null;
+var INSIGNIA_CORES = { patrono: "#3187e8", campeao: "#08bda8", iluminado: "#ef4f8f", heroi: "#963de8", lendario: "#8ad92b", divindade: "#f39a27" };
 
 var RANKING_JOGO_LABELS = {
   sudoku_solo: "Sudoku Solo",
@@ -220,8 +221,9 @@ function _renderizarConteudoModal(container, jogador, perfil) {
 function doacaoHtml(jogador) {
   var d = jogador.doacao || { total: jogador.total_doado || 0, progresso: 0, falta: 0, insignias: [], proxima: null };
   var proxima = d.proxima ? "Próxima: " + d.proxima.icone + " " + d.proxima.nome + " · faltam " + d.falta.toLocaleString("pt-BR") : "Todas as insignias conquistadas";
+  var corBarra = d.proxima ? (INSIGNIA_CORES[d.proxima.icone] || "#5b9dff") : (d.atual && INSIGNIA_CORES[d.atual.icone] || "#ffd36a");
   var badges = (d.insignias || []).map(function (b) { return '<span class="rmodal-doacao-badge"><img src="./img/insignia-' + escapeHtml(b.icone) + '.svg" alt="" />' + escapeHtml(b.nome) + "</span>"; }).join("");
-  return '<div class="rmodal-doacao" title="' + escapeHtml(proxima) + '"><h4>💝 Progresso de doador</h4><strong>' + d.total.toLocaleString("pt-BR") + ' moedas doadas</strong><div class="rmodal-doacao-bar"><div style="width:' + d.progresso + '%"></div></div><div class="rmodal-doacao-meta"><span>' + escapeHtml(proxima) + '</span><span>' + d.progresso + '%</span></div><div class="rmodal-doacao-badges">' + (badges || '<span class="rmodal-doacao-badge">Nenhuma ainda</span>') + '</div></div>';
+  return '<div class="rmodal-doacao" title="' + escapeHtml(proxima) + '"><h4>💝 Progresso de doador</h4><strong>' + d.total.toLocaleString("pt-BR") + ' moedas doadas</strong><div class="rmodal-doacao-bar"><div style="width:' + d.progresso + '%;background:' + corBarra + '"></div></div><div class="rmodal-doacao-meta"><span>' + escapeHtml(proxima) + '</span><span>' + d.progresso + '%</span></div><div class="rmodal-doacao-badges">' + (badges || '<span class="rmodal-doacao-badge">Nenhuma ainda</span>') + '</div></div>';
 }
 
 function mostrarPopupInsignia(insignia) {
@@ -241,7 +243,7 @@ function abrirFormularioDoacao(card, jogador) {
   overlay.className = "rmodal-transfer-overlay";
   var form = document.createElement("div");
   form.className = "rmodal-transfer";
-  form.innerHTML = '<div class="rmodal-transfer-pessoas"><div><b>Enviando</b><strong class="rmodal-remetente-nick">Carregando...</strong><span class="rmodal-remetente-saldo"></span></div><span class="rmodal-seta">→</span><div><b>Recebendo</b><strong>' + escapeHtml(jogador.nick || jogador.nome) + '</strong><span>' + (jogador.saldo || 0).toLocaleString("pt-BR") + ' moedas</span></div></div><div class="rmodal-transfer-insignia"></div><div class="rmodal-transfer-barra"><div></div><small></small></div><label>Valor a enviar<input type="number" min="1" step="1" placeholder="Digite o valor" /></label><div class="rmodal-transfer-resumo">Digite um valor para ver a simulação.</div><div class="rmodal-transfer-progresso"></div><div class="rmodal-transfer-acoes"><button type="button" class="botao principal rmodal-confirmar">Enviar</button><button type="button" class="botao rmodal-cancelar">Cancelar</button></div><small class="rmodal-transfer-taxa">A transação tem taxa de 10%: o destinatário recebe 90% do valor. 1% da taxa vai para o dono.</small>';
+  form.innerHTML = '<div class="rmodal-transfer-pessoas"><div><b>Enviando</b>' + rankingAvatarHtml({ avatar: "", nick: "?", decoracao_imagem: "" }, 48) + '<strong class="rmodal-remetente-nick">Carregando...</strong><span class="rmodal-remetente-saldo"></span></div><span class="rmodal-seta">→</span><div><b>Recebendo</b>' + rankingAvatarHtml(jogador, 48) + '<strong>' + rankingNickHtml(jogador) + '</strong><span>' + (jogador.saldo || 0).toLocaleString("pt-BR") + ' moedas</span></div></div><div class="rmodal-transfer-insignia"></div><div class="rmodal-transfer-barra"><div></div><small></small></div><label>Valor a enviar<input type="number" min="1" step="1" placeholder="Digite o valor" /></label><div class="rmodal-transfer-resumo">Digite um valor para ver a simulação.</div><div class="rmodal-transfer-progresso"></div><div class="rmodal-transfer-acoes"><button type="button" class="botao principal rmodal-confirmar">Enviar</button><button type="button" class="botao rmodal-cancelar">Cancelar</button></div><small class="rmodal-transfer-taxa">A transação tem taxa de 10%: o destinatário recebe 90% do valor. 1% da taxa vai para o dono.</small>';
   overlay.appendChild(form);
   document.body.appendChild(overlay);
   var input = form.querySelector("input");
@@ -253,11 +255,13 @@ function abrirFormularioDoacao(card, jogador) {
     .then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       meuPerfil = d;
       form.querySelector(".rmodal-remetente-nick").textContent = d ? (d.nick || d.nome) : (meuNome || "Você");
+      if (d) form.querySelector(".rmodal-transfer-pessoas > div:first-child .ranking-avatar-box").outerHTML = rankingAvatarHtml(d, 48);
       form.querySelector(".rmodal-remetente-saldo").textContent = d ? d.saldo.toLocaleString("pt-BR") + " moedas" : "Saldo indisponível";
       var atual = d && d.doacao && d.doacao.atual;
       form.querySelector(".rmodal-transfer-insignia").innerHTML = atual ? '<span>Insígnia atual</span><img src="./img/insignia-' + escapeHtml(atual.icone) + '.svg" alt="" /><b>' + escapeHtml(atual.nome) + '</b>' : '<span>Insígnia atual</span><b>Nenhuma ainda</b>';
       var doacao = (d && d.doacao) || { total: 0, progresso: 0, falta: 0, proxima: null };
       form.querySelector(".rmodal-transfer-barra div").style.width = doacao.progresso + "%";
+      form.querySelector(".rmodal-transfer-barra div").style.background = INSIGNIA_CORES[doacao.proxima && doacao.proxima.icone] || "#ffd36a";
       form.querySelector(".rmodal-transfer-barra small").textContent = doacao.total.toLocaleString("pt-BR") + " doadas · " + (doacao.proxima ? "faltam " + doacao.falta.toLocaleString("pt-BR") : "todas conquistadas");
       atualizarPrevia();
     });
@@ -360,8 +364,15 @@ async function abrirPerfilRanking(jogador) {
   }
 
   try {
-    var resp = await fetch("./perfil/recordes?nome=" + encodeURIComponent(jogador.nome));
+    var respostas = await Promise.all([
+      fetch("./perfil/recordes?nome=" + encodeURIComponent(jogador.nome)),
+      fetch("./economia/jogador?nome=" + encodeURIComponent(jogador.nome)),
+    ]);
+    var resp = respostas[0], respEconomia = respostas[1];
     var perfil = resp.ok ? await resp.json() : {};
+    var economiaPerfil = respEconomia.ok ? await respEconomia.json() : {};
+    jogador = Object.assign({}, jogador, economiaPerfil);
+    card.querySelector(".rmodal-cabecalho").innerHTML = rankingAvatarHtml(jogador, 72) + '<span class="rmodal-nick">' + rankingNickHtml(jogador) + "</span>" + ((jogador.nome && jogador.nome !== jogador.nick) ? ' <span class="rmodal-username">(' + escapeHtml(jogador.nome) + ")</span>" : "");
     var conteudo = card.querySelector("#rmodal-conteudo");
     _renderizarConteudoModal(conteudo, jogador, perfil);
     if (typeof atualizarMoldurasPerfil === "function") atualizarMoldurasPerfil();
