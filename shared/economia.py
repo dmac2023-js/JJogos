@@ -217,9 +217,9 @@ PARTIDAS_JOGOS = [
 ]
 
 INSIGNIAS_DOACAO = [
-    (10_000, "Patron", "🎁"), (100_000, "Champion", "🎁"),
-    (500_000, "Luminary", "🎁"), (1_000_000, "Icon", "🎁"),
-    (5_000_000, "Hero", "🎁"), (10_000_000, "Legend", "🎁"),
+    (10_000, "Patrono", "patrono"), (100_000, "Campeão", "campeao"),
+    (500_000, "Iluminado", "iluminado"), (1_000_000, "Herói", "heroi"),
+    (5_000_000, "Lendário", "lendario"), (10_000_000, "Divindade", "divindade"),
 ]
 TAXA_DOACAO = 0.10
 DONO_DOACAO = "jovem7l"
@@ -237,6 +237,7 @@ def progresso_doacao(total: int) -> dict:
     total = max(0, int(total or 0))
     ganhas = [{"valor": v, "nome": n, "icone": i} for v, n, i in INSIGNIAS_DOACAO if total >= v]
     proxima = next(({"valor": v, "nome": n, "icone": i} for v, n, i in INSIGNIAS_DOACAO if total < v), None)
+    atual = ganhas[-1] if ganhas else None
     anterior = ganhas[-1]["valor"] if ganhas else 0
     if proxima:
         faixa = max(1, proxima["valor"] - anterior)
@@ -244,8 +245,26 @@ def progresso_doacao(total: int) -> dict:
         falta = proxima["valor"] - total
     else:
         progresso, falta = 100, 0
-    return {"total": total, "insignias": ganhas, "proxima": proxima,
+    return {"total": total, "insignias": ganhas, "atual": atual, "proxima": proxima,
             "anterior": anterior, "falta": falta, "progresso": progresso}
+
+
+def _conta_para_insignia(carteira: dict, destinatario: str, agora: int) -> bool:
+    ultima = int((carteira.get("doacoes_por_destinatario") or {}).get(destinatario, 0) or 0)
+    return agora - ultima >= INTERVALO_INSIGNIA_MESMO_DESTINATARIO
+
+
+def prever_transferencia(remetente: str, destinatario: str, quantidade: int) -> dict:
+    dados = carregar_economia()
+    carteira = dados.get("carteiras", {}).get(remetente) or {}
+    alvo = dados.get("carteiras", {}).get(destinatario) or {}
+    agora = int(time.time())
+    taxa = quantidade // 10
+    return {"saldo_remetente": carteira.get("saldo", 0),
+            "saldo_destinatario": alvo.get("saldo", 0),
+            "recebido": quantidade - taxa, "taxa": taxa,
+            "conta_insignia": _conta_para_insignia(carteira, destinatario, agora),
+            "doacao": progresso_doacao(carteira.get("total_doado", 0))}
 
 
 def _missoes(carteira: dict, agora: int = None) -> dict:
@@ -711,8 +730,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         transferencias.append({"quantidade": quantidade, "em": agora})
         del transferencias[:-100]
         ultimos = carteira_rem.setdefault("doacoes_por_destinatario", {})
-        ultima = int(ultimos.get(destinatario, 0) or 0)
-        conta_insignia = agora - ultima >= INTERVALO_INSIGNIA_MESMO_DESTINATARIO
+        conta_insignia = _conta_para_insignia(carteira_rem, destinatario, agora)
         if conta_insignia:
             ultimos[destinatario] = agora
         total_doado = carteira_rem.get("total_doado", 0) + (quantidade if conta_insignia else 0)
@@ -725,6 +743,7 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
             "novo_saldo_remetente": carteira_rem["saldo"],
             "novo_saldo_destinatario": carteira_dest["saldo"],
             "doacao": progresso_doacao(total_doado),
+            "insignia_nova": (progresso_doacao(total_doado)["atual"] if conta_insignia and progresso_doacao(total_doado)["atual"] and progresso_doacao(total_doado)["atual"] != progresso_doacao(carteira_rem.get("total_doado", 0) - quantidade)["atual"] else None),
             "recebido": recebido,
             "taxa": taxa,
             "taxa_dono": taxa_dono,

@@ -44,6 +44,7 @@ from shared.economia import (
     tentar_reclamar_bonus,
     top_ranking,
     transferir_moedas,
+    prever_transferencia,
     top_doadores,
     _missoes,
     MISSOES_MODELOS,
@@ -491,6 +492,13 @@ def rota_transferir_moedas(dados: TransferirMoedas):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return resultado
+
+
+@router.post("/economia/transferir/preview")
+def preview_transferir_moedas(dados: TransferirMoedas):
+    if eh_anonimo(dados.remetente) or eh_anonimo(dados.destinatario) or dados.quantidade <= 0:
+        raise HTTPException(status_code=400, detail="Dados inválidos.")
+    return prever_transferencia(dados.remetente, dados.destinatario, dados.quantidade)
 
 
 @router.post("/economia/missoes/trocar")

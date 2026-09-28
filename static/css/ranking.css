@@ -234,9 +234,31 @@
 .rmodal-doacao-meta { display: flex; justify-content: space-between; gap: 8px; color: #aeb2c7; font-size: 12px; }
 .rmodal-doacao-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .rmodal-doacao-badge { padding: 4px 7px; border-radius: 7px; background: #242c46; color: #ffd36a; font-size: 12px; }
+.rmodal-doacao-badge { display: inline-flex; align-items: center; gap: 5px; }
+.rmodal-doacao-badge img { width: 26px; height: 26px; object-fit: contain; }
 .rmodal-transfer { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #26314f; border-radius: 10px; background: #111a2e; }
 .rmodal-transfer input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #354568; border-radius: 8px; background: #0d1424; color: #f4f6ff; }
 .rmodal-transfer-acoes { display: flex; gap: 8px; }
+.rmodal-transfer-pessoas { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; text-align: center; }
+.rmodal-transfer-pessoas div { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: #1e2943; }
+.rmodal-transfer-pessoas b { color: #7a85a8; font-size: 11px; text-transform: uppercase; }
+.rmodal-transfer-pessoas strong { color: #f4f6ff; overflow-wrap: anywhere; }
+.rmodal-transfer-pessoas span { color: #ffd36a; font-size: 12px; }
+.rmodal-seta { color: #85e0ae; font-size: 22px; }
+.rmodal-transfer-resumo { color: #c9ccda; font-size: 13px; line-height: 1.4; }
+.rmodal-transfer-progresso { min-height: 18px; font-size: 12px; line-height: 1.35; }
+.rmodal-progresso-ok { color: #85e0ae; }
+.rmodal-progresso-alerta { color: #ff8a8a; }
+.rmodal-transfer-taxa { color: #7a85a8; }
+.insignia-up-popup { position: fixed; inset: 0; z-index: 4000; display: grid; place-items: center; background: rgba(0,0,0,.76); animation: insignia-in .25s ease-out; }
+.insignia-up-popup.fechando { animation: insignia-out .25s ease-in forwards; }
+.insignia-up-card { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(360px, calc(100vw - 32px)); padding: 28px 22px; border: 1px solid #5267a4; border-radius: 16px; background: #141c30; text-align: center; }
+.insignia-up-card h2 { margin: 0; color: #ffd36a; font-size: 21px; }
+.insignia-up-card img { width: 150px; height: 150px; object-fit: contain; animation: insignia-badge-in .45s ease-out; }
+.insignia-up-card strong { font-size: 24px; color: #f4f6ff; }
+@keyframes insignia-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes insignia-out { to { opacity: 0; } }
+@keyframes insignia-badge-in { from { opacity: 0; transform: scale(.65); } to { opacity: 1; transform: scale(1); } }
 
 .rmodal-jogo {
   background: #1a2135;
