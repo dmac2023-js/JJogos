@@ -18,6 +18,11 @@ jogos7.duckdns.org). Os pedidos marcados com ✅ já estão no ar — não refaz
 | clickJ dá 300 por rebirth, ascensão te dá 2000 e adiciona 100 de ganho a cada rebirth (primeira ascensão, o rebirth agora vai dar 400 por vez). | `MOEDAS_POR_REBIRTH=300`, `MOEDAS_POR_SUBIDA=2000`, `MOEDAS_POR_REBIRTH_ADEMAIS=100` (cada rebirth adiciona 100, sendo que após a primeira ascensão o valor passa a ser 400 por vez) |
 | Bônus de 50 moedas a cada 10 min | `BONUS_QUANTIDADE=50`, `BONUS_INTERVALO_SEGUNDOS=600` |
 | Reconexão sem sair da atividade (ClickJ e Assistir) | `clickj.js` (`onclose` → nova conexão em 2s) e `tela.js` (viewer da transmissão e tiles "assistir" com tentativas) já reconectam; o mesmo vale pra velha e splano |
+
+### 6. ClickJ — sistema de recompensas e pets
+- [x] Rewards restructured: `300 por rebirth`, `2000 por ascensão`, `+100 a cada rebirth` (400 após primeira ascensão). Variáveis `MOEDAS_POR_REBIRTH=300`, `MOEDAS_POR_SUBIDA=2000`, `MOEDAS_POR_REBIRTH_ADEMAIS=100` implementadas.
+- [ ] **A cada 2 rebirth, aumenta o estoque de pets na mochila**: rebirth 2 → 10 pets, rebirth 4 → 11 pets (e assim por diante a cada 2 rebirths).
+- [ ] **Botão de minimizar o assistir algo**: ao clicar, maximiza o jogo voltando à proporção normal (antes de clicar no assistir algo). Implementar toggle que maximize o canvas `#tela-jogos` e recolha o painel de assistir.
 | Velha online | Pago **50 fixo** (`MOEDAS_VELHA_ONLINE = 50`), decisão tomada nesta sessão |
 | Roleta — centralizar textos das fatias | `.loja-roleta-label` em `static/css/loja.css:111` recebeu `transform: translate(-50%, -50%)`; cada rótulo agora fica visualmente centralizado em sua fatia |
 | 2x energia acumulativo no Splano | `DOBRO_MULTIPLICADORES = (2, 4, 5)`; helper `multiplicador_dobro`; campo `dobro_nivel`; HUD mostra `(spEu.dobro_x||1)+"x energia (Ns)"`; expiração após 30s; reinício em nova partida |
