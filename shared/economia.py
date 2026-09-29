@@ -258,8 +258,10 @@ def progresso_doacao(total: int) -> dict:
             "anterior": anterior, "falta": falta, "progresso": progresso}
 
 
-def _historico_doacoes_publico(lista: list, destino: str) -> list:
-    carteiras = carregar_economia().get("carteiras", {})
+def _historico_doacoes_publico(lista: list, destino: str, carteiras: dict = None) -> list:
+    # O ranking monta vários perfis de uma vez; reaproveite o mesmo snapshot
+    # para não fazer uma leitura Redis para cada histórico individual.
+    carteiras = carteiras if carteiras is not None else carregar_economia().get("carteiras", {})
     carteira_clown = carteiras.get("clown") or carteiras.get("Clown") or {}
     equipado_clown = carteira_clown.get("equipado") or {}
     saida = []
@@ -504,6 +506,8 @@ def carregar_economia() -> dict:
 def salvar_economia(dados: dict) -> None:
     salvar_json(CHAVE_ECONOMIA, dados, ARQUIVO_ECONOMIA)
     _cache_carteiras.update(em=time.time(), carteiras=dados.get("carteiras", {}))
+    with _lock_ranking:
+        _cache_ranking.clear()
 
 
 def _carteiras_recentes() -> dict:
@@ -689,7 +693,7 @@ def registrar_evento_missao(nome: str, nick: str, tipo: str, quantidade: int, av
         salvar_economia(dados)
 
 
-def _entrada_publica(nome: str, carteira: dict) -> dict:
+def _entrada_publica(nome: str, carteira: dict, carteiras: dict = None) -> dict:
     equipado = carteira.get("equipado") or {}
     partidas = carteira.get("partidas", {})
     total_doado = carteira.get("total_doado", 0)
@@ -709,26 +713,40 @@ def _entrada_publica(nome: str, carteira: dict) -> dict:
         "total_doado": total_doado,
         "doacao": progresso_doacao(total_doado),
         "missoes": _missoes(carteira),
-        "historico_doacoes": _historico_doacoes_publico(carteira.get("historico_envios", []), "para"),
-        "historico_recebidos": _historico_doacoes_publico(carteira.get("historico_recebidos", []), "de"),
+        "historico_doacoes": _historico_doacoes_publico(carteira.get("historico_envios", []), "para", carteiras),
+        "historico_recebidos": _historico_doacoes_publico(carteira.get("historico_recebidos", []), "de", carteiras),
     }
 
 
 def perfil_publico(nome: str) -> Optional[dict]:
-    carteira = carregar_economia().get("carteiras", {}).get(nome)
-    return _entrada_publica(nome, carteira) if carteira else None
+    carteiras = carregar_economia().get("carteiras", {})
+    carteira = carteiras.get(nome)
+    return _entrada_publica(nome, carteira, carteiras) if carteira else None
+
+
+_cache_ranking = {}
+_lock_ranking = threading.Lock()
+CACHE_RANKING_SEGUNDOS = 5
 
 
 def top_ranking(limit: int = 10) -> dict:
     """Retorna os top jogadores por moedas, por partidas jogadas e por doações."""
-    entradas = [_entrada_publica(nome, c) for nome, c in carregar_economia().get("carteiras", {}).items()]
-    top_moedas = sorted(entradas, key=lambda x: x["saldo"], reverse=True)
-    top_partidas = sorted(entradas, key=lambda x: x["total_partidas"], reverse=True)
-    return {
-        "top_moedas": top_moedas[:limit],
-        "top_horas": top_partidas[:limit],
-        "top_doadores": top_doadores(limit),
-    }
+    agora = time.time()
+    with _lock_ranking:
+        cacheado = _cache_ranking.get(limit)
+        if cacheado and agora - cacheado["em"] <= CACHE_RANKING_SEGUNDOS:
+            return cacheado["dados"]
+        carteiras = _carteiras_recentes()
+        entradas = [_entrada_publica(nome, c, carteiras) for nome, c in carteiras.items()]
+        top_moedas = sorted(entradas, key=lambda x: x["saldo"], reverse=True)
+        top_partidas = sorted(entradas, key=lambda x: x["total_partidas"], reverse=True)
+        dados = {
+            "top_moedas": top_moedas[:limit],
+            "top_horas": top_partidas[:limit],
+            "top_doadores": top_doadores(limit, carteiras),
+        }
+        _cache_ranking[limit] = {"em": agora, "dados": dados}
+        return dados
 
 
 def creditar_moedas(nome: str, quantidade: int) -> Optional[int]:
@@ -818,9 +836,9 @@ def transferir_moedas(remetente: str, destinatario: str, quantidade: int) -> dic
         }
 
 
-def top_doadores(limit: int = 10) -> list:
+def top_doadores(limit: int = 10, carteiras: dict = None) -> list:
     """Retorna os top doadores ordenados por total_doado."""
-    carteiras = carregar_economia().get("carteiras", {})
+    carteiras = carteiras if carteiras is not None else _carteiras_recentes()
     entradas = []
     for nome, c in carteiras.items():
         total = c.get("total_doado", 0)
